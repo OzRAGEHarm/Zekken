@@ -1,0 +1,4 @@
+let const
+ func if else then for use include export obj in
+ ( ) { } [ ] + - * % / < > . ; : ,
+ || | -> => = ! && & == != <= >= ' "

@@ -19,6 +19,7 @@ pub enum TokenType {
     Export,
     Obj,
     In,
+    From,
 
     // Grouping & Operators
     BinaryOperator,
@@ -59,7 +60,7 @@ pub enum TokenType {
 }
 
 // Static HashMaps for keywords and token characters
-static KEYWORDS: &[(&str, TokenType)] = &[
+pub static KEYWORDS: &[(&str, TokenType)] = &[
     ("let", TokenType::Let),
     ("const", TokenType::Const),
     ("func", TokenType::Func),
@@ -72,9 +73,10 @@ static KEYWORDS: &[(&str, TokenType)] = &[
     ("export", TokenType::Export),
     ("obj", TokenType::Obj),
     ("in", TokenType::In),
+    ("from", TokenType::From),
 ];
 
-static TOKEN_CHAR: &[(&str, TokenType)] = &[
+pub static TOKEN_CHAR: &[(&str, TokenType)] = &[
     ("(", TokenType::OpenParen),
     (")", TokenType::CloseParen),
     ("{", TokenType::OpenBrace),
@@ -115,25 +117,24 @@ pub struct Token {
     pub kind: TokenType,
     pub line: usize,
     pub column: usize,
+    pub length: usize,
 }
 
 impl Token {
     pub fn new(value: String, kind: TokenType, line: usize, column: usize) -> Token {
+        let length = value.len();
         Token {
             value,
             kind,
             line,
             column,
+            length,
         }
     }
 }
 
 fn is_skippable(input: &str) -> bool {
     input.trim().is_empty()
-}
-
-fn is_integer(input: &str) -> bool {
-    input.chars().all(|c| c.is_numeric())
 }
 
 pub fn tokenize(source: String) -> Vec<Token> {
@@ -144,20 +145,21 @@ pub fn tokenize(source: String) -> Vec<Token> {
 
     while !src.is_empty() {
         let char = src.remove(0);
-
+    
         if char == '\n' {
             line += 1;
-            column = 0;
-        } else {
+            column = 1;
+        } else if char.is_whitespace() {
             column += 1;
         }
-
+    
         if is_skippable(char.to_string().as_str()) {
             continue;
         }
-
+    
         // Tokenize using a helper function
         if let Some(token) = tokenize_char(&mut src, char, line, column) {
+            column += token.length;
             tokens.push(token);
         }
     }
