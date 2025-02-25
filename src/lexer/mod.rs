@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenType {
     // Literals
@@ -20,6 +21,7 @@ pub enum TokenType {
     Obj,
     In,
     From,
+    Return,
 
     // Grouping & Operators
     BinaryOperator,
@@ -74,6 +76,7 @@ pub static KEYWORDS: &[(&str, TokenType)] = &[
     ("obj", TokenType::Obj),
     ("in", TokenType::In),
     ("from", TokenType::From),
+    ("return", TokenType::Return),
 ];
 
 pub static TOKEN_CHAR: &[(&str, TokenType)] = &[
@@ -273,29 +276,29 @@ fn parse_number(src: &mut Vec<char>, initial_char: char, line: usize, column: us
 
 fn parse_string(src: &mut Vec<char>, line: usize, column: usize) -> Token {
     let mut string_content = String::new();
-    let mut current_column = column;
+    let mut column = column;
 
     src.remove(0); // Remove the first '"' character
 
     while let Some(&next_char) = src.get(0) {
         if next_char == '"' {
             src.remove(0);
-            current_column += 1;
+            column += 1;
             break;
         } else if next_char == '\\' {
             src.remove(0);
-            current_column += 1;
+            column += 1;
             if let Some(&next_char) = src.get(0) {
                 string_content.push(next_char);
                 src.remove(0);
-                current_column += 1;
+                column += 1;
             } else {
                 panic!("Unterminated escape sequence in string literal");
             }
         } else {
             string_content.push(next_char);
             src.remove(0);
-            current_column += 1;
+            column += 1;
         }
     }
 
@@ -310,7 +313,7 @@ fn parse_string(src: &mut Vec<char>, line: usize, column: usize) -> Token {
 
 fn parse_single_line_comment(src: &mut Vec<char>, line: usize, column: usize) -> Token {
     let mut comment_content = String::new();
-    let mut current_column = column;
+    let mut column = column;
 
     src.remove(0); // Remove the second '/' character
 
@@ -319,7 +322,7 @@ fn parse_single_line_comment(src: &mut Vec<char>, line: usize, column: usize) ->
             break; // End of comment at new line
         }
         comment_content.push(src.remove(0));
-        current_column += 1;
+        column += 1;
     }
 
     Token::new(comment_content, TokenType::SingleLineComment, line, column)
@@ -327,8 +330,8 @@ fn parse_single_line_comment(src: &mut Vec<char>, line: usize, column: usize) ->
 
 fn parse_multi_line_comment(src: &mut Vec<char>, line: usize, column: usize) -> Token {
     let mut comment_content = String::new();
-    let mut current_line = line;
-    let mut current_column = column;
+    let mut line = line;
+    let mut column = column;
 
     src.remove(0); // Remove the '*' character
 
@@ -343,11 +346,11 @@ fn parse_multi_line_comment(src: &mut Vec<char>, line: usize, column: usize) -> 
                     }
                 }
             } else if next_char == '\n' {
-                current_line += 1;
-                current_column = 0;
+                line += 1;
+                column = 0;
             } else {
                 comment_content.push(next_char);
-                current_column += 1;
+                column += 1;
             }
             src.remove(0);
         } else {

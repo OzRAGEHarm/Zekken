@@ -1,1 +1,0 @@
-D:\Rions\zekken-rewritten\zekken\target\debug\zekken.exe

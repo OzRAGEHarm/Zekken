@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::fmt::Debug;
 
 #[derive(Debug)]
@@ -14,6 +15,7 @@ pub enum Stmt {
   Use(String),
   Include(String),
   Export(Vec<String>),
+  Return(ReturnStmt)
 }
 
 #[derive(Debug)]
@@ -22,7 +24,7 @@ pub enum Expr {
   Member(MemberExpr),
   Call(CallExpr),
   Binary(BinaryExpr),
-  Indentifier(Indentifier),
+  Identifier(Identifier),
   Property(Property),
   IntLit(IntLit),
   FloatLit(FloatLit),
@@ -96,6 +98,11 @@ pub struct BlockStmt {
 }
 
 #[derive(Debug)]
+pub struct ReturnStmt {
+    pub value: Option<Box<Expr>>,
+}
+
+#[derive(Debug)]
 pub struct AssignExpr {
   pub left: Box<Expr>,
   pub right: Box<Expr>,
@@ -122,7 +129,7 @@ pub struct BinaryExpr {
 }
 
 #[derive(Debug)]
-pub struct Indentifier {
+pub struct Identifier {
   pub name: String,
 }
 
