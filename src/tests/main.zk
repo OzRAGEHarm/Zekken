@@ -1,4 +1,3 @@
-let const
- func if else then for use include export obj in
- ( ) { } [ ] + - * % / < > . ; : ,
- || | -> => = ! && & == != <= >= ' "
+let x: int = 45
+const y: float = 90.0
+let z: string = 'Hello, World!'

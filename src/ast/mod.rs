@@ -49,6 +49,7 @@ pub struct Program {
 pub struct VarDecl {
   pub constant: bool,
   pub ident: String,
+  pub type_: String,
   pub value: Option<Content>,
 }
 

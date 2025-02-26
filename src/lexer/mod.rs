@@ -1,11 +1,44 @@
 #![allow(dead_code)]
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArithOp {
+    Add,            // +
+    Sub,            // -
+    Mul,            // *
+    Div,            // /
+    Mod,            // %
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinOp {
+    And,            // &&
+    Or,             // ||
+    Not,            // !
+    Eq,             // ==
+    Neq,            // !=
+    Less,           // <
+    Greater,        // >
+    LessEq,         // <=
+    GreaterEq,      // >=
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AssignOp {
+    Assign,         // =
+    AddAssign,      // +=
+    SubAssign,      // -=
+    MulAssign,      // *=
+    DivAssign,      // /=
+    ModAssign,      // %=
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenType {
     // Literals
-    Int,
-    Float,
-    Identifier,
-    String,
+    Int,            // Integer (1, 2, etc.)
+    Float,          // Float (1.1, 2.2, etc.)
+    Identifier,     // Identifier (x, add, etc.)
+    String,         // String ("Hello World!", "This is a string", etc.)
 
     // Keywords
     Let,
@@ -15,6 +48,7 @@ pub enum TokenType {
     Else,
     Then,
     For,
+    While,
     Use,
     Include,
     Export,
@@ -23,10 +57,6 @@ pub enum TokenType {
     From,
     Return,
 
-    // Grouping & Operators
-    BinaryOperator,
-    Assignment,
-    Equal,
     Comma,
     Colon,
     Semicolon,
@@ -39,19 +69,11 @@ pub enum TokenType {
     CloseBracket,
     SingleQuote,
     DoubleQuote,
-    Greater,
-    Less,
-    EqualCompare,
-    NotEqualCompare,
-    Exclamation,
-    And,
-    Ampersand,
-    Bar,
-    Pipe,
-    ThinArrow,
-    FatArrow,
-    GreaterEqual,
-    LessEqual,
+
+    // Operators
+    ArithOp(ArithOp),
+    BinOp(BinOp),
+    AssignOp(AssignOp),
 
     // Comments
     SingleLineComment,
@@ -59,6 +81,12 @@ pub enum TokenType {
 
     // End Of File
     EOF,
+    
+    // Additional Operators
+    ThinArrow,      // ->
+    FatArrow,       // =>
+    Pipe,           // |
+    Ampersand,      // &
 }
 
 // Static HashMaps for keywords and token characters
@@ -86,29 +114,27 @@ pub static TOKEN_CHAR: &[(&str, TokenType)] = &[
     ("}", TokenType::CloseBrace),
     ("[", TokenType::OpenBracket),
     ("]", TokenType::CloseBracket),
-    ("+", TokenType::BinaryOperator),
-    ("-", TokenType::BinaryOperator),
-    ("*", TokenType::BinaryOperator),
-    ("%", TokenType::BinaryOperator),
-    ("/", TokenType::BinaryOperator),
-    ("<", TokenType::Less),
-    (">", TokenType::Greater),
+    ("+", TokenType::ArithOp(ArithOp::Add)),
+    ("-", TokenType::ArithOp(ArithOp::Sub)),
+    ("*", TokenType::ArithOp(ArithOp::Mul)),
+    ("%", TokenType::ArithOp(ArithOp::Mod)),
+    ("/", TokenType::ArithOp(ArithOp::Div)),
     (".", TokenType::Dot),
     (";", TokenType::Semicolon),
     (":", TokenType::Colon),
     (",", TokenType::Comma),
-    ("||", TokenType::Bar),
-    ("|", TokenType::Pipe),
+    ("||", TokenType::BinOp(BinOp::Or)),
+    ("|", TokenType::Pipe), // Single pipe can also be a bitwise OR
     ("->", TokenType::ThinArrow),
     ("=>", TokenType::FatArrow),
-    ("=", TokenType::Equal),
-    ("!", TokenType::Exclamation),
-    ("&&", TokenType::And),
-    ("&", TokenType::Ampersand),
-    ("==", TokenType::EqualCompare),
-    ("!=", TokenType::NotEqualCompare),
-    (">=", TokenType::GreaterEqual),
-    ("<=", TokenType::LessEqual),
+    ("=", TokenType::AssignOp(AssignOp::Assign)),
+    ("!", TokenType::BinOp(BinOp::Not)),
+    ("&&", TokenType::BinOp(BinOp::And)),
+    ("&", TokenType::Ampersand), // Single ampersand can also be a bitwise AND
+    ("==", TokenType::BinOp(BinOp::Eq)),
+    ("!=", TokenType::BinOp(BinOp::Neq)),
+    (">=", TokenType::BinOp(BinOp::GreaterEq)),
+    ("<=", TokenType::BinOp(BinOp::LessEq)),
     ("'", TokenType::SingleQuote),
     ("\"", TokenType::DoubleQuote),
 ];
@@ -199,27 +225,27 @@ fn tokenize_char(src: &mut Vec<char>, char: char, line: usize, column: usize) ->
             }
             ('|', '|') => {
                 src.remove(0);
-                return Some(Token::new("||".to_string(), TokenType::Bar, line, column));
+                return Some(Token::new("||".to_string(), TokenType::BinOp(BinOp::Or), line, column));
             }
             ('&', '&') => {
                 src.remove(0);
-                return Some(Token::new("&&".to_string(), TokenType::And, line, column));
+                return Some(Token::new("&&".to_string(), TokenType::BinOp(BinOp::And), line, column));
             }
             ('!', '=') => {
                 src.remove(0);
-                return Some(Token::new("!=".to_string(), TokenType::NotEqualCompare, line, column));
+                return Some(Token::new("!=".to_string(), TokenType::BinOp(BinOp::Neq), line, column));
             }
             ('=', '=') => {
                 src.remove(0);
-                return Some(Token::new("==".to_string(), TokenType::EqualCompare, line, column));
+                return Some(Token::new("==".to_string(), TokenType::BinOp(BinOp::Eq), line, column));
             }
             ('<', '=') => {
                 src.remove(0);
-                return Some(Token::new("<=".to_string(), TokenType::LessEqual, line, column));
+                return Some(Token::new("<=".to_string(), TokenType::BinOp(BinOp::LessEq), line, column));
             }
             ('>', '=') => {
                 src.remove(0);
-                return Some(Token::new(">=".to_string(), TokenType::GreaterEqual, line, column));
+                return Some(Token::new(">=".to_string(), TokenType::BinOp(BinOp::GreaterEq), line, column));
             }
             _ => {}
         }
@@ -238,7 +264,7 @@ fn tokenize_char(src: &mut Vec<char>, char: char, line: usize, column: usize) ->
     }
 
     // Handle string literals
-    if char == '"' {
+    if char == '"' || char == '\'' {
         return Some(parse_string(src, line, column));
     }
 
@@ -276,36 +302,26 @@ fn parse_number(src: &mut Vec<char>, initial_char: char, line: usize, column: us
 
 fn parse_string(src: &mut Vec<char>, line: usize, column: usize) -> Token {
     let mut string_content = String::new();
-    let mut column = column;
+    let quote_char = if src[0] == '"' { '"' } else { '\'' };
 
-    src.remove(0); // Remove the first '"' character
-
+    src.remove(0); // Remove the first quote character
     while let Some(&next_char) = src.get(0) {
-        if next_char == '"' {
-            src.remove(0);
-            column += 1;
+        if next_char == quote_char {
+            src.remove(0); // Remove the closing quote
             break;
         } else if next_char == '\\' {
-            src.remove(0);
-            column += 1;
-            if let Some(&next_char) = src.get(0) {
-                string_content.push(next_char);
-                src.remove(0);
-                column += 1;
+            src.remove(0); // Remove the backslash
+            if let Some(&escaped_char) = src.get(0) {
+                string_content.push('\\');
+                string_content.push(escaped_char);
+                src.remove(0); // Remove the escaped character
             } else {
                 panic!("Unterminated escape sequence in string literal");
             }
         } else {
             string_content.push(next_char);
-            src.remove(0);
-            column += 1;
+            src.remove(0); // Remove the character
         }
-    }
-
-    if src.is_empty() {
-        panic!("Unterminated string literal at end of file");
-    } else if src.get(0) == Some(&'\n') {
-        panic!("Unterminated string literal at end of line");
     }
 
     Token::new(string_content, TokenType::String, line, column)
@@ -363,10 +379,17 @@ fn parse_multi_line_comment(src: &mut Vec<char>, line: usize, column: usize) -> 
 
 fn parse_operators(src: &mut Vec<char>, line: usize, column: usize, char: char) -> Option<Token> {
     match char {
-        '=' => parse_operator(src, line, column, "=", TokenType::Assignment),
-        '&' => parse_operator(src, line, column, "&", TokenType::Ampersand),
-        '!' => parse_operator(src, line, column, "!", TokenType::Exclamation),
-        '|' => parse_operator(src, line, column, "|", TokenType::Pipe),
+        '=' => parse_operator(src, line, column, "=", TokenType::AssignOp(AssignOp::Assign)),
+        '!' => parse_operator(src, line, column, "!", TokenType::BinOp(BinOp::Not)),
+        '&' => parse_operator(src, line, column, "&", TokenType::Ampersand), // Single ampersand
+        '|' => parse_operator(src, line, column, "|", TokenType::Pipe), // Single pipe
+        '+' => parse_operator(src, line, column, "+", TokenType::ArithOp(ArithOp::Add)),
+        '-' => parse_operator(src, line, column, "-", TokenType::ArithOp(ArithOp::Sub)),
+        '*' => parse_operator(src, line, column, "*", TokenType::ArithOp(ArithOp::Mul)),
+        '/' => parse_operator(src, line, column, "/", TokenType::ArithOp(ArithOp::Div)),
+        '%' => parse_operator(src, line, column, "%", TokenType::ArithOp(ArithOp::Mod)),
+        '<' => parse_operator(src, line, column, "<", TokenType::BinOp(BinOp::Less)),
+        '>' => parse_operator(src, line, column, ">", TokenType::BinOp(BinOp::Greater)),
         _ => None,
     }
 }

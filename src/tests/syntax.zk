@@ -1,0 +1,92 @@
+// this is a single-lined comment
+
+//
+* this is a multi-lined comment
+//
+
+// use native library statement
+use math;
+use fs.read_file;
+
+// include from file statement
+include file;
+include file.method;
+
+
+// integer varaible declaration
+let x: int = 45; 
+const y: int = 90;
+
+// export from file statement
+export x, y
+
+
+// floating point variable declaration
+let a: float = 12.34;
+const b: float = 56.78;
+
+// string variable declaration
+let z: string = "Hello World!"
+
+
+// log to the console with println
+println(z) // output: Hello World!
+
+// function declaration
+func add | a, b | {
+  return a + b
+}
+
+
+// lambda function
+const multiply -> | a, b | { 
+  return a * b
+}
+
+
+// method call expressions
+add => | x, y |
+multiply => | a, b |
+
+
+// if-else statement
+if x == 45
+  then x + 5
+else if x == 40
+  then x + 10
+else
+  then x + 15
+
+
+// object declaration
+obj z {
+  key1: "value1",
+  key2: "value2"
+}
+
+// for-loop
+for x in z {
+  println(x)
+}
+
+
+// arithmitic operators
+x + y
+x - y
+x * y
+x / y
+
+
+// assignment operators
+x += y
+x -= y
+x *= y
+x /= y
+
+
+// try-catch statement
+try {
+  x + y
+} catch |e| {
+  x * y
+}
