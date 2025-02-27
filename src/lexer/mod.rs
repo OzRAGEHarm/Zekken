@@ -33,12 +33,23 @@ pub enum AssignOp {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DataType {
+    Int,
+    Float,
+    String,
+    Bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenType {
     // Literals
-    Int,            // Integer (1, 2, etc.)
-    Float,          // Float (1.1, 2.2, etc.)
-    Identifier,     // Identifier (x, add, etc.)
-    String,         // String ("Hello World!", "This is a string", etc.)
+    Int,
+    Float,
+    Identifier,
+    String,
+
+    // Data Types
+    DataType(DataType),
 
     // Keywords
     Let,
@@ -56,7 +67,8 @@ pub enum TokenType {
     In,
     From,
     Return,
-
+    
+    // Grouping
     Comma,
     Colon,
     Semicolon,
@@ -74,19 +86,19 @@ pub enum TokenType {
     ArithOp(ArithOp),
     BinOp(BinOp),
     AssignOp(AssignOp),
+    ThinArrow,
+    FatArrow,
+    Pipe,
+    Ampersand,
 
     // Comments
     SingleLineComment,
     MultiLineComment,
 
+    Undefined,
+
     // End Of File
     EOF,
-    
-    // Additional Operators
-    ThinArrow,      // ->
-    FatArrow,       // =>
-    Pipe,           // |
-    Ampersand,      // &
 }
 
 // Static HashMaps for keywords and token characters
@@ -105,6 +117,10 @@ pub static KEYWORDS: &[(&str, TokenType)] = &[
     ("in", TokenType::In),
     ("from", TokenType::From),
     ("return", TokenType::Return),
+    ("int", TokenType::DataType(DataType::Int)),
+    ("float", TokenType::DataType(DataType::Float)),
+    ("string", TokenType::DataType(DataType::String)),
+    ("bool", TokenType::DataType(DataType::Bool)),
 ];
 
 pub static TOKEN_CHAR: &[(&str, TokenType)] = &[
@@ -251,13 +267,6 @@ fn tokenize_char(src: &mut Vec<char>, char: char, line: usize, column: usize) ->
         }
     }
 
-    // Check for token character types
-    if let Some(token_type) = TOKEN_CHAR.iter().find_map(|&(c, ref token_type)| {
-        if c == char.to_string() { Some(*token_type) } else { None }
-    }) {
-        return Some(Token::new(char.to_string(), token_type, line, column));
-    }
-
     // Handle numbers (integer)
     if char.is_digit(10) || (char == '-' && !src.is_empty() && src[0].is_digit(10)) {
         return Some(parse_number(src, char, line, column, true)); // Check for integer
@@ -265,7 +274,13 @@ fn tokenize_char(src: &mut Vec<char>, char: char, line: usize, column: usize) ->
 
     // Handle string literals
     if char == '"' || char == '\'' {
-        return Some(parse_string(src, line, column));
+        return Some(parse_string(src, char, line, column));
+    }
+
+    if let Some(token_type) = TOKEN_CHAR.iter().find_map(|&(c, ref token_type)| {
+        if c == char.to_string() { Some(*token_type) } else { None }
+    }) {
+        return Some(Token::new(char.to_string(), token_type, line, column));
     }
 
     // Handle operators and keywords
@@ -300,81 +315,64 @@ fn parse_number(src: &mut Vec<char>, initial_char: char, line: usize, column: us
     Token::new(num.clone(), token_type, line, column)
 }
 
-fn parse_string(src: &mut Vec<char>, line: usize, column: usize) -> Token {
+fn parse_string(src: &mut Vec<char>, quote_type: char, line: usize, column: usize) -> Token {
     let mut string_content = String::new();
-    let quote_char = if src[0] == '"' { '"' } else { '\'' };
-
-    src.remove(0); // Remove the first quote character
+    
+    // We already consumed the opening quote, now process until closing quote
     while let Some(&next_char) = src.get(0) {
-        if next_char == quote_char {
-            src.remove(0); // Remove the closing quote
+        if next_char == quote_type {
+            src.remove(0);  // Remove closing quote
             break;
-        } else if next_char == '\\' {
-            src.remove(0); // Remove the backslash
-            if let Some(&escaped_char) = src.get(0) {
-                string_content.push('\\');
-                string_content.push(escaped_char);
-                src.remove(0); // Remove the escaped character
-            } else {
-                panic!("Unterminated escape sequence in string literal");
-            }
-        } else {
-            string_content.push(next_char);
-            src.remove(0); // Remove the character
         }
+        
+        // Handle escape characters
+        if next_char == '\\' {
+            src.remove(0);  // Remove backslash
+            if let Some(escaped_char) = src.get(0) {
+                string_content.push(*escaped_char);
+                src.remove(0);
+                continue;
+            }
+        }
+        
+        string_content.push(next_char);
+        src.remove(0);
     }
 
     Token::new(string_content, TokenType::String, line, column)
 }
 
+// Keep existing comment parsing functions but ensure they return proper tokens
 fn parse_single_line_comment(src: &mut Vec<char>, line: usize, column: usize) -> Token {
-    let mut comment_content = String::new();
-    let mut column = column;
-
-    src.remove(0); // Remove the second '/' character
-
-    while let Some(&next_char) = src.get(0) {
-        if next_char == '\n' {
-            break; // End of comment at new line
-        }
-        comment_content.push(src.remove(0));
-        column += 1;
+    let mut content = String::new();
+    while let Some(&c) = src.get(0) {
+        if c == '\n' { break }
+        content.push(src.remove(0));
     }
-
-    Token::new(comment_content, TokenType::SingleLineComment, line, column)
+    Token::new(content, TokenType::SingleLineComment, line, column)
 }
 
 fn parse_multi_line_comment(src: &mut Vec<char>, line: usize, column: usize) -> Token {
-    let mut comment_content = String::new();
-    let mut line = line;
-    let mut column = column;
+    let mut content = String::new();
+    let mut current_line = line;
+    let mut current_col = column;
 
-    src.remove(0); // Remove the '*' character
-
-    loop {
-        if let Some(&next_char) = src.get(0) {
-            if next_char == '*' {
-                src.remove(0); 
-                if let Some(&next_after_star) = src.get(0) {
-                    if next_after_star == '/' {
-                        src.remove(0);
-                        break; // End of comment
-                    }
-                }
-            } else if next_char == '\n' {
-                line += 1;
-                column = 0;
-            } else {
-                comment_content.push(next_char);
-                column += 1;
-            }
-            src.remove(0);
-        } else {
-            panic!("Unterminated multi-line comment");
+    while let Some(c) = src.get(0) {
+        if *c == '*' && src.get(1) == Some(&'/') {
+            src.remove(0); // Remove *
+            src.remove(0); // Remove /
+            break;
         }
+        if *c == '\n' {
+            current_line += 1;
+            current_col = 1;
+        } else {
+            current_col += 1;
+        }
+        content.push(*c);
+        src.remove(0);
     }
-
-    Token::new(comment_content, TokenType::MultiLineComment, line, column)
+    Token::new(content, TokenType::MultiLineComment, current_line, current_col)
 }
 
 fn parse_operators(src: &mut Vec<char>, line: usize, column: usize, char: char) -> Option<Token> {

@@ -17,9 +17,17 @@ impl Parser {
 
     pub fn produce_ast(&mut self, source_code: String) -> Program {
         self.tokens = tokenize(source_code);
+
+        for token in &self.tokens {
+            println!("{:?}", token);
+        }
+
         let mut program = Program { body: vec![] };
 
         while self.not_eof() {
+            if self.skip_comments() {
+                continue;
+            }
             program.body.push(self.parse_stmt());
         }
 
@@ -43,10 +51,20 @@ impl Parser {
     fn expect(&mut self, type_: TokenType, err: &str) -> Token {
         let token = self.at().clone();
         if token.kind != type_ {
-            panic!("Parser error: {}\nExpecting: {:?}", err, type_);
+            panic!("Parser error: {}\nExpecting: {:?}, Got: {:?} at Line: {:?}, Column: {:?}", err, type_, token.value, token.line, token.column);
         }
         self.consume();
         token
+    }
+
+    fn skip_comments(&mut self) -> bool {
+        match self.at().kind {
+            TokenType::SingleLineComment | TokenType::MultiLineComment => {
+                self.consume();
+                true
+            }
+            _ => false
+        }
     }
 
     fn parse_stmt(&mut self) -> Content {
@@ -60,6 +78,7 @@ impl Parser {
             TokenType::Include => self.parse_include_stmt(),
             TokenType::Export => self.parse_export_stmt(),
             TokenType::Obj => self.parse_object_decl(),
+            TokenType::Return => self.parse_return_stmt(),
             _ => self.parse_expr(),
         }
     }
@@ -69,32 +88,77 @@ impl Parser {
         self.consume();
         let ident = self.expect(TokenType::Identifier, "Expected variable identifier").value;
         self.expect(TokenType::Colon, "Expected ':' after variable identifier");
-        let type_ = self.expect(TokenType::Identifier, "Expected type after ':'").value; 
+        let type_ = match self.at().kind {
+            TokenType::DataType(DataType::Int) => {
+                self.consume();
+                DataType::Int
+            },
+            TokenType::DataType(DataType::Float) => {
+                self.consume();
+                DataType::Float
+            },
+            TokenType::DataType(DataType::String) => {
+                self.consume();
+                DataType::String
+            },
+            TokenType::DataType(DataType::Bool) => {
+                self.consume();
+                DataType::Bool
+            },
+            _ => panic!("Expected type after ':', got: {:?}", self.at().kind),
+        };
         self.expect(TokenType::AssignOp(AssignOp::Assign), "Expected '=' after type declaration");
         let value = Some(self.parse_expr());
+        self.expect(TokenType::Semicolon, "Expected ';' after variable declaration");
         Content::Statement(Box::new(Stmt::VarDecl(VarDecl { constant, ident, type_, value })))
     }
 
     fn parse_func_decl(&mut self) -> Content {
         self.expect(TokenType::Func, "Expected 'func' keyword");
         let ident = self.expect(TokenType::Identifier, "Expected function identifier").value;
-        self.expect(TokenType::Pipe, "Expected '|' after function identifier");
-        let params = self.parse_params();
-        self.expect(TokenType::OpenBrace, "Expected '{' after parameters");
+        self.expect(TokenType::Pipe, "Expected '|' after function identifier"); // Expect the opening pipe
+        let params = self.parse_params(); // Parse parameters
+        self.expect(TokenType::Pipe, "Expected '|' after parameters"); // Expect the closing pipe
+        self.expect(TokenType::OpenBrace, "Expected '{' after parameters"); // Expect the opening brace
         let body = self.parse_block_stmt().into_iter().map(|b| *b).collect();
         Content::Statement(Box::new(Stmt::FuncDecl(FuncDecl { params, ident, body })))
     }
 
-    fn parse_params(&mut self) -> Vec<String> {
+    fn parse_params(&mut self) -> Vec<Param> {
         let mut params = Vec::new();
-        while self.at().kind != TokenType::CloseParen {
-            let param = self.expect(TokenType::Identifier, "Expected parameter identifier").value;
-            params.push(param);
+        while self.at().kind != TokenType::Pipe {
+            let ident = self.expect(TokenType::Identifier, "Expected parameter identifier").value;
+            self.expect(TokenType::Colon, "Expected ':' after parameter identifier");
+    
+            // Expect a type token
+            let type_ = match self.at().kind {
+                TokenType::DataType(DataType::Int) => {
+                    self.consume();
+                    DataType::Int
+                },
+                TokenType::DataType(DataType::Float) => {
+                    self.consume();
+                    DataType::Float
+                },
+                TokenType::DataType(DataType::String) => {
+                    self.consume();
+                    DataType::String
+                },
+                TokenType::DataType(DataType::Bool) => {
+                    self.consume();
+                    DataType::Bool
+                },
+                _ => panic!("Expected type after ':', got: {:?}", self.at().kind),
+            };
+    
+            params.push(Param { ident, type_ }); // Create a new Param instance
+    
             if self.at().kind == TokenType::Comma {
                 self.consume(); // Consume the comma
+            } else {
+                break;
             }
         }
-        self.expect(TokenType::CloseParen, "Expected ')' after parameters");
         params
     }
 
@@ -196,6 +260,21 @@ impl Parser {
         Content::Statement(Box::new(Stmt::ObjectDecl(ObjectDecl { ident, properties })))
     }
 
+    fn parse_return_stmt(&mut self) -> Content {
+        self.expect(TokenType::Return, "Expected 'return' keyword");
+
+        let value = if self.at().kind != TokenType::Semicolon {
+            match self.parse_expr() {
+                Content::Expression(expr) => Some(Box::new(Content::Expression(expr))),
+                _ => panic!("Expected expression after 'return'"),
+            }
+        } else {
+            None
+        };
+        
+        Content::Statement(Box::new(Stmt::Return(ReturnStmt { value })))
+    }
+
     fn parse_object_properties(&mut self) -> Vec<Property> {
         let mut properties = Vec::new();
         while self.at().kind != TokenType::CloseBrace {
@@ -215,41 +294,78 @@ impl Parser {
         properties
     }
 
+    fn parse_string_literal(&mut self) -> Content {
+        let quote_token = self.at().clone(); // Capture the opening quote token
+        self.consume(); // Consume the opening quote
+
+        let mut string_content = String::new();
+
+        while self.not_eof() {
+            let current_token = self.at().clone();
+
+            // Check for the closing quote
+            if current_token.kind == quote_token.kind {
+                self.consume(); // Consume the closing quote
+                break;
+            }
+
+            string_content.push_str(&current_token.value);
+            self.consume(); // Consume the current token
+        }
+
+        Content::Expression(Box::new(Expr::StringLit(StringLit { value: string_content })))
+    }
+
     fn parse_expr(&mut self) -> Content {
         self.parse_assignment_expr()
     }
 
     fn parse_assignment_expr(&mut self) -> Content {
-        let left = self.parse_binary_expr();
-        if matches!(self.at().kind, TokenType::AssignOp(_)) {
-            let operator = self.at().kind.clone();
-            self.consume(); // Consume the assignment operator
-            let right = self.parse_expr();
-            if let (Content::Expression(left_expr), Content::Expression(right_expr)) = (left, right) {
-                let assign_expr = AssignExpr { left: left_expr, right: right_expr };
-                return Content::Expression(Box::new(Expr::Assign(assign_expr)));
-            }
-            panic!("Expected expressions in assignment");
-        }
-        left
-    }
-
-    fn parse_binary_expr(&mut self) -> Content {
-        let mut left = self.parse_primary_expr();
-
-        while matches!(self.at().kind, TokenType::BinOp(_)) {
-            let operator = self.at().kind.clone();
-            self.consume(); // Consume the operator
-            let right = self.parse_primary_expr();
-            if let (Content::Expression(left_expr), Content::Expression(right_expr)) = (left, right) {
-                let binary_expr = BinaryExpr { left: left_expr, right: right_expr, operator: format!("{:?}", operator) };
-                left = Content::Expression(Box::new(Expr::Binary(binary_expr)));
+        let mut expr = self.parse_binary_expr();
+    
+        while self.at().kind != TokenType::Semicolon && self.at().kind != TokenType::CloseBrace && self.at().kind != TokenType::CloseParen {
+            if matches!(self.at().kind, TokenType::AssignOp(_)) {
+                let operator = self.at().kind.clone();
+                self.consume(); // Consume the assignment operator
+                let right = self.parse_binary_expr(); // Parse the right-hand side expression
+                if let (Content::Expression(left_expr), Content::Expression(right_expr)) = (expr, right) {
+                    let assign_expr = AssignExpr { left: left_expr, right: right_expr };
+                    expr = Content::Expression(Box::new(Expr::Assign(assign_expr)));
+                } else {
+                    panic!("Expected expressions in assignment");
+                }
             } else {
-                panic!("Expected expressions in binary operation");
+                break;
             }
         }
-
-        left
+    
+        expr // Return the parsed expression
+    }
+    
+    fn parse_binary_expr(&mut self) -> Content {
+        let mut expr = self.parse_primary_expr();
+    
+        while self.at().kind != TokenType::Semicolon && self.at().kind != TokenType::CloseBrace && self.at().kind != TokenType::CloseParen && !matches!(self.at().kind, TokenType::AssignOp(_)) {
+            if matches!(self.at().kind, TokenType::BinOp(_)) {
+                let operator = self.at().kind.clone();
+                self.consume(); // Consume the binary operator
+                let right = self.parse_primary_expr(); // Parse the right-hand side expression
+                if let (Content::Expression(left_expr), Content::Expression(right_expr)) = (expr, right) {
+                    let binary_expr = BinaryExpr {
+                        left: left_expr,
+                        right: right_expr,
+                        operator: format!("{:?}", operator),
+                    };
+                    expr = Content::Expression(Box::new(Expr::Binary(binary_expr)));
+                } else {
+                    panic!("Expected expressions in binary operation");
+                }
+            } else {
+                break;
+            }
+        }
+    
+        expr // Return the parsed expression
     }
 
     fn parse_primary_expr(&mut self) -> Content {
@@ -267,8 +383,8 @@ impl Parser {
                 Content::Expression(Box::new(Expr::FloatLit(FloatLit { value: float_lit.value.parse().unwrap() })))
             },
             TokenType::String => {
-                let string_lit = self.expect(TokenType::String, "Expected string literal").value;
-                Content::Expression(Box::new(Expr::StringLit(StringLit { value: string_lit })))
+                let string_token = self.expect(TokenType::String, "Expected string literal");
+                Content::Expression(Box::new(Expr::StringLit(StringLit { value: string_token.value })))
             },
             TokenType::OpenParen => {
                 self.consume(); // Consume '('

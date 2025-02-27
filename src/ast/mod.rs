@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 use std::fmt::Debug;
 
+use crate::lexer::DataType;
+
 #[derive(Debug)]
 pub enum Stmt {
   Program(Program),
@@ -49,13 +51,19 @@ pub struct Program {
 pub struct VarDecl {
   pub constant: bool,
   pub ident: String,
-  pub type_: String,
+  pub type_: DataType,
   pub value: Option<Content>,
 }
 
 #[derive(Debug)]
+pub struct Param {
+  pub ident: String,
+  pub type_: DataType,
+}
+
+#[derive(Debug)]
 pub struct FuncDecl {
-  pub params: Vec<String>,
+  pub params: Vec<Param>,
   pub ident: String,
   pub body: Vec<Content>,
 }
@@ -100,7 +108,7 @@ pub struct BlockStmt {
 
 #[derive(Debug)]
 pub struct ReturnStmt {
-    pub value: Option<Box<Expr>>,
+    pub value: Option<Box<Content>>,
 }
 
 #[derive(Debug)]

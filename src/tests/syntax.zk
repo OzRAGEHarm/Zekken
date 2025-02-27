@@ -1,8 +1,8 @@
 // this is a single-lined comment
 
-//
-* this is a multi-lined comment
-//
+/*
+ this is a multi-lined comment
+*/
 
 // use native library statement
 use math;
@@ -33,13 +33,13 @@ let z: string = "Hello World!"
 println(z) // output: Hello World!
 
 // function declaration
-func add | a, b | {
-  return a + b
+func add | a: int, b: int | {
+  return a + b;
 }
 
 
 // lambda function
-const multiply -> | a, b | { 
+const multiply -> | a: float, b: float | { 
   return a * b
 }
 
