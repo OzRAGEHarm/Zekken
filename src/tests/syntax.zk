@@ -5,12 +5,14 @@
 */
 
 // use native library statement
-use math;
-use fs.read_file;
+use math; // use all of the math module
+use { read_file, write_file } from fs; // use only the read and write methods from fs module
+
 
 // include from file statement
-include file;
-include file.method;
+include "file.zk"; // include 
+include method from "file.zk";
+include { method1, method2 } from "file.zk";
 
 
 // integer varaible declaration
@@ -18,7 +20,7 @@ let x: int = 45;
 const y: int = 90;
 
 // export from file statement
-export x, y
+export x, y;
 
 
 // floating point variable declaration
@@ -26,36 +28,37 @@ let a: float = 12.34;
 const b: float = 56.78;
 
 // string variable declaration
-let z: string = "Hello World!"
+let z: string = "Hello World!";
 
 
 // log to the console with println
 println(z) // output: Hello World!
 
-// function declaration
+// function declaration (done)
 func add | a: int, b: int | {
   return a + b;
 }
 
 
-// lambda function
+// lambda function (done)
 const multiply -> | a: float, b: float | { 
-  return a * b
+  return a * b;
 }
 
 
-// method call expressions
+// method call expressions (done)
 add => | x, y |
 multiply => | a, b |
 
 
-// if-else statement
-if x == 45
-  then x + 5
-else if x == 40
-  then x + 10
-else
-  then x + 15
+// if-else statement (done)
+if x == 45 {
+  x + 5
+} else if x == 40 {
+  x + 10
+} else {
+  x + 15
+}
 
 
 // object declaration
