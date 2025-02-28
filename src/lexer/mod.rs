@@ -57,7 +57,6 @@ pub enum TokenType {
     Func,
     If,
     Else,
-    Then,
     For,
     While,
     Use,
@@ -67,6 +66,8 @@ pub enum TokenType {
     In,
     From,
     Return,
+    Try,
+    Catch,
     
     // Grouping
     Comma,
@@ -108,7 +109,6 @@ pub static KEYWORDS: &[(&str, TokenType)] = &[
     ("func", TokenType::Func),
     ("if", TokenType::If),
     ("else", TokenType::Else),
-    ("then", TokenType::Then),
     ("for", TokenType::For),
     ("use", TokenType::Use),
     ("include", TokenType::Include),
@@ -117,6 +117,8 @@ pub static KEYWORDS: &[(&str, TokenType)] = &[
     ("in", TokenType::In),
     ("from", TokenType::From),
     ("return", TokenType::Return),
+    ("try", TokenType::Try),
+    ("catch", TokenType::Catch),
     ("int", TokenType::DataType(DataType::Int)),
     ("float", TokenType::DataType(DataType::Float)),
     ("string", TokenType::DataType(DataType::String)),
@@ -345,34 +347,39 @@ fn parse_string(src: &mut Vec<char>, quote_type: char, line: usize, column: usiz
 // Keep existing comment parsing functions but ensure they return proper tokens
 fn parse_single_line_comment(src: &mut Vec<char>, line: usize, column: usize) -> Token {
     let mut content = String::new();
+    src.remove(0); // Remove the first '/'
+    src.remove(0); // Remove the second '/'
+
     while let Some(&c) = src.get(0) {
-        if c == '\n' { break }
+        if c == '\n' { break; }
         content.push(src.remove(0));
     }
+    
     Token::new(content, TokenType::SingleLineComment, line, column)
 }
 
-fn parse_multi_line_comment(src: &mut Vec<char>, line: usize, column: usize) -> Token {
+fn parse_multi_line_comment(src: &mut Vec<char>, mut line: usize, mut column: usize) -> Token {
     let mut content = String::new();
-    let mut current_line = line;
-    let mut current_col = column;
+    src.remove(0); // Remove the first '*'
+    src.remove(0); // Remove the second '/'
 
     while let Some(c) = src.get(0) {
         if *c == '*' && src.get(1) == Some(&'/') {
-            src.remove(0); // Remove *
-            src.remove(0); // Remove /
+            src.remove(0); // Remove '*'
+            src.remove(0); // Remove '/'
             break;
         }
         if *c == '\n' {
-            current_line += 1;
-            current_col = 1;
+            line += 1;
+            column = 1;
         } else {
-            current_col += 1;
+            column += 1;
         }
         content.push(*c);
         src.remove(0);
     }
-    Token::new(content, TokenType::MultiLineComment, current_line, current_col)
+    
+    Token::new(content, TokenType::MultiLineComment, line, column)
 }
 
 fn parse_operators(src: &mut Vec<char>, line: usize, column: usize, char: char) -> Option<Token> {

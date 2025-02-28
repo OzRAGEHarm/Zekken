@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+
 use crate::ast::{*};
 use crate::lexer::{*};
 
@@ -17,10 +18,6 @@ impl Parser {
 
     pub fn produce_ast(&mut self, source_code: String) -> Program {
         self.tokens = tokenize(source_code);
-
-        for token in &self.tokens {
-            println!("{:?}", token);
-        }
 
         let mut program = Program { body: vec![] };
 
@@ -79,6 +76,7 @@ impl Parser {
             TokenType::Export => self.parse_export_stmt(),
             TokenType::Obj => self.parse_object_decl(),
             TokenType::Return => self.parse_return_stmt(),
+            TokenType::Try => self.parse_try_catch_stmt(),
             _ => self.parse_expr(),
         }
     }
@@ -87,24 +85,50 @@ impl Parser {
         let constant = matches!(self.at().kind, TokenType::Const);
         self.consume();
         let ident = self.expect(TokenType::Identifier, "Expected variable identifier").value;
+
+        if self.at().kind == TokenType::ThinArrow {
+            self.parse_lambda_decl(constant, ident)
+        } else {
+            self.parse_normal_var_decl(constant, ident)
+        }
+    }
+
+    fn parse_lambda_decl(&mut self, constant: bool, ident: String) -> Content {
+        self.expect(TokenType::ThinArrow, "Expected '->' after variable identifier");
+        self.expect(TokenType::Pipe, "Expected '|' after '->'");
+        let params = self.parse_params();
+        self.expect(TokenType::Pipe, "Expected '|' after parameters");
+        self.expect(TokenType::OpenBrace, "Expected '{' after parameters");
+        let body = self.parse_block_stmt();
+        self.expect(TokenType::CloseBrace, "Expected '}' after lambda body");
+        
+        Content::Statement(Box::new(Stmt::Lambda(LambdaDecl {
+            constant,
+            ident,
+            params,
+            body,
+        })))
+    }
+
+    fn parse_normal_var_decl(&mut self, constant: bool, ident: String) -> Content {
         self.expect(TokenType::Colon, "Expected ':' after variable identifier");
         let type_ = match self.at().kind {
             TokenType::DataType(DataType::Int) => {
                 self.consume();
                 DataType::Int
-            },
+            }
             TokenType::DataType(DataType::Float) => {
                 self.consume();
                 DataType::Float
-            },
+            }
             TokenType::DataType(DataType::String) => {
                 self.consume();
                 DataType::String
-            },
+            }
             TokenType::DataType(DataType::Bool) => {
                 self.consume();
                 DataType::Bool
-            },
+            }
             _ => panic!("Expected type after ':', got: {:?}", self.at().kind),
         };
         self.expect(TokenType::AssignOp(AssignOp::Assign), "Expected '=' after type declaration");
@@ -116,11 +140,13 @@ impl Parser {
     fn parse_func_decl(&mut self) -> Content {
         self.expect(TokenType::Func, "Expected 'func' keyword");
         let ident = self.expect(TokenType::Identifier, "Expected function identifier").value;
-        self.expect(TokenType::Pipe, "Expected '|' after function identifier"); // Expect the opening pipe
-        let params = self.parse_params(); // Parse parameters
-        self.expect(TokenType::Pipe, "Expected '|' after parameters"); // Expect the closing pipe
-        self.expect(TokenType::OpenBrace, "Expected '{' after parameters"); // Expect the opening brace
-        let body = self.parse_block_stmt().into_iter().map(|b| *b).collect();
+        self.expect(TokenType::Pipe, "Expected '|' after function identifier");
+        let params = self.parse_params();
+        self.expect(TokenType::Pipe, "Expected closing '|' after parameters");
+        self.expect(TokenType::OpenBrace, "Expected '{' after parameters");
+        let body = self.parse_block_stmt();
+        self.expect(TokenType::CloseBrace, "Expected '}' after parameters");
+    
         Content::Statement(Box::new(Stmt::FuncDecl(FuncDecl { params, ident, body })))
     }
 
@@ -164,53 +190,106 @@ impl Parser {
 
     fn parse_block_stmt(&mut self) -> Vec<Box<Content>> {
         let mut body = Vec::new();
+    
         while self.at().kind != TokenType::CloseBrace {
             body.push(Box::new(self.parse_stmt()));
         }
-        self.expect(TokenType::CloseBrace, "Expected '}' to close block");
+        
         body
     }
 
     fn parse_if_stmt(&mut self) -> Content {
         self.expect(TokenType::If, "Expected 'if' keyword");
+        
         let test = match self.parse_expr() {
             Content::Expression(expr) => expr,
-            _ => panic!("Expected expression"),
+            _ => panic!("Expected expression after 'if'"),
         };
-        self.expect(TokenType::Then, "Expected 'then' after condition");
-        let body = self.parse_block_stmt();
-        let alt = if self.at().kind == TokenType::Else {
-            self.consume();
-            Some(self.parse_block_stmt().into_iter().collect())
+        
+        self.expect(TokenType::OpenBrace, "Expected '{' after condition"); // Expect the opening brace
+        
+        let body = self.parse_block_stmt(); // Parse the body of the if statement
+        
+        self.expect(TokenType::CloseBrace, "Expected '}' after if body"); // Expect the closing brace
+        
+        let alt = self.parse_else(); // Parse the else statement
+        
+        if let Some(alt) = alt {
+            Content::Statement(Box::new(Stmt::IfStmt(IfStmt { test, body, alt: Some(alt) })))
         } else {
-            None
-        };
-        Content::Statement(Box::new(Stmt::IfStmt(IfStmt { test, body, alt })))
+            Content::Statement(Box::new(Stmt::IfStmt(IfStmt { test, body, alt: None })))
+        }
+    }
+
+    fn parse_else(&mut self) -> Option<Vec<Box<Content>>> {
+        if self.at().kind == TokenType::Else {
+            self.consume(); // Consume the else keyword
+            
+            if self.at().kind == TokenType::If {
+                self.consume(); // Consume the if keyword
+                
+                let test = match self.parse_expr() {
+                    Content::Expression(expr) => expr,
+                    _ => panic!("Expected expression after 'else if'"),
+                };
+                
+                self.expect(TokenType::OpenBrace, "Expected '{' after else if condition"); // Expect the opening brace
+                
+                let body = self.parse_block_stmt(); // Parse the body of the else if statement
+                
+                self.expect(TokenType::CloseBrace, "Expected '}' after else if body"); // Expect the closing brace
+                
+                let alt = self.parse_else(); // Recursively parse the next else statement
+                
+                return Some(vec![Box::new(Content::Statement(Box::new(Stmt::IfStmt(IfStmt {
+                    test,
+                    body,
+                    alt,
+                }))))]);
+            } else {
+                // If it's just else, we can parse the body
+                self.expect(TokenType::OpenBrace, "Expected '{' after else"); // Expect the opening brace
+                
+                let body = self.parse_block_stmt(); // Parse the body of the else statement
+                
+                self.expect(TokenType::CloseBrace, "Expected '}' after else body"); // Expect the closing brace
+                
+                return Some(vec![Box::new(Content::Statement(Box::new(Stmt::BlockStmt(BlockStmt { body }))))]);
+            }
+        }
+        
+        None
     }
 
     fn parse_for_stmt(&mut self) -> Content {
         self.expect(TokenType::For, "Expected 'for' keyword");
-        let init = if let Content::Statement(stmt) = self.parse_var_decl() {
-            Some(stmt)
-        } else {
-            panic!("Expected statement in for loop initialization")
-        };
-        self.expect(TokenType::In, "Expected 'in' after for initialization");
-        let test = match self.parse_expr() {
-            Content::Expression(expr) => Some(expr),
-            _ => panic!("Expected expression"),
-        };
-        let update = if self.at().kind != TokenType::OpenBrace {
-            match self.parse_expr() {
-                Content::Expression(expr) => Some(expr),
-                _ => panic!("Expected expression"),
-            }
-        } else {
-            None
-        };
+    
+        // Parse the variable declaration
+        let ident = self.expect(TokenType::Identifier, "Expected identifier after 'for'").value;
+        self.expect(TokenType::In, "Expected 'in' after identifier");
+    
+        // Parse the collection (which can be an identifier or an expression)
+        let collection = self.parse_expr();
+    
+        // Expect the opening brace
         self.expect(TokenType::OpenBrace, "Expected '{' after for condition");
+    
+        // Parse the body of the loop
         let body = self.parse_block_stmt();
-        Content::Statement(Box::new(Stmt::ForStmt(ForStmt { init, test, update, body })))
+
+        self.expect(TokenType::CloseBrace, "Expected '}' after else body");
+    
+        Content::Statement(Box::new(Stmt::ForStmt(ForStmt {
+            init: Some(Box::new(Stmt::VarDecl(VarDecl {
+                constant: false, // Assuming it's not a constant declaration
+                ident,
+                type_: DataType::String,
+                value: Some(collection),
+            }))),
+            test: None,
+            update: None,
+            body,
+        })))
     }
 
     fn parse_while_stmt(&mut self) -> Content {
@@ -226,28 +305,108 @@ impl Parser {
 
     fn parse_use_stmt(&mut self) -> Content {
         self.expect(TokenType::Use, "Expected 'use' keyword");
-        let ident = self.expect(TokenType::Identifier, "Expected identifier after 'use'").value;
-        Content::Statement(Box::new(Stmt::Use(ident)))
+
+        if self.at().kind == TokenType::OpenBrace {
+            self.consume(); // Consume '{'
+            
+            let methods = self.parse_method_list();
+            
+            self.expect(TokenType::CloseBrace, "Expected '}' after method list");
+            self.expect(TokenType::From, "Expected 'from' keyword after method list");
+            
+            let module = self.expect(TokenType::Identifier, "Expected module name after 'from'").value; // Expect the module name
+            self.expect(TokenType::Semicolon, "Expected ';' after use statement");
+    
+            return Content::Statement(Box::new(Stmt::Use(UseStmt {
+                methods: Some(methods),
+                module,
+            })));
+        } else {
+            let module = self.expect(TokenType::Identifier, "Expected module name").value; // Expect the module name
+            self.expect(TokenType::Semicolon, "Expected ';' after use statement");
+    
+            return Content::Statement(Box::new(Stmt::Use(UseStmt {
+                methods: None,
+                module,
+            })));
+        }
     }
 
     fn parse_include_stmt(&mut self) -> Content {
         self.expect(TokenType::Include, "Expected 'include' keyword");
-        let ident = self.expect(TokenType::Identifier, "Expected identifier after 'include'").value;
-        Content::Statement(Box::new(Stmt::Include(ident)))
+    
+        let methods = if self.at().kind == TokenType::OpenBrace {
+            self.consume(); // Consume '{'
+            let methods = self.parse_method_list();
+            self.expect(TokenType::CloseBrace, "Expected '}' after method list");
+            Some(methods)
+        } else if self.at().kind == TokenType::Identifier {
+            let method = self.expect(TokenType::Identifier, "Expected method name").value;
+            self.expect(TokenType::From, "Expected 'from' keyword after method name");
+            let file_path = self.expect(TokenType::String, "Expected file path after 'from'").value; // Expect the file path
+            self.expect(TokenType::Semicolon, "Expected ';' after include statement");
+    
+            return Content::Statement(Box::new(Stmt::Include(IncludeStmt {
+                methods: Some(vec![method]),
+                file_path,
+            })));
+        } else if self.at().kind == TokenType::String {
+            let file_path = self.expect(TokenType::String, "Expected file path").value;
+            self.expect(TokenType::Semicolon, "Expected ';' after include statement");
+    
+            return Content::Statement(Box::new(Stmt::Include(IncludeStmt {
+                methods: None,
+                file_path,
+            })));
+        } else {
+            panic!("Unexpected token after 'include'");
+        };
+    
+        self.expect(TokenType::From, "Expected 'from' keyword after method list");
+        let file_path = self.expect(TokenType::String, "Expected file path after 'from'").value;
+        self.expect(TokenType::Semicolon, "Expected ';' after include statement");
+    
+        Content::Statement(Box::new(Stmt::Include(IncludeStmt {
+            methods,
+            file_path,
+        })))
     }
-
-    fn parse_export_stmt(&mut self) -> Content {
-        self.expect(TokenType::Export, "Expected 'export' keyword");
-        let mut exports = Vec::new();
-        while self.at().kind != TokenType::EOF {
-            let ident = self.expect(TokenType::Identifier, "Expected identifier after 'export'").value;
-            exports.push(ident);
+    
+    fn parse_method_list(&mut self) -> Vec<String> {
+        let mut methods = Vec::new();
+        
+        while self.at().kind != TokenType::CloseBrace {
+            let method = self.expect(TokenType::Identifier, "Expected method name").value;
+            methods.push(method);
+            
             if self.at().kind == TokenType::Comma {
                 self.consume(); // Consume the comma
             } else {
                 break;
             }
         }
+        
+        methods
+    }
+
+    fn parse_export_stmt(&mut self) -> Content {
+        self.expect(TokenType::Export, "Expected 'export' keyword");
+        
+        let mut exports = Vec::new();
+        
+        loop {
+            let ident = self.expect(TokenType::Identifier, "Expected identifier after 'export'").value;
+            exports.push(ident);
+            
+            if self.at().kind == TokenType::Comma {
+                self.consume(); // Consume the comma
+            } else {
+                break;
+            }
+        }
+
+        self.expect(TokenType::Semicolon, "Expected ';' after export statement");
+        
         Content::Statement(Box::new(Stmt::Export(exports)))
     }
 
@@ -271,8 +430,36 @@ impl Parser {
         } else {
             None
         };
+
+        self.expect(TokenType::Semicolon, "Expected ';' after return statement");
         
         Content::Statement(Box::new(Stmt::Return(ReturnStmt { value })))
+    }
+
+    fn parse_try_catch_stmt(&mut self) -> Content {
+        self.expect(TokenType::Try, "Expected 'try' keyword");
+    
+        // Parse the try block
+        self.expect(TokenType::OpenBrace, "Expected '{' after 'try'");
+        let try_block = self.parse_block_stmt();
+        self.expect(TokenType::CloseBrace, "Expected '}' after try block");
+    
+        // Parse the catch clause
+        self.expect(TokenType::Catch, "Expected 'catch' keyword");
+        self.expect(TokenType::Pipe, "Expected '|' after 'catch'");
+        
+        // Parse the catch parameter
+        let param_ident = self.expect(TokenType::Identifier, "Expected identifier in catch clause").value;
+        self.expect(TokenType::Pipe, "Expected '|' after catch parameter");
+        
+        self.expect(TokenType::OpenBrace, "Expected '{' after catch clause");
+        let catch_block = self.parse_block_stmt();
+        self.expect(TokenType::CloseBrace, "Expected '}' after catch block");
+    
+        Content::Statement(Box::new(Stmt::TryCatchStmt(TryCatchStmt {
+            try_block,
+            catch_block: Some(catch_block),
+        })))
     }
 
     fn parse_object_properties(&mut self) -> Vec<Property> {
@@ -344,35 +531,86 @@ impl Parser {
     
     fn parse_binary_expr(&mut self) -> Content {
         let mut expr = self.parse_primary_expr();
-    
-        while self.at().kind != TokenType::Semicolon && self.at().kind != TokenType::CloseBrace && self.at().kind != TokenType::CloseParen && !matches!(self.at().kind, TokenType::AssignOp(_)) {
-            if matches!(self.at().kind, TokenType::BinOp(_)) {
-                let operator = self.at().kind.clone();
-                self.consume(); // Consume the binary operator
-                let right = self.parse_primary_expr(); // Parse the right-hand side expression
-                if let (Content::Expression(left_expr), Content::Expression(right_expr)) = (expr, right) {
-                    let binary_expr = BinaryExpr {
-                        left: left_expr,
-                        right: right_expr,
-                        operator: format!("{:?}", operator),
-                    };
-                    expr = Content::Expression(Box::new(Expr::Binary(binary_expr)));
-                } else {
-                    panic!("Expected expressions in binary operation");
-                }
+
+        while self.not_eof() && !matches!(
+            self.at().kind,
+            TokenType::Semicolon | TokenType::CloseBrace | TokenType::CloseParen
+        ) {
+            let operator = if matches!(self.at().kind, TokenType::BinOp(_) | TokenType::ArithOp(_)) {
+                let op = match &self.at().kind {
+                    TokenType::ArithOp(arith_op) => match arith_op {
+                        ArithOp::Add => "+",
+                        ArithOp::Sub => "-",
+                        ArithOp::Mul => "*",
+                        ArithOp::Div => "/",
+                        ArithOp::Mod => "%",
+                    }.to_string(),
+                    TokenType::BinOp(bin_op) => match bin_op {
+                        BinOp::And => "&&",
+                        BinOp::Or => "||",
+                        BinOp::Not => "!",
+                        BinOp::Eq => "==",
+                        BinOp::Neq => "!=",
+                        BinOp::Less => "<",
+                        BinOp::Greater => ">",
+                        BinOp::LessEq => "<=",
+                        BinOp::GreaterEq => ">=",
+                    }.to_string(),
+                    _ => unreachable!(),
+                };
+                self.consume(); // Consume the operator
+                op
             } else {
                 break;
+            };
+
+            let right = self.parse_primary_expr();
+            if let (Content::Expression(left_expr), Content::Expression(right_expr)) = (expr, right) {
+                expr = Content::Expression(Box::new(Expr::Binary(BinaryExpr {
+                    left: left_expr,
+                    right: right_expr,
+                    operator,
+                })));
+            } else {
+                panic!("Expected expressions in binary operation");
             }
         }
-    
-        expr // Return the parsed expression
+
+        expr
     }
 
     fn parse_primary_expr(&mut self) -> Content {
         match self.at().kind {
             TokenType::Identifier => {
-                let ident = self.expect(TokenType::Identifier, "Expected identifier").value;
-                Content::Expression(Box::new(Expr::Identifier(Identifier { name: ident })))
+                let ident = Identifier { name: self.expect(TokenType::Identifier, "Expected identifier").value };
+                
+                // Check for call expression syntax
+                if self.at().kind == TokenType::FatArrow {
+                    self.consume(); // Consume =>
+                    self.expect(TokenType::Pipe, "Expected '|' after =>");
+                    
+                    let mut args = Vec::new();
+                    while self.at().kind != TokenType::Pipe {
+                        args.push(Box::new(match self.parse_expr() {
+                            Content::Expression(e) => *e,
+                            _ => panic!("Expected expression in call arguments"),
+                        }));
+                        
+                        if self.at().kind == TokenType::Comma {
+                            self.consume();
+                        } else {
+                            break;
+                        }
+                    }
+                    self.expect(TokenType::Pipe, "Expected closing '|' in call expression");
+                    
+                    return Content::Expression(Box::new(Expr::Call(CallExpr {
+                        callee: Box::new(Expr::Identifier(ident)),
+                        args,
+                    })));
+                }
+                
+                Content::Expression(Box::new(Expr::Identifier(ident)))
             },
             TokenType::Int => {
                 let int_lit = self.expect(TokenType::Int, "Expected integer literal");

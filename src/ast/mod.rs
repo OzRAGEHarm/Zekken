@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+
 use std::fmt::Debug;
 
 use crate::lexer::DataType;
@@ -14,10 +15,11 @@ pub enum Stmt {
   WhileStmt(WhileStmt),
   TryCatchStmt(TryCatchStmt),
   BlockStmt(BlockStmt),
-  Use(String),
-  Include(String),
+  Use(UseStmt),
+  Include(IncludeStmt),
   Export(Vec<String>),
-  Return(ReturnStmt)
+  Return(ReturnStmt),
+  Lambda(LambdaDecl),
 }
 
 #[derive(Debug)]
@@ -65,7 +67,7 @@ pub struct Param {
 pub struct FuncDecl {
   pub params: Vec<Param>,
   pub ident: String,
-  pub body: Vec<Content>,
+  pub body: Vec<Box<Content>>,
 }
 
 #[derive(Debug)]
@@ -107,8 +109,28 @@ pub struct BlockStmt {
 }
 
 #[derive(Debug)]
+pub struct UseStmt {
+    pub methods: Option<Vec<String>>,
+    pub module: String,
+}
+
+#[derive(Debug)]
+pub struct IncludeStmt {
+    pub methods: Option<Vec<String>>,
+    pub file_path: String,
+}
+
+#[derive(Debug)]
 pub struct ReturnStmt {
     pub value: Option<Box<Content>>,
+}
+
+#[derive(Debug)]
+pub struct LambdaDecl {
+    pub constant: bool,
+    pub ident: String,
+    pub params: Vec<Param>,
+    pub body: Vec<Box<Content>>,
 }
 
 #[derive(Debug)]
