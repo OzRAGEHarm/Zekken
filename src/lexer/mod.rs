@@ -38,6 +38,7 @@ pub enum DataType {
     Float,
     String,
     Bool,
+    Any,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

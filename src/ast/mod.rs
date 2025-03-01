@@ -4,7 +4,7 @@ use std::fmt::Debug;
 
 use crate::lexer::DataType;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Stmt {
   Program(Program),
   VarDecl(VarDecl),
@@ -22,7 +22,7 @@ pub enum Stmt {
   Lambda(LambdaDecl),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
   Assign(AssignExpr),
   Member(MemberExpr),
@@ -38,18 +38,18 @@ pub enum Expr {
   ObjectLit(ObjectLit),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Content {
   Statement(Box<Stmt>),
   Expression(Box<Expr>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Program {
   pub body: Vec<Content>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VarDecl {
   pub constant: bool,
   pub ident: String,
@@ -57,33 +57,33 @@ pub struct VarDecl {
   pub value: Option<Content>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Param {
   pub ident: String,
   pub type_: DataType,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FuncDecl {
   pub params: Vec<Param>,
   pub ident: String,
   pub body: Vec<Box<Content>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ObjectDecl {
   pub ident: String,
   pub properties: Vec<Property>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IfStmt {
   pub test: Box<Expr>,
   pub body: Vec<Box<Content>>,
   pub alt: Option<Vec<Box<Content>>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ForStmt {
   pub init: Option<Box<Stmt>>,
   pub test: Option<Box<Expr>>,
@@ -91,41 +91,41 @@ pub struct ForStmt {
   pub body: Vec<Box<Content>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WhileStmt {
   pub test: Box<Expr>,
   pub body: Vec<Box<Content>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TryCatchStmt {
   pub try_block: Vec<Box<Content>>,
   pub catch_block: Option<Vec<Box<Content>>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BlockStmt {
   pub body: Vec<Box<Content>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UseStmt {
     pub methods: Option<Vec<String>>,
     pub module: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IncludeStmt {
     pub methods: Option<Vec<String>>,
     pub file_path: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ReturnStmt {
     pub value: Option<Box<Content>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LambdaDecl {
     pub constant: bool,
     pub ident: String,
@@ -133,69 +133,69 @@ pub struct LambdaDecl {
     pub body: Vec<Box<Content>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AssignExpr {
   pub left: Box<Expr>,
   pub right: Box<Expr>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MemberExpr {
   pub object: Box<Expr>,
   pub property: Box<Expr>,
   pub computed: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CallExpr {
   pub callee: Box<Expr>,
   pub args: Vec<Box<Expr>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BinaryExpr {
   pub left: Box<Expr>,
   pub right: Box<Expr>,
   pub operator: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Identifier {
   pub name: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Property {
   pub key: String,
   pub value: Box<Expr>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IntLit {
   pub value: i64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FloatLit {
   pub value: f64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StringLit {
   pub value: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BoolLit {
   pub value: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ArrayLit {
   pub elements: Vec<Box<Expr>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ObjectLit {
   pub properties: Vec<Property>,
 }

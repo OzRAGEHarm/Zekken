@@ -10,7 +10,7 @@ use { read_file, write_file } from fs; // use only the read and write methods fr
 
 
 // include from file statement
-include "file.zk"; // include 
+include "file.zk"; // include every exported value
 include method from "file.zk";
 include { method1, method2 } from "file.zk";
 

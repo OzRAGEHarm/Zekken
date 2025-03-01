@@ -6,6 +6,7 @@ use crate::lexer::{*};
 pub struct Parser {
     tokens: Vec<Token>,
     current: usize,
+    source_lines: Vec<String>,
 }
 
 impl Parser {
@@ -13,10 +14,21 @@ impl Parser {
         Parser {
             tokens: Vec::new(),
             current: 0,
+            source_lines: Vec::new(),
+        }
+    }
+
+    fn skip_comments(&mut self) -> bool {
+        if matches!(self.at().kind, TokenType::SingleLineComment | TokenType::MultiLineComment) {
+            self.consume();
+            true
+        } else {
+            false
         }
     }
 
     pub fn produce_ast(&mut self, source_code: String) -> Program {
+        self.source_lines = source_code.lines().map(String::from).collect();
         self.tokens = tokenize(source_code);
 
         let mut program = Program { body: vec![] };
@@ -48,20 +60,49 @@ impl Parser {
     fn expect(&mut self, type_: TokenType, err: &str) -> Token {
         let token = self.at().clone();
         if token.kind != type_ {
-            panic!("Parser error: {}\nExpecting: {:?}, Got: {:?} at Line: {:?}, Column: {:?}", err, type_, token.value, token.line, token.column);
+            let line_content = self.source_lines.get(token.line - 1)
+                .unwrap_or(&String::from("<unknown>"))
+                .clone();
+            
+            let pointer = " ".repeat(token.column - 1) + "\x1b[1;31m^\x1b[0m";
+            //let separator = "\x1b[1;34m━\x1b[0m".repeat(60);
+            let filename = std::env::var("ZEKKEN_CURRENT_FILE").unwrap_or_else(|_| String::from("<unknown>"));
+
+            let token_value = if token.kind == TokenType::EOF {
+                String::from("End Of File")
+            } else {
+                token.value
+            };
+            
+            let error = format!(
+                 "\x1b[1;31mSyntax Error\x1b[0m: {}\n\
+                 \x1b[1;90m  ┌─\x1b[0m \x1b[1;37m{}\x1b[0m\n\
+                 \x1b[1;90m  ├─[\x1b[0m Line \x1b[1;37m{}\x1b[0m, Column \x1b[1;37m{}\x1b[0m \x1b[1;90m]\x1b[0m\n\
+                 \x1b[1;90m  │\x1b[0m\n\
+                 \x1b[1;90m{:>4} │\x1b[0m {}\n\
+                 \x1b[1;90m     │\x1b[0m {}\n\
+                 \x1b[1;90m     │\x1b[0m\n\
+                 \x1b[1;90m     │\x1b[0m Expected: \x1b[1;32m{:?}\x1b[0m\n\
+                 \x1b[1;90m     │\x1b[0m Found:    \x1b[1;31m{:?}\x1b[0m (\"{}\")
+                 \n
+                 ",
+                //separator,
+                err,
+                filename,
+                token.line,
+                token.column,
+                token.line,
+                line_content,
+                pointer,
+                type_,
+                token.kind,
+                token_value,
+                //separator
+            );
+            panic!("{}", error);
         }
         self.consume();
         token
-    }
-
-    fn skip_comments(&mut self) -> bool {
-        match self.at().kind {
-            TokenType::SingleLineComment | TokenType::MultiLineComment => {
-                self.consume();
-                true
-            }
-            _ => false
-        }
     }
 
     fn parse_stmt(&mut self) -> Content {
@@ -129,7 +170,16 @@ impl Parser {
                 self.consume();
                 DataType::Bool
             }
-            _ => panic!("Expected type after ':', got: {:?}", self.at().kind),
+            _ => {
+                let token = self.expect(
+                    TokenType::DataType(DataType::Any), 
+                    "Expected type (int, float, string, bool) after ':'"
+                );
+                match token.kind {
+                    TokenType::DataType(t) => t,
+                    _ => unreachable!()
+                }
+            }
         };
         self.expect(TokenType::AssignOp(AssignOp::Assign), "Expected '=' after type declaration");
         let value = Some(self.parse_expr());
@@ -174,7 +224,16 @@ impl Parser {
                     self.consume();
                     DataType::Bool
                 },
-                _ => panic!("Expected type after ':', got: {:?}", self.at().kind),
+                _ => {
+                    let token = self.expect(
+                        TokenType::DataType(DataType::Any), 
+                        "Expected type (int, float, string, bool) after ':'"
+                    );
+                    match token.kind {
+                        TokenType::DataType(t) => t,
+                        _ => unreachable!()
+                    }
+                }
             };
     
             params.push(Param { ident, type_ }); // Create a new Param instance
@@ -449,7 +508,7 @@ impl Parser {
         self.expect(TokenType::Pipe, "Expected '|' after 'catch'");
         
         // Parse the catch parameter
-        let param_ident = self.expect(TokenType::Identifier, "Expected identifier in catch clause").value;
+        let _param_ident = self.expect(TokenType::Identifier, "Expected identifier in catch clause").value;
         self.expect(TokenType::Pipe, "Expected '|' after catch parameter");
         
         self.expect(TokenType::OpenBrace, "Expected '{' after catch clause");
@@ -512,7 +571,7 @@ impl Parser {
     
         while self.at().kind != TokenType::Semicolon && self.at().kind != TokenType::CloseBrace && self.at().kind != TokenType::CloseParen {
             if matches!(self.at().kind, TokenType::AssignOp(_)) {
-                let operator = self.at().kind.clone();
+                let _operator = self.at().kind.clone();
                 self.consume(); // Consume the assignment operator
                 let right = self.parse_binary_expr(); // Parse the right-hand side expression
                 if let (Content::Expression(left_expr), Content::Expression(right_expr)) = (expr, right) {
