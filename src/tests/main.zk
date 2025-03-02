@@ -1,1 +1,5 @@
-println("Hello, World!")
+include "src/tests/file.zk";
+
+println(x)
+
+println(y)

@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use crate::ast::*;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArithOp {
     Add,            // +
@@ -178,6 +180,18 @@ impl Token {
             column,
             length,
         }
+    }
+
+    pub fn location(&self) -> Location {
+
+        Location {
+
+            line: self.line,
+
+            column: self.column,
+
+        }
+
     }
 }
 

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io::Write;
+use std::fmt::{self, Display, Formatter};
 
 use crate::ast::*;
 
@@ -14,6 +15,51 @@ pub enum Value {
   Function(FunctionValue),
   NativeFunction(fn(Vec<Value>) -> Result<Value, String>),
   Void,
+}
+
+impl Display for Value {
+  fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+      match self {
+          Value::Int(i) => write!(f, "{}", i),
+          Value::Float(fl) => {
+              let s = format!("{}", fl);
+              if !s.contains('.') {
+                  write!(f, "{}.0", fl)
+              } else {
+                  write!(f, "{}", fl)
+              }
+          },
+          Value::String(s) => write!(f, "{}", s),
+          Value::Boolean(b) => write!(f, "{}", b),
+          Value::Array(arr) => {
+              write!(f, "[")?;
+              let mut first = true;
+              for value in arr {
+                  if !first {
+                      write!(f, ", ")?;
+                  }
+                  write!(f, "{}", value)?;
+                  first = false;
+              }
+              write!(f, "]")
+          },
+          Value::Object(obj) => {
+              write!(f, "{{")?;
+              let mut first = true;
+              for (key, value) in obj {
+                  if !first {
+                      write!(f, ", ")?;
+                  }
+                  write!(f, "{}: {}", key, value)?;
+                  first = false;
+              }
+              write!(f, "}}")
+          },
+          Value::Function(_) => write!(f, "<function>"),
+          Value::NativeFunction(_) => write!(f, "<native function>"),
+          Value::Void => write!(f, "void"),
+      }
+  }
 }
 
 #[derive(Debug, Clone)]
@@ -31,30 +77,6 @@ pub struct Environment {
 }
 
 impl Environment {
-  fn format_value(value: &Value) -> String {
-    match value {
-        Value::String(s) => s.clone(),
-        Value::Int(i) => i.to_string(),
-        Value::Float(f) => f.to_string(),
-        Value::Boolean(b) => b.to_string(),
-        Value::Array(arr) => {
-            let elements: Vec<String> = arr.iter()
-                .map(|v| Environment::format_value(v))
-                .collect();
-            format!("[{}]", elements.join(", "))
-        },
-        Value::Object(obj) => {
-            let properties: Vec<String> = obj.iter()
-                .map(|(k, v)| format!("{}: {}", k, Environment::format_value(v)))
-                .collect();
-            format!("{{{}}}", properties.join(", "))
-        },
-        Value::Function(_) => "<function>".to_string(),
-        Value::NativeFunction(_) => "<native function>".to_string(),
-        Value::Void => "void".to_string(),
-    }
-  }
-  
   pub fn new() -> Self {
     let mut env = Environment {
       parent: None,
@@ -67,7 +89,7 @@ impl Environment {
       "println".to_string(),
       Value::NativeFunction(|args: Vec<Value>| -> Result<Value, String> {
           let output: Vec<String> = args.iter()
-              .map(|arg| Environment::format_value(arg))
+              .map(|v| format!("{}", v))  // This uses the Display implementation
               .collect();
           
           println!("{}", output.join(" "));

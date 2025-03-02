@@ -64,6 +64,13 @@ fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Result<Va
     let callee = evaluate_expression(&call.callee, env)?;
 
     match callee {
+        Value::NativeFunction(native_func) => {
+            let mut args = Vec::new();
+            for arg in &call.args {
+                args.push(evaluate_expression(arg, env)?);
+            }
+            native_func(args)
+        },
         Value::Function(func) => {
             // Handle regular function calls
             let mut args = Vec::new();
@@ -84,7 +91,6 @@ fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Result<Va
                 function_env.declare(param.ident.clone(), arg, false);
             }
 
-            // Execute function body and return last result
             let mut result = Value::Void;
             for stmt in &func.body {
                 match **stmt {
@@ -99,15 +105,6 @@ fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Result<Va
                 }
             }
             Ok(result)
-        }
-        Value::NativeFunction(native_func) => {
-            let mut args = Vec::new();
-            for arg in &call.args {
-                args.push(evaluate_expression(arg, env)?);
-            }
-
-            // Call the native function
-            native_func(args)
         }
         _ => Err("Cannot call non-function value".to_string())
     }

@@ -22,19 +22,41 @@ pub fn evaluate_statement(stmt: &Stmt, env: &mut Environment) -> Result<Option<V
     }
 }
 
+fn runtime_error(error: &str, line: usize) -> String {
+    format!("\x1b[1;31mRuntime Error\x1b[0m at line {}: {}\n{}^ {}", 
+        line,
+        "-".repeat(40),
+        " ".repeat(4),
+        error
+    )
+}
+
 fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<Value>, String> {
-  let mut last_result = None;
-  for content in &program.body {
-      match content {
-          Content::Statement(stmt) => {
-              last_result = evaluate_statement(stmt, env)?;
-          }
-          Content::Expression(expr) => {
-              last_result = Some(evaluate_expression(expr, env)?);
-          }
-      }
-  }
-  Ok(last_result)
+    // Process imports first
+    for import in &program.imports {
+        if let Content::Statement(stmt) = &*import {
+            match &**stmt {
+                Stmt::Include(include) => evaluate_include(include, env)?,
+                Stmt::Use(use_stmt) => evaluate_use(use_stmt, env)?,
+                _ => return Ok(None)
+            };
+        }
+    }
+
+    // Process all content
+    for content in &program.content {
+        match &**content {
+            Content::Statement(stmt) => {
+                evaluate_statement(stmt, env)?;
+            },
+            Content::Expression(expr) => {
+                // Direct evaluation - don't store result
+                evaluate_expression(expr, env)?;
+            }
+        }
+    }
+
+    Ok(None)
 }
 
 fn evaluate_var_declaration(decl: &VarDecl, env: &mut Environment) -> Result<Option<Value>, String> {
@@ -324,8 +346,8 @@ fn evaluate_include(include: &IncludeStmt, env: &mut Environment) -> Result<Opti
   Ok(None)
 }
 
-fn evaluate_export(exports: &Vec<String>, env: &mut Environment) -> Result<Option<Value>, String> {
-  for name in exports {
+fn evaluate_export(exports: &ExportStmt, env: &mut Environment) -> Result<Option<Value>, String> {
+  for name in &exports.exports {
       if let Some(value) = env.lookup(name) {
           // Just re-declare as variable which makes it accessible
           env.declare(name.clone(), value, false);

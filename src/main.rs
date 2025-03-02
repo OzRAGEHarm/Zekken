@@ -4,10 +4,10 @@ use std::process;
 use std::io::Write;
 
 mod ast;
-mod environment;
-mod eval;
 mod lexer;
 mod parser;
+mod environment;
+mod eval;
 
 use parser::Parser;
 use eval::statement::evaluate_statement;
@@ -30,6 +30,8 @@ fn main() {
 
     let mut parser = Parser::new();
     let ast = parser.produce_ast(source_code);
+
+    println!("{:#?}", ast);
     
     let mut env = Environment::new();
 
@@ -38,13 +40,13 @@ fn main() {
             std::io::stdout().flush().unwrap();
             match result {
                 Some(Value::Void) => (),
-                Some(value) => println!("{:?}", value),
+                Some(value) => println!("{}", value), // Use Display formatter here
                 None => ()
             }
             process::exit(0)
         },
         Err(error) => {
-            eprintln!("Runtime error: {}", error);
+            eprintln!("{}", error);
             process::exit(1);
         }
     }

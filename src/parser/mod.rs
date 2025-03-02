@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
-use crate::ast::{*};
-use crate::lexer::{*};
+use crate::ast::*;
+use crate::lexer::*;
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -30,16 +30,33 @@ impl Parser {
     pub fn produce_ast(&mut self, source_code: String) -> Program {
         self.source_lines = source_code.lines().map(String::from).collect();
         self.tokens = tokenize(source_code);
-
-        let mut program = Program { body: vec![] };
-
+    
+        let start_location = self.at().location();
+        let mut program = Program {
+            imports: Vec::new(),
+            comments: Vec::new(),
+            content: Vec::new(),
+            location: start_location,
+        };
+    
+        // First pass: collect imports and comments
         while self.not_eof() {
-            if self.skip_comments() {
-                continue;
+            match self.at().kind {
+                TokenType::SingleLineComment | TokenType::MultiLineComment => {
+                    program.comments.push(self.at().value.clone());
+                    self.consume();
+                },
+                TokenType::Use | TokenType::Include => {
+                    program.imports.push(self.parse_stmt());
+                },
+                TokenType::EOF => break,
+                _ => {
+                    // Parse any other statements as program content
+                    program.content.push(Box::new(self.parse_stmt()));
+                }
             }
-            program.body.push(self.parse_stmt());
         }
-
+    
         program
     }
 
@@ -65,7 +82,6 @@ impl Parser {
                 .clone();
             
             let pointer = " ".repeat(token.column - 1) + "\x1b[1;31m^\x1b[0m";
-            //let separator = "\x1b[1;34m━\x1b[0m".repeat(60);
             let filename = std::env::var("ZEKKEN_CURRENT_FILE").unwrap_or_else(|_| String::from("<unknown>"));
 
             let token_value = if token.kind == TokenType::EOF {
@@ -86,7 +102,6 @@ impl Parser {
                  \x1b[1;90m     │\x1b[0m Found:    \x1b[1;31m{:?}\x1b[0m (\"{}\")
                  \n
                  ",
-                //separator,
                 err,
                 filename,
                 token.line,
@@ -97,7 +112,6 @@ impl Parser {
                 type_,
                 token.kind,
                 token_value,
-                //separator
             );
             panic!("{}", error);
         }
@@ -123,6 +137,7 @@ impl Parser {
     }
 
     fn parse_var_decl(&mut self) -> Content {
+        let start_location = self.at().location();
         let constant = matches!(self.at().kind, TokenType::Const);
         self.consume();
         let ident = self.expect(TokenType::Identifier, "Expected variable identifier").value;
@@ -130,11 +145,12 @@ impl Parser {
         if self.at().kind == TokenType::ThinArrow {
             self.parse_lambda_decl(constant, ident)
         } else {
-            self.parse_normal_var_decl(constant, ident)
+            self.parse_normal_var_decl(constant, ident, start_location)
         }
     }
 
     fn parse_lambda_decl(&mut self, constant: bool, ident: String) -> Content {
+        let start_location = self.at().location();
         self.expect(TokenType::ThinArrow, "Expected '->' after variable identifier");
         self.expect(TokenType::Pipe, "Expected '|' after '->'");
         let params = self.parse_params();
@@ -148,10 +164,11 @@ impl Parser {
             ident,
             params,
             body,
+            location: start_location,
         })))
     }
 
-    fn parse_normal_var_decl(&mut self, constant: bool, ident: String) -> Content {
+    fn parse_normal_var_decl(&mut self, constant: bool, ident: String, start_location: Location) -> Content {
         self.expect(TokenType::Colon, "Expected ':' after variable identifier");
         let type_ = match self.at().kind {
             TokenType::DataType(DataType::Int) => {
@@ -184,10 +201,11 @@ impl Parser {
         self.expect(TokenType::AssignOp(AssignOp::Assign), "Expected '=' after type declaration");
         let value = Some(self.parse_expr());
         self.expect(TokenType::Semicolon, "Expected ';' after variable declaration");
-        Content::Statement(Box::new(Stmt::VarDecl(VarDecl { constant, ident, type_, value })))
+        Content::Statement(Box::new(Stmt::VarDecl(VarDecl { constant, ident, type_, value, location: start_location })))
     }
 
     fn parse_func_decl(&mut self) -> Content {
+        let start_location = self.at().location();
         self.expect(TokenType::Func, "Expected 'func' keyword");
         let ident = self.expect(TokenType::Identifier, "Expected function identifier").value;
         self.expect(TokenType::Pipe, "Expected '|' after function identifier");
@@ -197,12 +215,13 @@ impl Parser {
         let body = self.parse_block_stmt();
         self.expect(TokenType::CloseBrace, "Expected '}' after parameters");
     
-        Content::Statement(Box::new(Stmt::FuncDecl(FuncDecl { params, ident, body })))
+        Content::Statement(Box::new(Stmt::FuncDecl(FuncDecl { params, ident, body, location: start_location })))
     }
 
     fn parse_params(&mut self) -> Vec<Param> {
         let mut params = Vec::new();
         while self.at().kind != TokenType::Pipe {
+            let start_location = self.at().location();
             let ident = self.expect(TokenType::Identifier, "Expected parameter identifier").value;
             self.expect(TokenType::Colon, "Expected ':' after parameter identifier");
     
@@ -236,7 +255,7 @@ impl Parser {
                 }
             };
     
-            params.push(Param { ident, type_ }); // Create a new Param instance
+            params.push(Param { ident, type_, location: start_location }); // Create a new Param instance
     
             if self.at().kind == TokenType::Comma {
                 self.consume(); // Consume the comma
@@ -258,6 +277,7 @@ impl Parser {
     }
 
     fn parse_if_stmt(&mut self) -> Content {
+        let start_location = self.at().location();
         self.expect(TokenType::If, "Expected 'if' keyword");
         
         let test = match self.parse_expr() {
@@ -273,11 +293,7 @@ impl Parser {
         
         let alt = self.parse_else(); // Parse the else statement
         
-        if let Some(alt) = alt {
-            Content::Statement(Box::new(Stmt::IfStmt(IfStmt { test, body, alt: Some(alt) })))
-        } else {
-            Content::Statement(Box::new(Stmt::IfStmt(IfStmt { test, body, alt: None })))
-        }
+        Content::Statement(Box::new(Stmt::IfStmt(IfStmt { test, body, alt, location: start_location })))
     }
 
     fn parse_else(&mut self) -> Option<Vec<Box<Content>>> {
@@ -304,6 +320,7 @@ impl Parser {
                     test,
                     body,
                     alt,
+                    location: self.at().location(),
                 }))))]);
             } else {
                 // If it's just else, we can parse the body
@@ -313,7 +330,7 @@ impl Parser {
                 
                 self.expect(TokenType::CloseBrace, "Expected '}' after else body"); // Expect the closing brace
                 
-                return Some(vec![Box::new(Content::Statement(Box::new(Stmt::BlockStmt(BlockStmt { body }))))]);
+                return Some(vec![Box::new(Content::Statement(Box::new(Stmt::BlockStmt(BlockStmt { body, location: self.at().location() }))))]);
             }
         }
         
@@ -321,6 +338,7 @@ impl Parser {
     }
 
     fn parse_for_stmt(&mut self) -> Content {
+        let start_location = self.at().location();
         self.expect(TokenType::For, "Expected 'for' keyword");
     
         // Parse the variable declaration
@@ -344,14 +362,17 @@ impl Parser {
                 ident,
                 type_: DataType::String,
                 value: Some(collection),
+                location: start_location.clone(),
             }))),
             test: None,
             update: None,
             body,
+            location: start_location,
         })))
     }
 
     fn parse_while_stmt(&mut self) -> Content {
+        let start_location = self.at().location();
         self.expect(TokenType::While, "Expected 'while' keyword");
         let test = match self.parse_expr() {
             Content::Expression(expr) => expr,
@@ -359,12 +380,14 @@ impl Parser {
         };
         self.expect(TokenType::OpenBrace, "Expected '{' after while condition");
         let body = self.parse_block_stmt();
-        Content::Statement(Box::new(Stmt::WhileStmt(WhileStmt { test, body })))
+        self.expect(TokenType::CloseBrace, "Expected '}' after while body");
+        Content::Statement(Box::new(Stmt::WhileStmt(WhileStmt { test, body, location: start_location })))
     }
 
     fn parse_use_stmt(&mut self) -> Content {
+        let start_location = self.at().location().clone();
         self.expect(TokenType::Use, "Expected 'use' keyword");
-
+        
         if self.at().kind == TokenType::OpenBrace {
             self.consume(); // Consume '{'
             
@@ -379,6 +402,7 @@ impl Parser {
             return Content::Statement(Box::new(Stmt::Use(UseStmt {
                 methods: Some(methods),
                 module,
+                location: start_location,
             })));
         } else {
             let module = self.expect(TokenType::Identifier, "Expected module name").value; // Expect the module name
@@ -387,11 +411,13 @@ impl Parser {
             return Content::Statement(Box::new(Stmt::Use(UseStmt {
                 methods: None,
                 module,
+                location: start_location,
             })));
         }
     }
 
     fn parse_include_stmt(&mut self) -> Content {
+        let start_location = self.at().location();
         self.expect(TokenType::Include, "Expected 'include' keyword");
     
         let methods = if self.at().kind == TokenType::OpenBrace {
@@ -408,6 +434,7 @@ impl Parser {
             return Content::Statement(Box::new(Stmt::Include(IncludeStmt {
                 methods: Some(vec![method]),
                 file_path,
+                location: start_location,
             })));
         } else if self.at().kind == TokenType::String {
             let file_path = self.expect(TokenType::String, "Expected file path").value;
@@ -416,6 +443,7 @@ impl Parser {
             return Content::Statement(Box::new(Stmt::Include(IncludeStmt {
                 methods: None,
                 file_path,
+                location: start_location,
             })));
         } else {
             panic!("Unexpected token after 'include'");
@@ -428,6 +456,7 @@ impl Parser {
         Content::Statement(Box::new(Stmt::Include(IncludeStmt {
             methods,
             file_path,
+            location: start_location,
         })))
     }
     
@@ -449,6 +478,7 @@ impl Parser {
     }
 
     fn parse_export_stmt(&mut self) -> Content {
+        let start_location = self.at().location();
         self.expect(TokenType::Export, "Expected 'export' keyword");
         
         let mut exports = Vec::new();
@@ -466,19 +496,24 @@ impl Parser {
 
         self.expect(TokenType::Semicolon, "Expected ';' after export statement");
         
-        Content::Statement(Box::new(Stmt::Export(exports)))
+        Content::Statement(Box::new(Stmt::Export(ExportStmt {
+            exports,
+            location: start_location,
+        })))
     }
 
     fn parse_object_decl(&mut self) -> Content {
+        let start_location = self.at().location().clone();
         self.expect(TokenType::Obj, "Expected 'obj' keyword");
         let ident = self.expect(TokenType::Identifier, "Expected object identifier").value;
         self.expect(TokenType::OpenBrace, "Expected '{' after object identifier");
         let properties = self.parse_object_properties();
         self.expect(TokenType::CloseBrace, "Expected '}' to close object declaration");
-        Content::Statement(Box::new(Stmt::ObjectDecl(ObjectDecl { ident, properties })))
+        Content::Statement(Box::new(Stmt::ObjectDecl(ObjectDecl { ident, properties, location: start_location })))
     }
 
     fn parse_return_stmt(&mut self) -> Content {
+        let start_location = self.at().location();
         self.expect(TokenType::Return, "Expected 'return' keyword");
 
         let value = if self.at().kind != TokenType::Semicolon {
@@ -492,10 +527,11 @@ impl Parser {
 
         self.expect(TokenType::Semicolon, "Expected ';' after return statement");
         
-        Content::Statement(Box::new(Stmt::Return(ReturnStmt { value })))
+        Content::Statement(Box::new(Stmt::Return(ReturnStmt { value, location: start_location })))
     }
 
     fn parse_try_catch_stmt(&mut self) -> Content {
+        let start_location = self.at().location();
         self.expect(TokenType::Try, "Expected 'try' keyword");
     
         // Parse the try block
@@ -518,19 +554,21 @@ impl Parser {
         Content::Statement(Box::new(Stmt::TryCatchStmt(TryCatchStmt {
             try_block,
             catch_block: Some(catch_block),
+            location: start_location,
         })))
     }
 
     fn parse_object_properties(&mut self) -> Vec<Property> {
         let mut properties = Vec::new();
         while self.at().kind != TokenType::CloseBrace {
+            let start_location = self.at().location();
             let key = self.expect(TokenType::Identifier, "Expected property key").value;
             self.expect(TokenType::Colon, "Expected ':' after property key");
             let value = match self.parse_expr() {
                 Content::Expression(expr) => expr,
                 _ => panic!("Expected expression for property value"),
             };
-            properties.push(Property { key, value });
+            properties.push(Property { key, value, location: start_location });
             if self.at().kind == TokenType::Comma {
                 self.consume(); // Consume the comma
             } else {
@@ -559,7 +597,7 @@ impl Parser {
             self.consume(); // Consume the current token
         }
 
-        Content::Expression(Box::new(Expr::StringLit(StringLit { value: string_content })))
+        Content::Expression(Box::new(Expr::StringLit(StringLit { value: string_content, location: quote_token.location() })))
     }
 
     fn parse_expr(&mut self) -> Content {
@@ -575,7 +613,7 @@ impl Parser {
                 self.consume(); // Consume the assignment operator
                 let right = self.parse_binary_expr(); // Parse the right-hand side expression
                 if let (Content::Expression(left_expr), Content::Expression(right_expr)) = (expr, right) {
-                    let assign_expr = AssignExpr { left: left_expr, right: right_expr };
+                    let assign_expr = AssignExpr { left: left_expr, right: right_expr, location: self.at().location() };
                     expr = Content::Expression(Box::new(Expr::Assign(assign_expr)));
                 } else {
                     panic!("Expected expressions in assignment");
@@ -593,7 +631,7 @@ impl Parser {
 
         while self.not_eof() && !matches!(
             self.at().kind,
-            TokenType::Semicolon | TokenType::CloseBrace | TokenType::CloseParen
+            TokenType ::Semicolon | TokenType::CloseBrace | TokenType::CloseParen
         ) {
             let operator = if matches!(self.at().kind, TokenType::BinOp(_) | TokenType::ArithOp(_)) {
                 let op = match &self.at().kind {
@@ -629,6 +667,7 @@ impl Parser {
                     left: left_expr,
                     right: right_expr,
                     operator,
+                    location: self.at().location(),
                 })));
             } else {
                 panic!("Expected expressions in binary operation");
@@ -641,7 +680,7 @@ impl Parser {
     fn parse_primary_expr(&mut self) -> Content {
         match self.at().kind {
             TokenType::Identifier => {
-                let ident = Identifier { name: self.expect(TokenType::Identifier, "Expected identifier").value };
+                let ident = Identifier { name: self.expect(TokenType::Identifier, "Expected identifier").value, location: self.at().location() };
                 
                 // Check for call expression syntax
                 if self.at().kind == TokenType::FatArrow {
@@ -666,6 +705,7 @@ impl Parser {
                     return Content::Expression(Box::new(Expr::Call(CallExpr {
                         callee: Box::new(Expr::Identifier(ident)),
                         args,
+                        location: self.at().location(),
                     })));
                 }
                 
@@ -673,15 +713,15 @@ impl Parser {
             },
             TokenType::Int => {
                 let int_lit = self.expect(TokenType::Int, "Expected integer literal");
-                Content::Expression(Box::new(Expr::IntLit(IntLit { value: int_lit.value.parse().unwrap() })))
+                Content::Expression(Box::new(Expr::IntLit(IntLit { value: int_lit.value.parse().unwrap(), location: int_lit.location() })))
             },
             TokenType::Float => {
                 let float_lit = self.expect(TokenType::Float, "Expected float literal");
-                Content::Expression(Box::new(Expr::FloatLit(FloatLit { value: float_lit.value.parse().unwrap() })))
+                Content::Expression(Box::new(Expr::FloatLit(FloatLit { value: float_lit.value.parse().unwrap(), location: float_lit.location() })))
             },
             TokenType::String => {
                 let string_token = self.expect(TokenType::String, "Expected string literal");
-                Content::Expression(Box::new(Expr::StringLit(StringLit { value: string_token.value })))
+                Content::Expression(Box::new(Expr::StringLit(StringLit { value: string_token.value.clone(), location: string_token.location() })))
             },
             TokenType::OpenParen => {
                 self.consume(); // Consume '('
