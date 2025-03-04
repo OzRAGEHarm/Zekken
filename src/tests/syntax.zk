@@ -32,7 +32,7 @@ let z: string = "Hello World!";
 
 
 // log to the console with println
-println(z) // output: Hello World!
+@println => | z | // output: Hello World!
 
 // function declaration (done)
 func add | a: int, b: int | {

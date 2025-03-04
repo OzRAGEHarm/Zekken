@@ -1,5 +1,8 @@
-include "src/tests/file.zk";
+obj myObj {
+  key: "value",
+  another_key: "another value"
+}
 
-println(x)
-
-println(y)
+for key in myObj {
+  @println => |key|
+}

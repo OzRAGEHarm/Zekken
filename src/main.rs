@@ -8,6 +8,7 @@ mod lexer;
 mod parser;
 mod environment;
 mod eval;
+mod errors;
 
 use parser::Parser;
 use eval::statement::evaluate_statement;
@@ -40,7 +41,7 @@ fn main() {
             std::io::stdout().flush().unwrap();
             match result {
                 Some(Value::Void) => (),
-                Some(value) => println!("{}", value), // Use Display formatter here
+                Some(value) => println!("{}", value),
                 None => ()
             }
             process::exit(0)

@@ -2,8 +2,22 @@ use crate::ast::*;
 use crate::environment::{Environment, Value, FunctionValue};
 use crate::parser::Parser;
 use super::expression::evaluate_expression;
+use crate::errors::ZekkenError;
 
-pub fn evaluate_statement(stmt: &Stmt, env: &mut Environment) -> Result<Option<Value>, String> {
+fn runtime_error(error: &str, line: usize) -> ZekkenError {
+    ZekkenError::RuntimeError {
+        message: error.to_string(),
+        filename: None,
+        line: Some(line),
+        column: None,
+        line_content: None,
+        pointer: None,
+        expected: None,
+        found: None,
+    }
+}
+
+pub fn evaluate_statement(stmt: &Stmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     match stmt {
         Stmt::Program(program) => evaluate_program(program, env),
         Stmt::VarDecl(var_decl) => evaluate_var_declaration(var_decl, env),
@@ -22,17 +36,7 @@ pub fn evaluate_statement(stmt: &Stmt, env: &mut Environment) -> Result<Option<V
     }
 }
 
-fn runtime_error(error: &str, line: usize) -> String {
-    format!("\x1b[1;31mRuntime Error\x1b[0m at line {}: {}\n{}^ {}", 
-        line,
-        "-".repeat(40),
-        " ".repeat(4),
-        error
-    )
-}
-
-fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<Value>, String> {
-    // Process imports first
+fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     for import in &program.imports {
         if let Content::Statement(stmt) = &*import {
             match &**stmt {
@@ -50,7 +54,6 @@ fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<V
                 evaluate_statement(stmt, env)?;
             },
             Content::Expression(expr) => {
-                // Direct evaluation - don't store result
                 evaluate_expression(expr, env)?;
             }
         }
@@ -59,7 +62,7 @@ fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<V
     Ok(None)
 }
 
-fn evaluate_var_declaration(decl: &VarDecl, env: &mut Environment) -> Result<Option<Value>, String> {
+fn evaluate_var_declaration(decl: &VarDecl, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     let value = match &decl.value {
         Some(content) => match content {
             Content::Expression(expr) => Some(evaluate_expression(expr, env)?),
@@ -75,18 +78,17 @@ fn evaluate_var_declaration(decl: &VarDecl, env: &mut Environment) -> Result<Opt
     Ok(value)
 }
 
-fn evaluate_function_declaration(func: &FuncDecl, env: &mut Environment) -> Result<Option<Value>, String> {
+fn evaluate_function_declaration(func: &FuncDecl, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     let function_value = FunctionValue {
         params: func.params.clone(),
         body: func.body.clone(),
-        //closure: env.clone(),
     };
 
     env.declare(func.ident.clone(), Value::Function(function_value), false);
     Ok(None)
 }
 
-fn evaluate_object_declaration(obj: &ObjectDecl, env: &mut Environment) -> Result<Option<Value>, String> {
+fn evaluate_object_declaration(obj: &ObjectDecl, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     let mut object_map = std::collections::HashMap::new();
 
     for property in &obj.properties {
@@ -98,7 +100,7 @@ fn evaluate_object_declaration(obj: &ObjectDecl, env: &mut Environment) -> Resul
     Ok(None)
 }
 
-fn evaluate_if_statement(if_stmt: &IfStmt, env: &mut Environment) -> Result<Option<Value>, String> {
+fn evaluate_if_statement(if_stmt: &IfStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     let test_result = evaluate_expression(&if_stmt.test, env)?;
     
     match test_result {
@@ -134,27 +136,53 @@ fn evaluate_if_statement(if_stmt: &IfStmt, env: &mut Environment) -> Result<Opti
                 Ok(None)
             }
         }
-        _ => Err("If statement condition must evaluate to a boolean".to_string())
+        _ => Err(runtime_error("If statement condition must evaluate to a boolean", if_stmt.location.line)),
     }
 }
 
-fn evaluate_for_statement(for_stmt: &ForStmt, env: &mut Environment) -> Result<Option<Value>, String> {
+fn evaluate_for_statement(for_stmt: &ForStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
+    // Evaluate the initialization statement if it exists
     if let Some(ref init) = for_stmt.init {
         evaluate_statement(init, env)?;
     }
 
-    loop {
-        if let Some(ref test) = for_stmt.test {
-            match evaluate_expression(test, env)? {
-                Value::Boolean(false) => break,
-                Value::Boolean(true) => (),
-                _ => return Err("For loop test must evaluate to a boolean".to_string())
+    // Evaluate the collection expression (the object to iterate over)
+    let collection_expr = if let Some(ref init) = for_stmt.init {
+        if let Stmt::VarDecl(var_decl) = &**init {
+            if let Some(content) = &var_decl.value {
+                if let Content::Expression(expr) = content {
+                    expr
+                } else {
+                    return Err(runtime_error("Expected expression in for loop initialization", for_stmt.location.line));
+                }
+            } else {
+                return Err(runtime_error("Expected expression in for loop initialization", for_stmt.location.line));
             }
+        } else {
+            return Err(runtime_error("Expected variable declaration in for loop initialization", for_stmt.location.line));
         }
+    } else {
+        return Err(runtime_error("For loop requires an initialization", for_stmt.location.line));
+    };
 
+    // Evaluate the collection expression
+    let object_expr = evaluate_expression(collection_expr, env)?;
+
+    // Ensure the collection is an object
+    let object_map = match object_expr {
+        Value::Object(map) => map,
+        _ => return Err(runtime_error("For loop must iterate over an object", for_stmt.location.line)),
+    };
+
+    // Iterate over the key-value pairs in the object
+    for (key, value) in object_map {
+        // Declare the key in the environment
+        env.declare(key.clone(), value.clone(), false); // Use the key as the variable name
+
+        // Evaluate the body of the for loop
         let mut result = None;
-        for stmt in &for_stmt.body {
-            match **stmt {
+        for content in &for_stmt.body {
+            match **content {
                 Content::Statement(ref stmt) => {
                     result = evaluate_statement(stmt, env)?;
                 }
@@ -164,10 +192,7 @@ fn evaluate_for_statement(for_stmt: &ForStmt, env: &mut Environment) -> Result<O
             }
         }
 
-        if let Some(ref update) = for_stmt.update {
-            evaluate_expression(update, env)?;
-        }
-
+        // If the body produces a result, return it
         if result.is_some() {
             return Ok(result);
         }
@@ -176,7 +201,7 @@ fn evaluate_for_statement(for_stmt: &ForStmt, env: &mut Environment) -> Result<O
     Ok(None)
 }
 
-fn evaluate_while_statement(while_stmt: &WhileStmt, env: &mut Environment) -> Result<Option<Value>, String> {
+fn evaluate_while_statement(while_stmt: &WhileStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     loop {
         match evaluate_expression(&while_stmt.test, env)? {
             Value::Boolean(false) => break,
@@ -196,14 +221,14 @@ fn evaluate_while_statement(while_stmt: &WhileStmt, env: &mut Environment) -> Re
                     return Ok(result);
                 }
             }
-            _ => return Err("While loop condition must evaluate to a boolean".to_string())
+            _ => return Err(runtime_error("While loop condition must evaluate to a boolean", while_stmt.location.line)),
         }
     }
     Ok(None)
 }
 
-fn evaluate_try_catch(try_catch: &TryCatchStmt, env: &mut Environment) -> Result<Option<Value>, String> {
-    let try_result = (|| -> Result<Option<Value>, String> {
+fn evaluate_try_catch(try_catch: &TryCatchStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
+    let try_result = (|| -> Result<Option<Value>, ZekkenError> {
         let mut result = None;
         for stmt in &try_catch.try_block {
             match **stmt {
@@ -241,7 +266,7 @@ fn evaluate_try_catch(try_catch: &TryCatchStmt, env: &mut Environment) -> Result
     }
 }
 
-fn evaluate_block(block: &BlockStmt, env: &mut Environment) -> Result<Option<Value>, String> {
+fn evaluate_block(block: &BlockStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     let mut result = None;
     for stmt in &block.body {
         match **stmt {
@@ -256,7 +281,7 @@ fn evaluate_block(block: &BlockStmt, env: &mut Environment) -> Result<Option<Val
     Ok(result)
 }
 
-fn evaluate_return(ret: &ReturnStmt, env: &mut Environment) -> Result<Option<Value>, String> {
+fn evaluate_return(ret: &ReturnStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     match &ret.value {
         Some(content) => match **content {
             Content::Expression(ref expr) => Ok(Some(evaluate_expression(expr, env)?)),
@@ -266,95 +291,131 @@ fn evaluate_return(ret: &ReturnStmt, env: &mut Environment) -> Result<Option<Val
     }
 }
 
-fn evaluate_lambda(lambda: &LambdaDecl, env: &mut Environment) -> Result<Option<Value>, String> {
+fn evaluate_lambda(lambda: &LambdaDecl, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     let function_value = FunctionValue {
         params: lambda.params.clone(),
         body: lambda.body.clone(),
-        //closure: env.clone(),
     };
 
     env.declare(lambda.ident.clone(), Value::Function(function_value), lambda.constant);
     Ok(None)
 }
 
-fn evaluate_use(use_stmt: &UseStmt, env: &mut Environment) -> Result<Option<Value>, String> {
-  // Load and parse module file
-  let module_path = format!("{}.zk", use_stmt.module);
-  let module_contents = std::fs::read_to_string(&module_path)
-      .map_err(|e| format!("Failed to load module '{}': {}", module_path, e))?;
+fn evaluate_use(use_stmt: &UseStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
+    let module_path = format!("{}.zk", use_stmt.module);
+    let module_contents = std::fs::read_to_string(&module_path)
+        .map_err(|e| ZekkenError::RuntimeError {
+            message: format!("Failed to load module '{}': {}", module_path, e),
+            filename: None,
+            line: None,
+            column: None,
+            line_content: None,
+            pointer: None,
+            expected: None,
+            found: None,
+        })?;
 
-  let mut parser = Parser::new();
-  let module_ast = parser.produce_ast(module_contents);
-  
-  // Create new environment for module
-  let mut module_env = Environment::new();
-  
-  // Evaluate module code
-  evaluate_statement(&Stmt::Program(module_ast), &mut module_env)?;
+    let mut parser = Parser::new();
+    let module_ast = parser.produce_ast(module_contents);
+    
+    let mut module_env = Environment::new();
+    
+    evaluate_statement(&Stmt::Program(module_ast), &mut module_env)?;
 
-  // Import specified items or everything
-  match &use_stmt.methods {
-      Some(methods) => {
-          // Import only specified methods
-          for method in methods {
-              if let Some(value) = module_env.lookup(method) {
-                  env.declare(method.clone(), value, false);
-              } else {
-                  return Err(format!("Method '{}' not found in module '{}'", method, use_stmt.module));
-              }
-          }
-      }
-      None => {
-          // Import all values by checking through lookups
-          for (name, value) in &module_env.variables {
-              env.declare(name.clone(), value.clone(), false);
-          }
-      }
-  }
+    match &use_stmt.methods {
+        Some(methods) => {
+            for method in methods {
+                if let Some(value) = module_env.lookup(method) {
+                    env.declare(method.clone(), value, false);
+                } else {
+                    return Err(ZekkenError::RuntimeError {
+                        message: format!("Method '{}' not found in module '{}'", method, use_stmt.module),
+                        filename: None,
+                        line: None,
+                        column: None,
+                        line_content: None,
+                        pointer: None,
+                        expected: None,
+                        found: None,
+                    });
+                }
+            }
+        }
+        None => {
+            for (name, value) in &module_env.variables {
+                env.declare(name.clone(), value.clone(), false);
+            }
+        }
+    }
 
-  Ok(None)
+    Ok(None)
 }
 
-fn evaluate_include(include: &IncludeStmt, env: &mut Environment) -> Result<Option<Value>, String> {
-  let file_contents = std::fs::read_to_string(&include.file_path)
-      .map_err(|e| format!("Failed to include file '{}': {}", include.file_path, e))?;
+fn evaluate_include(include: &IncludeStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
+    let file_contents = std::fs::read_to_string(&include.file_path)
+        .map_err(|e| ZekkenError::RuntimeError {
+            message: format!("Failed to include file '{}': {}", include.file_path, e),
+            filename: None,
+            line: None,
+            column: None,
+            line_content: None,
+            pointer: None,
+            expected: None,
+            found: None,
+        })?;
 
-  let mut parser = Parser::new();
-  let included_ast = parser.produce_ast(file_contents);
+    let mut parser = Parser::new();
+    let included_ast = parser.produce_ast(file_contents);
 
-  let mut temp_env = Environment::new();
-  evaluate_statement(&Stmt::Program(included_ast), &mut temp_env)?;
+    let mut temp_env = Environment::new();
+    evaluate_statement(&Stmt::Program(included_ast), &mut temp_env)?;
 
-  match &include.methods {
-      Some(methods) => {
-          for method in methods {
-              if let Some(value) = temp_env.lookup(method) {
-                  env.declare(method.clone(), value, false);
-              } else {
-                  return Err(format!("Method '{}' not found in included file", method));
-              }
-          }
-      }
-      None => {
-          // Import all values
-          for (name, value) in &temp_env.variables {
-              env.declare(name.clone(), value.clone(), false);
-          }
-      }
-  }
+    match &include.methods {
+        Some(methods) => {
+            for method in methods {
+                if let Some(value) = temp_env.lookup(method) {
+                    env.declare(method.clone(), value, false);
+                } else {
+                    return Err(ZekkenError::RuntimeError {
+                        message: format!("Method '{}' not found in included file", method),
+                        filename: None,
+                        line: None,
+                        column: None,
+                        line_content: None,
+                        pointer: None,
+                        expected: None,
+                        found: None,
+                    });
+                }
+            }
+        }
+        None => {
+            for (name, value) in &temp_env.variables {
+                env.declare(name.clone(), value.clone(), false);
+            }
+        }
+    }
 
-  Ok(None)
+    Ok(None)
 }
 
-fn evaluate_export(exports: &ExportStmt, env: &mut Environment) -> Result<Option<Value>, String> {
-  for name in &exports.exports {
-      if let Some(value) = env.lookup(name) {
-          // Just re-declare as variable which makes it accessible
-          env.declare(name.clone(), value, false);
-      } else {
-          return Err(format!("Cannot export undefined value '{}'", name));
-      }
-  }
-  
-  Ok(None)
+fn evaluate_export(exports: &ExportStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
+    for name in &exports.exports {
+        if let Some(value) = env.lookup(name) {
+            env.declare(name.clone(), value, false);
+        } else {
+            return Err(ZekkenError::RuntimeError {
+                message: format!("Cannot export undefined value '{}'", name),
+                filename: None,
+                line: None,
+                column: None,
+                line_content: None,
+                pointer: None,
+                expected: None,
+                found: None,
+            });
+        }
+    }
+    
+    Ok(None)
 }

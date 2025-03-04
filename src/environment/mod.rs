@@ -88,12 +88,15 @@ impl Environment {
     env.variables.insert(
       "println".to_string(),
       Value::NativeFunction(|args: Vec<Value>| -> Result<Value, String> {
-          let output: Vec<String> = args.iter()
-              .map(|v| format!("{}", v))  // This uses the Display implementation
-              .collect();
-          
-          println!("{}", output.join(" "));
-          std::io::stdout().flush().unwrap();
+          let mut stdout = std::io::stdout();
+          let output = args
+              .iter()
+              .map(|v| format!("{}", v))
+              .collect::<Vec<_>>()
+              .join(" ");
+          writeln!(stdout, "{}", output)
+              .map_err(|e| format!("Failed to write to stdout: {}", e))?;
+          stdout.flush().map_err(|e| format!("Failed to flush stdout: {}", e))?;
           Ok(Value::Void)
       })
     );

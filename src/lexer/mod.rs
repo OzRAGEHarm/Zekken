@@ -73,6 +73,7 @@ pub enum TokenType {
     Catch,
     
     // Grouping
+    At,
     Comma,
     Colon,
     Semicolon,
@@ -129,6 +130,7 @@ pub static KEYWORDS: &[(&str, TokenType)] = &[
 ];
 
 pub static TOKEN_CHAR: &[(&str, TokenType)] = &[
+    ("@", TokenType::At),
     ("(", TokenType::OpenParen),
     (")", TokenType::CloseParen),
     ("{", TokenType::OpenBrace),

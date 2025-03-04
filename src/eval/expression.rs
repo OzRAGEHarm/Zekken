@@ -2,14 +2,14 @@ use crate::ast::*;
 use crate::environment::{Environment, Value};
 use std::collections::HashMap;
 use crate::eval::statement::evaluate_statement;
+use crate::errors::{ZekkenError, runtime_error};
 
-pub fn evaluate_expression(expr: &Expr, env: &mut Environment) -> Result<Value, String> {
+pub fn evaluate_expression(expr: &Expr, env: &mut Environment) -> Result<Value, ZekkenError> {
     match expr {
         Expr::IntLit(int) => Ok(Value::Int(int.value)),
         Expr::FloatLit(float) => Ok(Value::Float(float.value)),
         Expr::StringLit(string) => Ok(Value::String(string.value.clone())),
         Expr::BoolLit(bool) => Ok(Value::Boolean(bool.value)),
-        Expr::Property(_) => Err("Property expression not supported in this context".to_string()),
         Expr::ArrayLit(array) => {
             let mut values = Vec::new();
             for element in &array.elements {
@@ -28,75 +28,77 @@ pub fn evaluate_expression(expr: &Expr, env: &mut Environment) -> Result<Value, 
         Expr::Identifier(ident) => {
             match env.lookup(&ident.name) {
                 Some(value) => Ok(value),
-                None => Err(format!("Variable '{}' not found", ident.name))
+                None => Err(runtime_error(
+                    &format!("Variable '{}' not found", ident.name),
+                    ident.location.line,
+                    ident.location.column,
+                ))
             }
         },
         Expr::Binary(binary) => evaluate_binary_expression(binary, env),
         Expr::Call(call) => evaluate_call_expression(call, env),
         Expr::Member(member) => evaluate_member_expression(member, env),
         Expr::Assign(assign) => evaluate_assignment(assign, env),
+        Expr::Property(_) => Err(ZekkenError::InternalError("Property expression not supported in this context".to_string()))
     }
 }
 
-fn evaluate_binary_expression(expr: &BinaryExpr, env: &mut Environment) -> Result<Value, String> {
+fn evaluate_binary_expression(expr: &BinaryExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
     let left = evaluate_expression(&expr.left, env)?;
     let right = evaluate_expression(&expr.right, env)?;
 
     match expr.operator.as_str() {
-        "+" => add_values(left, right),
-        "-" => subtract_values(left, right),
-        "*" => multiply_values(left, right),
-        "/" => divide_values(left, right),
-        "%" => modulo_values(left, right),
+        "+" => add_values(left, right).map_err(|e| runtime_error(&e, expr.location.line, expr.location.column)),
+        "-" => subtract_values(left, right).map_err(|e| runtime_error(&e, expr.location.line, expr.location.column)),
+        "*" => multiply_values(left, right).map_err(|e| runtime_error(&e, expr.location.line, expr.location.column)),
+        "/" => divide_values(left, right).map_err(|e| runtime_error(&e, expr.location.line, expr.location.column)),
+        "%" => modulo_values(left, right).map_err(|e| runtime_error(&e, expr.location.line, expr.location.column)),
         "==" => Ok(Value::Boolean(compare_values(&left, &right))),
         "!=" => Ok(Value::Boolean(!compare_values(&left, &right))),
-        "<" => compare_less_than(left, right),
-        ">" => compare_greater_than(left, right),
-        "<=" => compare_less_equal(left, right),
-        ">=" => compare_greater_equal(left, right),
-        "&&" => logical_and(left, right),
-        "||" => logical_or(left, right),
-        _ => Err(format!("Unknown operator: {}", expr.operator))
+        "<" => compare_less_than(left, right).map_err(|e| runtime_error(&e, expr.location.line, expr.location.column)),
+        ">" => compare_greater_than(left, right).map_err(|e| runtime_error(&e, expr.location.line, expr.location.column)),
+        "<=" => compare_less_equal(left, right).map_err(|e| runtime_error(&e, expr.location.line, expr.location.column)),
+        ">=" => compare_greater_equal(left, right).map_err(|e| runtime_error(&e, expr.location.line, expr.location.column)),
+        "&&" => logical_and(left, right).map_err(|e| runtime_error(&e, expr.location.line, expr.location.column)),
+        "||" => logical_or(left, right).map_err(|e| runtime_error(&e, expr.location.line, expr.location.column)),
+        operator => Err(runtime_error(&format!("Unknown operator: {}", operator), expr.location.line, expr.location.column))
     }
 }
 
-fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Result<Value, String> {
+fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
     let callee = evaluate_expression(&call.callee, env)?;
 
     match callee {
         Value::NativeFunction(native_func) => {
             let mut args = Vec::new();
             for arg in &call.args {
-                args.push(evaluate_expression(arg, env)?);
+                let evaluated = evaluate_expression(arg, env)?;
+                args.push(evaluated);
             }
-            native_func(args)
+            native_func(args).map_err(|e| runtime_error(&e, call.location.line, call.location.column))
         },
         Value::Function(func) => {
-            // Handle regular function calls
             let mut args = Vec::new();
             for arg in &call.args {
                 args.push(evaluate_expression(arg, env)?);
             }
-
             if args.len() != func.params.len() {
-                return Err(format!(
-                    "Expected {} arguments but got {}",
-                    func.params.len(),
-                    args.len()
+                return Err(runtime_error(
+                    &format!("Expected {} arguments but got {}", func.params.len(), args.len()),
+                    call.location.line,
+                    call.location.column
                 ));
             }
-
             let mut function_env = Environment::new_with_parent(env.clone());
             for (param, arg) in func.params.iter().zip(args) {
                 function_env.declare(param.ident.clone(), arg, false);
             }
-
             let mut result = Value::Void;
             for stmt in &func.body {
                 match **stmt {
                     Content::Expression(ref expr) => {
                         result = evaluate_expression(expr, &mut function_env)?;
-                    }
+                    },
                     Content::Statement(ref stmt) => {
                         if let Ok(Some(val)) = evaluate_statement(stmt, &mut function_env) {
                             result = val;
@@ -105,19 +107,19 @@ fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Result<Va
                 }
             }
             Ok(result)
-        }
-        _ => Err("Cannot call non-function value".to_string())
+        },
+        _ => Err(runtime_error("Cannot call non-function value", call.location.line, call.location.column))
     }
 }
 
-fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Result<Value, String> {
+fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
     let object = evaluate_expression(&member.object, env)?;
     let property = if member.computed {
         evaluate_expression(&member.property, env)?
     } else {
         match *member.property {
             Expr::Identifier(ref ident) => Value::String(ident.name.clone()),
-            _ => return Err("Invalid property access".to_string())
+            _ => return Err(runtime_error("Invalid property access", member.location.line, member.location.column))
         }
     };
 
@@ -125,27 +127,28 @@ fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Res
         (Value::Object(map), Value::String(key)) => {
             map.get(&key)
                .cloned()
-               .ok_or_else(|| format!("Property '{}' not found", key))
-        }
+               .ok_or_else(|| runtime_error(&format!("Property '{}' not found", key), member.location.line, member.location.column))
+        },
         (Value::Array(arr), Value::Int(index)) => {
             if index < 0 || index >= arr.len() as i64 {
-                Err(format!("Index {} out of bounds", index))
+                Err(runtime_error(&format!("Index {} out of bounds", index), member.location.line, member.location.column))
             } else {
                 Ok(arr[index as usize].clone())
             }
-        }
-        _ => Err("Invalid member access".to_string())
+        },
+        _ => Err(runtime_error("Invalid member access", member.location.line, member.location.column))
     }
 }
 
-fn evaluate_assignment(assign: &AssignExpr, env: &mut Environment) -> Result<Value, String> {
+fn evaluate_assignment(assign: &AssignExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
     let value = evaluate_expression(&assign.right, env)?;
     
     match *assign.left {
         Expr::Identifier(ref ident) => {
-            env.assign(&ident.name, value.clone())?;
+            env.assign(&ident.name, value.clone())
+                .map_err(|e| runtime_error(&e, assign.location.line, assign.location.column))?;
             Ok(value)
-        }
+        },
         Expr::Member(ref member) => {
             let mut object = evaluate_expression(&member.object, env)?;
             let property = if member.computed {
@@ -153,32 +156,36 @@ fn evaluate_assignment(assign: &AssignExpr, env: &mut Environment) -> Result<Val
             } else {
                 match *member.property {
                     Expr::Identifier(ref ident) => Value::String(ident.name.clone()),
-                    _ => return Err("Invalid property access".to_string())
+                    _ => return Err(runtime_error("Invalid property access", member.location.line, member.location.column))
                 }
             };
 
             match (&mut object, property) {
                 (Value::Object(ref mut map), Value::String(key)) => {
                     map.insert(key, value.clone());
-                    env.assign(&format!("{:?}", member.object), object)?;
+                    env.assign(&format!("{:?}", member.object), object)
+                        .map_err(|e| runtime_error(&e, assign.location.line, assign.location.column))?;
                     Ok(value)
-                }
+                },
                 (Value::Array(ref mut arr), Value::Int(index)) => {
                     if index < 0 || index >= arr.len() as i64 {
-                        return Err(format!("Index {} out of bounds", index));
+                        Err(runtime_error(&format!("Index {} out of bounds", index), member.location.line, member.location.column))
+                    } else {
+                        arr[index as usize] = value.clone();
+                        env.assign(&format!("{:?}", member.object), object)
+                            .map_err(|e| runtime_error(&e, assign.location.line, assign.location.column))?;
+                        Ok(value)
                     }
-                    arr[index as usize] = value.clone();
-                    env.assign(&format!("{:?}", member.object), object)?;
-                    Ok(value)
-                }
-                _ => Err("Invalid assignment target".to_string())
+                },
+                _ => Err(runtime_error("Invalid assignment target", assign.location.line, assign.location.column))
             }
-        }
-        _ => Err("Invalid assignment target".to_string())
+        },
+        _ => Err(runtime_error("Invalid assignment target", assign.location.line, assign.location.column))
     }
 }
 
-// Helper functions for binary operations
+// Helper functions for binary operations now return Result<Value, String> and are wrapped with runtime_error
+
 fn add_values(left: Value, right: Value) -> Result<Value, String> {
     match (left, right) {
         (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l + r)),
