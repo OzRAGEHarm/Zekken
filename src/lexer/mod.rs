@@ -40,6 +40,8 @@ pub enum DataType {
     Float,
     String,
     Bool,
+    Object,
+    Array,
     Any,
 }
 
@@ -65,7 +67,6 @@ pub enum TokenType {
     Use,
     Include,
     Export,
-    Obj,
     In,
     From,
     Return,
@@ -117,7 +118,6 @@ pub static KEYWORDS: &[(&str, TokenType)] = &[
     ("use", TokenType::Use),
     ("include", TokenType::Include),
     ("export", TokenType::Export),
-    ("obj", TokenType::Obj),
     ("in", TokenType::In),
     ("from", TokenType::From),
     ("return", TokenType::Return),
@@ -127,6 +127,8 @@ pub static KEYWORDS: &[(&str, TokenType)] = &[
     ("float", TokenType::DataType(DataType::Float)),
     ("string", TokenType::DataType(DataType::String)),
     ("bool", TokenType::DataType(DataType::Bool)),
+    ("obj", TokenType::DataType(DataType::Object)),
+    ("arr", TokenType::DataType(DataType::Array)),
 ];
 
 pub static TOKEN_CHAR: &[(&str, TokenType)] = &[

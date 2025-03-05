@@ -32,7 +32,7 @@ fn main() {
     let mut parser = Parser::new();
     let ast = parser.produce_ast(source_code);
 
-    println!("{:#?}", ast);
+    //println!("{:#?}", ast);
     
     let mut env = Environment::new();
 

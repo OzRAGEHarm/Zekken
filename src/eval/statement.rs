@@ -141,63 +141,69 @@ fn evaluate_if_statement(if_stmt: &IfStmt, env: &mut Environment) -> Result<Opti
 }
 
 fn evaluate_for_statement(for_stmt: &ForStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
-    // Evaluate the initialization statement if it exists
     if let Some(ref init) = for_stmt.init {
-        evaluate_statement(init, env)?;
-    }
-
-    // Evaluate the collection expression (the object to iterate over)
-    let collection_expr = if let Some(ref init) = for_stmt.init {
         if let Stmt::VarDecl(var_decl) = &**init {
-            if let Some(content) = &var_decl.value {
-                if let Content::Expression(expr) = content {
-                    expr
-                } else {
-                    return Err(runtime_error("Expected expression in for loop initialization", for_stmt.location.line));
+            let collection_value = match &var_decl.value {
+                Some(content) => match content {
+                    Content::Expression(expr) => evaluate_expression(expr, env)?,
+                    _ => panic!("Expected expression in for loop initialization"),
+                },
+                None => panic!("Expected expression in for loop initialization"),
+            };
+            
+            match collection_value {
+                Value::Object(map) => {
+                    let idents: Vec<String> = var_decl.ident.split(", ").map(|s| s.to_string()).collect();
+                    
+                    for (key, value) in map {
+                        // Declare key and value in the environment
+                        env.declare(idents[0].clone(), Value::String(key.clone()), false); // Key
+                        env.declare(idents[1].clone(), value.clone(), false); // Value
+                        
+                        // Execute the body of the for loop
+                        for content in &for_stmt.body {
+                            match **content {
+                                Content::Statement(ref stmt) => {
+                                    evaluate_statement(stmt, env)?;
+                                }
+                                Content::Expression(ref expr) => {
+                                    evaluate_expression(expr, env)?;
+                                }
+                            }
+                        }
+                    }
                 }
-            } else {
-                return Err(runtime_error("Expected expression in for loop initialization", for_stmt.location.line));
+                Value::Array(arr) => {
+                    let idents: Vec<String> = var_decl.ident.split(", ").map(|s| s.to_string()).collect();
+                    
+                    for value in arr {
+                        // Declare value in the environment
+                        env.declare(idents[0].clone(), value.clone(), false); // Value
+                        
+                        // Execute the body of the for loop
+                        for content in &for_stmt.body {
+                            match **content {
+                                Content::Statement(ref stmt) => {
+                                    evaluate_statement(stmt, env)?;
+                                }
+                                Content::Expression(ref expr) => {
+                                    evaluate_expression(expr, env)?;
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    return Err(runtime_error("For loop must iterate over an object or array", for_stmt.location.line));
+                }
             }
         } else {
-            return Err(runtime_error("Expected variable declaration in for loop initialization", for_stmt.location.line));
+            panic!("Expected variable declaration in for loop initialization");
         }
     } else {
-        return Err(runtime_error("For loop requires an initialization", for_stmt.location.line));
-    };
-
-    // Evaluate the collection expression
-    let object_expr = evaluate_expression(collection_expr, env)?;
-
-    // Ensure the collection is an object
-    let object_map = match object_expr {
-        Value::Object(map) => map,
-        _ => return Err(runtime_error("For loop must iterate over an object", for_stmt.location.line)),
-    };
-
-    // Iterate over the key-value pairs in the object
-    for (key, value) in object_map {
-        // Declare the key in the environment
-        env.declare(key.clone(), value.clone(), false); // Use the key as the variable name
-
-        // Evaluate the body of the for loop
-        let mut result = None;
-        for content in &for_stmt.body {
-            match **content {
-                Content::Statement(ref stmt) => {
-                    result = evaluate_statement(stmt, env)?;
-                }
-                Content::Expression(ref expr) => {
-                    result = Some(evaluate_expression(expr, env)?);
-                }
-            }
-        }
-
-        // If the body produces a result, return it
-        if result.is_some() {
-            return Ok(result);
-        }
+        panic!("For loop requires an initialization");
     }
-
+    
     Ok(None)
 }
 

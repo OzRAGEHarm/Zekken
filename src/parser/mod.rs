@@ -117,7 +117,6 @@ impl Parser {
             TokenType::Use => self.parse_use_stmt(),
             TokenType::Include => self.parse_include_stmt(),
             TokenType::Export => self.parse_export_stmt(),
-            TokenType::Obj => self.parse_object_decl(),
             TokenType::Return => self.parse_return_stmt(),
             TokenType::Try => self.parse_try_catch_stmt(),
             _ => self.parse_expr(),
@@ -175,10 +174,18 @@ impl Parser {
                 self.consume();
                 DataType::Bool
             }
+            TokenType::DataType(DataType::Object) => {
+                self.consume();
+                DataType::Object
+            }
+            TokenType::DataType(DataType::Array) => {
+                self.consume();
+                DataType::Array
+            }
             _ => {
                 let token = self.expect(
                     TokenType::DataType(DataType::Any), 
-                    "Expected type (int, float, string, bool) after ':'"
+                    "Expected type (int, float, string, bool, object, array) after ':'"
                 );
                 match token.kind {
                     TokenType::DataType(t) => t,
@@ -328,26 +335,39 @@ impl Parser {
     fn parse_for_stmt(&mut self) -> Content {
         let start_location = self.at().location();
         self.expect(TokenType::For, "Expected 'for' keyword");
-    
-        let ident = self.expect(TokenType::Identifier, "Expected identifier after 'for'").value;
-        self.expect(TokenType::In, "Expected 'in' after identifier");
-    
+        
+        self.expect(TokenType::Pipe, "Expected '|' after 'for'");
+        let mut idents = Vec::new();
+        while self.at().kind != TokenType::Pipe {
+            let ident = self.expect(TokenType::Identifier, "Expected identifier").value;
+            idents.push(ident);
+            if self.at().kind == TokenType::Comma {
+                self.consume(); // Consume the comma
+            } else {
+                break;
+            }
+        }
+        self.expect(TokenType::Pipe, "Expected '|' after identifiers");
+        self.expect(TokenType::In, "Expected 'in' after identifiers");
+        
         let collection = self.parse_expr();
-    
+        
         self.expect(TokenType::OpenBrace, "Expected '{' after for condition");
-    
+        
         let body = self.parse_block_stmt();
-    
+        
         self.expect(TokenType::CloseBrace, "Expected '}' after for body");
-    
+        
+        let init = Some(Box::new(Stmt::VarDecl(VarDecl {
+            constant: false,
+            ident: idents.join(", "), // Join identifiers as a single string
+            type_: DataType::Any,
+            value: Some(collection),
+            location: start_location.clone(),
+        })));
+        
         Content::Statement(Box::new(Stmt::ForStmt(ForStmt {
-            init: Some(Box::new(Stmt::VarDecl(VarDecl {
-                constant: false,
-                ident,
-                type_: DataType::String,
-                value: Some(collection),
-                location: start_location.clone(),
-            }))),
+            init,
             test: None,
             update: None,
             body,
@@ -486,16 +506,6 @@ impl Parser {
         })))
     }
 
-    fn parse_object_decl(&mut self) -> Content {
-        let start_location = self.at().location().clone();
-        self.expect(TokenType::Obj, "Expected 'obj' keyword");
-        let ident = self.expect(TokenType::Identifier, "Expected object identifier").value;
-        self.expect(TokenType::OpenBrace, "Expected '{' after object identifier");
-        let properties = self.parse_object_properties();
-        self.expect(TokenType::CloseBrace, "Expected '}' to close object declaration");
-        Content::Statement(Box::new(Stmt::ObjectDecl(ObjectDecl { ident, properties, location: start_location })))
-    }
-
     fn parse_return_stmt(&mut self) -> Content {
         let start_location = self.at().location();
         self.expect(TokenType::Return, "Expected 'return' keyword");
@@ -542,6 +552,23 @@ impl Parser {
         })))
     }
 
+    fn parse_object_lit(&mut self) -> Content {
+        let start_location = self.at().location();
+        self.expect(TokenType::OpenBrace, "Expected '{' to start object literal");
+        let properties = self.parse_object_properties();
+        self.expect(TokenType::CloseBrace, "Expected '}' to end object literal");
+        Content::Expression(Box::new(Expr::ObjectLit(ObjectLit { properties, location: start_location })))
+    }
+    
+    fn parse_array_lit(&mut self) -> Content {
+        let start_location = self.at().location();
+        self.expect(TokenType::OpenBracket, "Expected '[' to start array literal");
+        let elements = self.parse_array_elements();
+        self.expect(TokenType::CloseBracket, "Expected ']' to end array literal");
+        Content::Expression(Box::new(Expr::ArrayLit(ArrayLit { elements, location: start_location })))
+    }
+    
+    
     fn parse_object_properties(&mut self) -> Vec<Property> {
         let mut properties = Vec::new();
         while self.at().kind != TokenType::CloseBrace {
@@ -560,6 +587,24 @@ impl Parser {
             }
         }
         properties
+    }
+    
+    fn parse_array_elements(&mut self) -> Vec<Box<Expr>> {
+        let mut elements = Vec::new();
+        while self.at().kind != TokenType::CloseBracket {
+            let element = self.parse_expr();
+            if let Content::Expression(expr) = element {
+                elements.push(expr);
+            } else {
+                panic!("Expected expression for array element");
+            }
+            if self.at().kind == TokenType::Comma {
+                self.consume(); // Consume the comma
+            } else {
+                break;
+            }
+        }
+        elements
     }
 
     fn parse_string_literal(&mut self) -> Content {
@@ -590,7 +635,7 @@ impl Parser {
 
     fn parse_assignment_expr(&mut self) -> Content {
         let mut expr = self.parse_binary_expr();
-    
+        
         while self.at().kind != TokenType::Semicolon && self.at().kind != TokenType::CloseBrace && self.at().kind != TokenType::CloseParen {
             if matches!(self.at().kind, TokenType::AssignOp(_)) {
                 let _operator = self.at().kind.clone();
@@ -606,13 +651,13 @@ impl Parser {
                 break;
             }
         }
-    
+        
         expr // Return the parsed expression
     }
     
     fn parse_binary_expr(&mut self) -> Content {
         let mut expr = self.parse_primary_expr();
-
+    
         while self.not_eof() && !matches!(
             self.at().kind,
             TokenType ::Semicolon | TokenType::CloseBrace | TokenType::CloseParen
@@ -644,9 +689,9 @@ impl Parser {
             } else {
                 break;
             };
-
+    
             let right = self.parse_primary_expr();
-            if let (Content::Expression(left_expr), Content::Expression(right_expr)) = (expr, right) {
+            if let ( Content::Expression(left_expr), Content::Expression(right_expr)) = (expr, right) {
                 expr = Content::Expression(Box::new(Expr::Binary(BinaryExpr {
                     left: left_expr,
                     right: right_expr,
@@ -657,7 +702,7 @@ impl Parser {
                 panic!("Expected expressions in binary operation");
             }
         }
-
+    
         expr
     }
 
@@ -760,6 +805,8 @@ impl Parser {
                 self.expect(TokenType::CloseParen, "Expected ')' after expression");
                 expr
             },
+            TokenType::OpenBrace => self.parse_object_lit(),
+            TokenType::OpenBracket => self.parse_array_lit(),
             _ => panic!("Unexpected token: {:?}", self.at().kind),
         }
     }

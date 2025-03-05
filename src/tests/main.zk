@@ -1,8 +1,8 @@
-obj myObj {
-  key: "value",
-  another_key: "another value"
+let x: int = 45;
+
+func mul |a: int, b: int| {
+  return a * b;
 }
 
-for key in myObj {
-  @println => |key|
-}
+let result: int = mul => |x, 20|;
+@println => |result|

@@ -62,14 +62,14 @@ if x == 45 {
 
 
 // object declaration
-obj z {
+let myObj: obj = {
   key1: "value1",
   key2: "value2"
-}
+};
 
 // for-loop
-for x in z {
-  println(x)
+for |x| in myObj {
+  @println => | x |
 }
 
 

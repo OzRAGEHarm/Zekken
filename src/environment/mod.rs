@@ -29,7 +29,7 @@ impl Display for Value {
                   write!(f, "{}", fl)
               }
           },
-          Value::String(s) => write!(f, "{}", s),
+          Value::String(s) => write!(f, "\"{}\"", s),
           Value::Boolean(b) => write!(f, "{}", b),
           Value::Array(arr) => {
               write!(f, "[")?;
@@ -78,70 +78,82 @@ pub struct Environment {
 
 impl Environment {
   pub fn new() -> Self {
-    let mut env = Environment {
-      parent: None,
-      variables: HashMap::new(),
-      constants: HashMap::new(),
-    };
+      let mut env = Environment {
+          parent: None,
+          variables: HashMap::new(),
+          constants: HashMap::new(),
+      };
 
+      env.variables.insert(
+          "println".to_string(),
+          Value::NativeFunction(|args: Vec<Value>| -> Result<Value, String> {
+              let mut stdout = std::io::stdout();
 
-    env.variables.insert(
-      "println".to_string(),
-      Value::NativeFunction(|args: Vec<Value>| -> Result<Value, String> {
-          let mut stdout = std::io::stdout();
-          let output = args
-              .iter()
-              .map(|v| format!("{}", v))
-              .collect::<Vec<_>>()
-              .join(" ");
-          writeln!(stdout, "{}", output)
-              .map_err(|e| format!("Failed to write to stdout: {}", e))?;
-          stdout.flush().map_err(|e| format!("Failed to flush stdout: {}", e))?;
-          Ok(Value::Void)
-      })
-    );
+              if args.is_empty() {
+                  writeln!(stdout).map_err(|e| e.to_string())?;
+                  return Ok(Value::Void);
+              }
 
-    env
+              match &args[0] {
+                  Value::String(template) if template.contains('{') => {
+                      // Do string interpolation
+                      let mut result = template.to_string();
+                      for (i, arg) in args.iter().enumerate().skip(1) {
+                          let placeholder = format!("{{{}}}", i - 1);
+                          result = result.replace(&placeholder, &arg.to_string());
+                      }
+
+                      writeln!(stdout, "{}", result).map_err(|e| e.to_string())?;
+                  },
+                  value => writeln!(stdout, "{}", value).map_err(|e| e.to_string())?,
+              }
+
+              stdout.flush().map_err(|e| e.to_string())?;
+              Ok(Value::Void)
+          })
+      );
+
+      env
   }
 
   pub fn new_with_parent(parent: Environment) -> Self {
-    Environment {
-      parent: Some(Box::new(parent)),
-      variables: HashMap::new(),
-      constants: HashMap::new(),
-    }
+      Environment {
+          parent: Some(Box::new(parent)),
+          variables: HashMap::new(),
+          constants: HashMap::new(),
+      }
   }
 
   pub fn declare(&mut self, name: String, value: Value, constant: bool) {
-    if constant {
-      self.constants.insert(name, value);
-    } else {
-      self.variables.insert(name, value);
-    }
+      if constant {
+          self.constants.insert(name, value);
+      } else {
+          self.variables.insert(name, value);
+      }
   }
 
   pub fn assign(&mut self, name: &str, value: Value) -> Result<(), String> {
-    if self.constants.contains_key(name) {
-      return Err(format!("Cannot reassign constant '{}'", name));
-    }
+      if self.constants.contains_key(name) {
+          return Err(format!("Cannot reassign constant '{}'", name));
+      }
 
-    if self.variables.contains_key(name) {
-      self.variables.insert(name.to_string(), value);
-      return Ok(());
-    }
+      if self.variables.contains_key(name) {
+          self.variables.insert(name.to_string(), value);
+          return Ok(());
+      }
 
-    if let Some(ref mut parent) = self.parent {
-      return parent.assign(name, value);
-    }
+      if let Some(ref mut parent) = self.parent {
+          return parent.assign(name, value);
+      }
 
-    Err(format!("Variable '{}' not found", name))
+      Err(format!("Variable '{}' not found", name))
   }
 
   pub fn lookup(&self, name: &str) -> Option<Value> {
-    self.variables.get(name)
-        .or_else(|| self.constants.get(name))
-        .cloned()
-        .or_else(|| self.parent.as_ref().and_then(|p| p.lookup(name)))
+      self.variables.get(name)
+          .or_else(|| self.constants.get(name))
+          .cloned()
+          .or_else(|| self.parent.as_ref().and_then(|p| p.lookup(name)))
   }
 }
 
