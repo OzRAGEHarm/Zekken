@@ -58,16 +58,25 @@ pub fn evaluate_expression(expr: &Expr, env: &mut Environment) -> Result<Value, 
 fn evaluate_binary_expression(expr: &BinaryExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
     let left = evaluate_expression(&expr.left, env)?;
     let right = evaluate_expression(&expr.right, env)?;
+
+    if (matches!(left, Value::Int(_)) && matches!(right, Value::Float(_))) ||
+       (matches!(left, Value::Float(_)) && matches!(right, Value::Int(_))) {
+        return Err(runtime_error(
+            &format!("Type error: Cannot perform '{}' operation between int and float", expr.operator),
+            expr.location.line,
+            expr.location.column,
+        ));
+    }
     
     match expr.operator.as_str() {
-        "+" => add_values(left, right)
-                .map_err(|msg| runtime_error(&msg, expr.location.line, expr.location.column)),
-        "-" => subtract_values(left, right)
-                .map_err(|msg| runtime_error(&msg, expr.location.line, expr.location.column)),
-        "*" => multiply_values(left, right)
-                .map_err(|msg| runtime_error(&msg, expr.location.line, expr.location.column)),
-        "/" => divide_values(left, right)
-                .map_err(|msg| runtime_error(&msg, expr.location.line, expr.location.column)),
+        "+" => add_values(&left, &right)
+            .map_err(|msg| runtime_error(&msg, expr.location.line, expr.location.column)),
+        "-" => subtract_values(&left, &right)
+            .map_err(|msg| runtime_error(&msg, expr.location.line, expr.location.column)),
+        "*" => multiply_values(&left, &right)
+            .map_err(|msg| runtime_error(&msg, expr.location.line, expr.location.column)),
+        "/" => divide_values(&left, &right)
+            .map_err(|msg| runtime_error(&msg, expr.location.line, expr.location.column)),
         "%" => modulo_values(left, right)
                 .map_err(|msg| runtime_error(&msg, expr.location.line, expr.location.column)),
         "==" => Ok(Value::Boolean(compare_values(&left, &right))),
@@ -282,58 +291,56 @@ fn evaluate_assignment(assign: &AssignExpr, env: &mut Environment) -> Result<Val
     }
 }
 
-// Helper functions for binary operations now return Result<Value, String> and are wrapped with runtime_error
-
-fn add_values(left: Value, right: Value) -> Result<Value, String> {
+fn add_values(left: &Value, right: &Value) -> Result<Value, String> {
     match (left, right) {
         (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l + r)),
         (Value::Float(l), Value::Float(r)) => Ok(Value::Float(l + r)),
-        (Value::Int(_), Value::Float(_)) => Err("Type error: cannot add int and float".to_string()),
-        (Value::Float(_), Value::Int(_)) => Err("Type error: cannot add float and int".to_string()),
-        (Value::String(l), Value::String(r)) => Ok(Value::String(l + &r)),
-        _ => Err("Invalid addition operation".to_string())
+        (Value::String(l), Value::String(r)) => Ok(Value::String(l.clone() + r)),
+        (Value::Int(_), Value::Float(_)) => Err("Cannot add int and float".to_string()),
+        (Value::Float(_), Value::Int(_)) => Err("Cannot add float and int".to_string()),
+        _ => Err("Invalid operand types for addition".to_string())
     }
 }
 
-fn subtract_values(left: Value, right: Value) -> Result<Value, String> {
+fn subtract_values(left: &Value, right: &Value) -> Result<Value, String> {
     match (left, right) {
         (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l - r)),
         (Value::Float(l), Value::Float(r)) => Ok(Value::Float(l - r)),
-        (Value::Int(_), Value::Float(_)) => Err("Type error: cannot subtract int and float".to_string()),
-        (Value::Float(_), Value::Int(_)) => Err("Type error: cannot subtract float and int".to_string()),
-        _ => Err("Invalid subtraction operation".to_string())
+        (Value::Int(_), Value::Float(_)) => Err("Cannot subtract int and float".to_string()),
+        (Value::Float(_), Value::Int(_)) => Err("Cannot subtract float and int".to_string()),
+        _ => Err("Invalid operand types for subtraction".to_string())
     }
 }
 
-fn multiply_values(left: Value, right: Value) -> Result<Value, String> {
+fn multiply_values(left: &Value, right: &Value) -> Result<Value, String> {
     match (left, right) {
         (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l * r)),
         (Value::Float(l), Value::Float(r)) => Ok(Value::Float(l * r)),
-        (Value::Int(_), Value::Float(_)) => Err("Type error: cannot multiply int and float".to_string()),
-        (Value::Float(_), Value::Int(_)) => Err("Type error: cannot multiply float and int".to_string()),
-        _ => Err("Invalid multiplication operation".to_string())
+        (Value::Int(_), Value::Float(_)) => Err("Cannot multiply int and float".to_string()),
+        (Value::Float(_), Value::Int(_)) => Err("Cannot multiply float and int".to_string()),
+        _ => Err("Invalid operand types for multiplication".to_string())
     }
 }
 
-fn divide_values(left: Value, right: Value) -> Result<Value, String> {
+fn divide_values(left: &Value, right: &Value) -> Result<Value, String> {
     match (left, right) {
         (Value::Int(l), Value::Int(r)) => {
-            if r == 0 {
+            if *r == 0 {
                 Err("Division by zero".to_string())
             } else {
                 Ok(Value::Int(l / r))
             }
-        }
+        },
         (Value::Float(l), Value::Float(r)) => {
-            if r == 0.0 {
+            if *r == 0.0 {
                 Err("Division by zero".to_string())
             } else {
                 Ok(Value::Float(l / r))
             }
-        }
-        (Value::Int(_), Value::Float(_)) => Err("Type error: cannot divide int by float".to_string()),
-        (Value::Float(_), Value::Int(_)) => Err("Type error: cannot divide float by int".to_string()),
-        _ => Err("Invalid division operation".to_string())
+        },
+        (Value::Int(_), Value::Float(_)) => Err("Cannot divide int by float".to_string()),
+        (Value::Float(_), Value::Int(_)) => Err("Cannot divide float by int".to_string()),
+        _ => Err("Invalid operand types for division".to_string())
     }
 }
 

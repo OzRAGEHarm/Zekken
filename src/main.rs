@@ -9,6 +9,7 @@ mod parser;
 mod environment;
 mod eval;
 mod errors;
+mod libraries;
 
 use parser::Parser;
 use eval::statement::evaluate_statement;

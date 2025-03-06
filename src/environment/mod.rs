@@ -14,6 +14,9 @@ pub enum Value {
   Object(HashMap<String, Value>),
   Function(FunctionValue),
   NativeFunction(fn(Vec<Value>) -> Result<Value, String>),
+  Complex { real: f64, imag: f64 },
+  Vector(Vec<f64>),
+  Matrix(Vec<Vec<f64>>),
   Void,
 }
 
@@ -29,7 +32,7 @@ impl Display for Value {
                   write!(f, "{}", fl)
               }
           },
-          Value::String(s) => write!(f, "\"{}\"", s),
+          Value::String(s) => write!(f, "{}", s),
           Value::Boolean(b) => write!(f, "{}", b),
           Value::Array(arr) => {
               write!(f, "[")?;
@@ -57,6 +60,35 @@ impl Display for Value {
           },
           Value::Function(_) => write!(f, "<function>"),
           Value::NativeFunction(_) => write!(f, "<native function>"),
+          Value::Complex { real, imag } => {
+            if *imag >= 0.0 {
+                write!(f, "{} + {}i", real, imag)
+            } else {
+                write!(f, "{} - {}i", real, imag.abs())
+            }
+          },
+          Value::Vector(v) => {
+              write!(f, "[")?;
+              for (i, val) in v.iter().enumerate() {
+                  if i > 0 { write!(f, ", ")? }
+                  write!(f, "{}", val)?;
+              }
+              write!(f, "]")
+          },
+          Value::Matrix(m) => {
+              writeln!(f, "[")?;
+              for (i, row) in m.iter().enumerate() {
+                  if i > 0 { write!(f, " ")? }
+                  write!(f, " [")?;
+                  for (j, val) in row.iter().enumerate() {
+                      if j > 0 { write!(f, ", ")? }
+                      write!(f, "{:>8.3}", val)?;
+                  }
+                  write!(f, "]")?;
+                  if i < m.len() - 1 { writeln!(f)? }
+              }
+              write!(f, "\n]")
+          },
           Value::Void => write!(f, "void"),
       }
   }
@@ -85,32 +117,25 @@ impl Environment {
       };
 
       env.variables.insert(
-          "println".to_string(),
-          Value::NativeFunction(|args: Vec<Value>| -> Result<Value, String> {
-              let mut stdout = std::io::stdout();
+        "println".to_string(),
+        Value::NativeFunction(|args: Vec<Value>| -> Result<Value, String> {
+            let mut stdout = std::io::stdout();
 
-              if args.is_empty() {
-                  writeln!(stdout).map_err(|e| e.to_string())?;
-                  return Ok(Value::Void);
-              }
+            if args.is_empty() {
+                writeln!(stdout).map_err(|e| e.to_string())?;
+                return Ok(Value::Void);
+            }
 
-              match &args[0] {
-                  Value::String(template) if template.contains('{') => {
-                      // Do string interpolation
-                      let mut result = template.to_string();
-                      for (i, arg) in args.iter().enumerate().skip(1) {
-                          let placeholder = format!("{{{}}}", i - 1);
-                          result = result.replace(&placeholder, &arg.to_string());
-                      }
+            // Store the first arg as the return value
+            let return_value = args[0].clone();
 
-                      writeln!(stdout, "{}", result).map_err(|e| e.to_string())?;
-                  },
-                  value => writeln!(stdout, "{}", value).map_err(|e| e.to_string())?,
-              }
+            // Print the value 
+            writeln!(stdout, "{}", return_value).map_err(|e| e.to_string())?;
+            stdout.flush().map_err(|e| e.to_string())?;
 
-              stdout.flush().map_err(|e| e.to_string())?;
-              Ok(Value::Void)
-          })
+            // Return the actual value instead of Void
+            Ok(return_value)
+        })
       );
 
       env
@@ -192,5 +217,45 @@ impl From<ArrayLit> for Value {
         _ => Value::Void,
       })
       .collect())
+  }
+}
+
+impl From<ComplexLit> for Value {
+  fn from(lit: ComplexLit) -> Self {
+      Value::Complex {
+          real: lit.real,
+          imag: lit.imag,
+      }
+  }
+}
+
+impl From<VectorLit> for Value {
+  fn from(lit: VectorLit) -> Self {
+      Value::Vector(lit.elements)
+  }
+}
+
+impl From<MatrixLit> for Value {
+  fn from(lit: MatrixLit) -> Self {
+      Value::Matrix(lit.rows)
+  }
+}
+
+impl Value {
+  pub fn as_float(&self) -> Option<f64> {
+      match self {
+          Value::Int(i) => Some(*i as f64),
+          Value::Float(f) => Some(*f),
+          Value::Complex { real, imag: _ } => Some(*real),
+          _ => None,
+      }
+  }
+
+  pub fn as_int(&self) -> Option<i64> {
+      match self {
+          Value::Int(i) => Some(*i),
+          Value::Float(f) => Some(*f as i64),
+          _ => None,
+      }
   }
 }

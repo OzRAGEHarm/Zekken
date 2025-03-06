@@ -139,29 +139,36 @@ pub static TOKEN_CHAR: &[(&str, TokenType)] = &[
     ("}", TokenType::CloseBrace),
     ("[", TokenType::OpenBracket),
     ("]", TokenType::CloseBracket),
+    (".", TokenType::Dot),
+    (";", TokenType::Semicolon),
+    (":", TokenType::Colon),
+    (",", TokenType::Comma),
+    ("|", TokenType::Pipe),
+    ("->", TokenType::ThinArrow),
+    ("=>", TokenType::FatArrow),
+    ("&", TokenType::Ampersand),
+    ("'", TokenType::SingleQuote),
+    ("\"", TokenType::DoubleQuote),
     ("+", TokenType::ArithOp(ArithOp::Add)),
     ("-", TokenType::ArithOp(ArithOp::Sub)),
     ("*", TokenType::ArithOp(ArithOp::Mul)),
     ("%", TokenType::ArithOp(ArithOp::Mod)),
     ("/", TokenType::ArithOp(ArithOp::Div)),
-    (".", TokenType::Dot),
-    (";", TokenType::Semicolon),
-    (":", TokenType::Colon),
-    (",", TokenType::Comma),
-    ("||", TokenType::BinOp(BinOp::Or)),
-    ("|", TokenType::Pipe), // Single pipe can also be a bitwise OR
-    ("->", TokenType::ThinArrow),
-    ("=>", TokenType::FatArrow),
     ("=", TokenType::AssignOp(AssignOp::Assign)),
+    ("+=", TokenType::AssignOp(AssignOp::AddAssign)),
+    ("-=", TokenType::AssignOp(AssignOp::SubAssign)),
+    ("*=", TokenType::AssignOp(AssignOp::MulAssign)),
+    ("/=", TokenType::AssignOp(AssignOp::DivAssign)),
+    ("%=", TokenType::AssignOp(AssignOp::ModAssign)),
+    ("||", TokenType::BinOp(BinOp::Or)),
     ("!", TokenType::BinOp(BinOp::Not)),
     ("&&", TokenType::BinOp(BinOp::And)),
-    ("&", TokenType::Ampersand), // Single ampersand can also be a bitwise AND
     ("==", TokenType::BinOp(BinOp::Eq)),
     ("!=", TokenType::BinOp(BinOp::Neq)),
     (">=", TokenType::BinOp(BinOp::GreaterEq)),
     ("<=", TokenType::BinOp(BinOp::LessEq)),
-    ("'", TokenType::SingleQuote),
-    ("\"", TokenType::DoubleQuote),
+    (">", TokenType::BinOp(BinOp::Greater)),
+    ("<", TokenType::BinOp(BinOp::Less)),
 ];
 
 #[allow(dead_code)]
@@ -187,15 +194,10 @@ impl Token {
     }
 
     pub fn location(&self) -> Location {
-
         Location {
-
             line: self.line,
-
             column: self.column,
-
         }
-
     }
 }
 

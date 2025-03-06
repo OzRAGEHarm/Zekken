@@ -1,8 +1,8 @@
-let x: int = 45;
+use math;
 
-func mul |a: int, b: int| {
-  return a * b;
+func add |a: float, b: float| {
+  return a + b;
 }
 
-let result: int = mul => |x, 20|;
-@println => |result|
+let result: float = add => |1.0, 2.0|;
+@println => |"penis {result}"|

@@ -238,3 +238,19 @@ pub struct ObjectLit {
     pub properties: Vec<Property>,
     pub location: Location,
 }
+
+#[derive(Debug, Clone)]
+pub struct ComplexLit {
+    pub real: f64,
+    pub imag: f64,
+}
+
+#[derive(Debug, Clone)]
+pub struct VectorLit {
+    pub elements: Vec<f64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MatrixLit {
+    pub rows: Vec<Vec<f64>>,
+}

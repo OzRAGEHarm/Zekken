@@ -1,6 +1,7 @@
 use std::fmt;
 use std::error::Error;
 use std::fs;
+use std::env;
 
 #[derive(Debug)]
 pub enum ZekkenError {
@@ -72,12 +73,14 @@ impl fmt::Display for ZekkenError {
 impl Error for ZekkenError {}
 
 pub fn runtime_error(message: &str, line: usize, column: usize) -> ZekkenError {
-    let filename = std::env::var("ZEKKEN_CURRENT_FILE").unwrap_or_else(|_| "<unknown>".into());
-    let file_content = fs::read_to_string(&filename).unwrap_or_else(|_| "<unknown>".into());
-    // Get the specific line from the file; line numbers are 1-indexed.
-    let line_content = file_content.lines().nth(line.wrapping_sub(1)).unwrap_or("<unknown>").to_string();
+    // Try to get the current file name
+    let filename = env::var("ZEKKEN_CURRENT_FILE").unwrap_or_else(|_| "<unknown>".to_string());
+    // Read the file content if possible.
+    let file_content = fs::read_to_string(&filename).unwrap_or_else(|_| "<source unavailable>".to_string());
+    // Lines are 1-indexed
+    let line_content = file_content.lines().nth(line.saturating_sub(1)).unwrap_or("<line not found>").to_string();
+    // Build a pointer string that marks the column
     let pointer = " ".repeat(column.saturating_sub(1)) + "\x1b[1;31m^\x1b[0m";
-
     ZekkenError::RuntimeError {
         message: message.to_string(),
         filename: Some(filename),
@@ -88,9 +91,4 @@ pub fn runtime_error(message: &str, line: usize, column: usize) -> ZekkenError {
         expected: None,
         found: None,
     }
-}
-
-/// A helper function to output errors.
-pub fn handle_error(err: &ZekkenError) {
-    eprintln!("{}", err);
 }
