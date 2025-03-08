@@ -3,6 +3,7 @@
 use crate::ast::*;
 use crate::lexer::*;
 use crate::errors::*;
+use crate::ast::Location;
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -29,8 +30,19 @@ impl Parser {
     }
 
     pub fn produce_ast(&mut self, source_code: String) -> Program {
-        self.source_lines = source_code.lines().map(String::from).collect();
-        self.tokens = tokenize(source_code);
+        let source_lines: Vec<String> = source_code.lines().map(String::from).collect();
+        std::env::set_var("ZEKKEN_SOURCE_LINES", source_lines.join("\n"));
+        
+        let tokens = tokenize(source_code);
+        let tokens_str = tokens
+            .iter()
+            .map(|t| format!("{:?}", t))
+            .collect::<Vec<String>>()
+            .join("\n");
+        std::env::set_var("ZEKKEN_TOKENS", tokens_str);
+
+        self.source_lines = source_lines;
+        self.tokens = tokens;
     
         let start_location = self.at().location();
         let mut program = Program {
@@ -81,16 +93,13 @@ impl Parser {
             let line_content = self.source_lines.get(token.line - 1)
                 .unwrap_or(&String::from("<unknown>"))
                 .clone();
-            
-            let pointer = " ".repeat(token.column - 1) + "\x1b[1;31m^\x1b[0m";
+            let pointer = " ".repeat(token.column - 1) + "┈┈↳";
             let filename = std::env::var("ZEKKEN_CURRENT_FILE").unwrap_or_else(|_| String::from("<unknown>"));
-
             let token_value = if token.kind == TokenType::EOF {
                 String::from("End Of File")
             } else {
                 token.value.clone()
             };
-            
             let error = ZekkenError::SyntaxError {
                 message: err.to_string(),
                 filename,
@@ -99,7 +108,7 @@ impl Parser {
                 line_content,
                 pointer,
                 expected: format!("{:?}", type_),
-                found: format!("{:?} ({:?})", token.kind, token_value),
+                found: format!("{:?} ({})", token.kind, token_value),
             };
             panic!("{}", error);
         }
@@ -630,97 +639,72 @@ impl Parser {
     }
 
     fn parse_expr(&mut self) -> Content {
-        self.parse_assignment_expr()
+        self.parse_expression(0)
     }
 
-    fn parse_assignment_expr(&mut self) -> Content {
-        let mut expr = self.parse_binary_expr();
-        
-        while self.at().kind != TokenType::Semicolon && self.at().kind != TokenType::CloseBrace && self.at().kind != TokenType::CloseParen {
-            if matches!(self.at().kind, TokenType::AssignOp(_)) {
-                let _operator = self.at().kind.clone();
-                self.consume(); // Consume the assignment operator
-                let right = self.parse_binary_expr(); // Parse the right-hand side expression
-                if let (Content::Expression(left_expr), Content::Expression(right_expr)) = (expr, right) {
-                    let assign_expr = AssignExpr { left: left_expr, right: right_expr, location: self.at().location() };
-                    expr = Content::Expression(Box::new(Expr::Assign(assign_expr)));
-                } else {
-                    panic!("Expected expressions in assignment");
+    // New Pratt parser routine using precedence climbing
+    fn parse_expression(&mut self, min_prec: u8) -> Content {
+        let mut left = self.parse_prefix();
+        loop {
+            // Handle member access (dot operator)
+            if self.at().kind == TokenType::Dot {
+                self.consume(); // consume the dot
+                let ident_token = self.expect(TokenType::Identifier, "Expected property identifier after '.'");
+                let member_expr = Expr::Member(MemberExpr {
+                    object: match left {
+                        Content::Expression(expr) => expr,
+                        _ => panic!("Expected expression")
+                    },
+                    property: Box::new(Expr::Identifier(Identifier {
+                        name: ident_token.value.clone(),
+                        location: ident_token.location(),
+                    })),
+                    computed: false,
+                    location: ident_token.location(),
+                });
+                left = Content::Expression(Box::new(member_expr));
+                continue;
+            }
+            // Process binary/infix operators
+            if let Some(op_prec) = self.get_infix_precedence() {
+                if op_prec < min_prec {
+                    break;
                 }
-            } else {
-                break;
-            }
-        }
-        
-        expr // Return the parsed expression
-    }
-    
-    fn parse_binary_expr(&mut self) -> Content {
-        let mut expr = self.parse_primary_expr();
-    
-        while self.not_eof() && !matches!(
-            self.at().kind,
-            TokenType ::Semicolon | TokenType::CloseBrace | TokenType::CloseParen
-        ) {
-            let operator = if matches!(self.at().kind, TokenType::BinOp(_) | TokenType::ArithOp(_)) {
-                let op = match &self.at().kind {
-                    TokenType::ArithOp(arith_op) => match arith_op {
-                        ArithOp::Add => "+",
-                        ArithOp::Sub => "-",
-                        ArithOp::Mul => "*",
-                        ArithOp::Div => "/",
-                        ArithOp::Mod => "%",
-                    }.to_string(),
-                    TokenType::BinOp(bin_op) => match bin_op {
-                        BinOp::And => "&&",
-                        BinOp::Or => "||",
-                        BinOp::Not => "!",
-                        BinOp::Eq => "==",
-                        BinOp::Neq => "!=",
-                        BinOp::Less => "<",
-                        BinOp::Greater => ">",
-                        BinOp::LessEq => "<=",
-                        BinOp::GreaterEq => ">=",
-                    }.to_string(),
-                    _ => unreachable!(),
-                };
-                self.consume(); // Consume the operator
-                op
-            } else {
-                break;
-            };
-    
-            let right = self.parse_primary_expr();
-            if let ( Content::Expression(left_expr), Content::Expression(right_expr)) = (expr, right) {
-                expr = Content::Expression(Box::new(Expr::Binary(BinaryExpr {
-                    left: left_expr,
-                    right: right_expr,
-                    operator,
-                    location: self.at().location(),
+                let op_token = self.at().clone();
+                self.consume(); // consume operator
+                let next_min_prec = op_prec + 1;
+                let right = self.parse_expression(next_min_prec);
+                left = Content::Expression(Box::new(Expr::Binary(BinaryExpr {
+                    left: match left {
+                        Content::Expression(expr) => expr,
+                        _ => panic!("Expected expression")
+                    },
+                    operator: self.operator_string_from_token(&op_token),
+                    right: match right {
+                        Content::Expression(expr) => expr,
+                        _ => panic!("Expected expression")
+                    },
+                    location: op_token.location(),
                 })));
-            } else {
-                panic!("Expected expressions in binary operation");
+                continue;
             }
+            break;
         }
-    
-        expr
+        left
     }
-
-    fn parse_primary_expr(&mut self) -> Content {
-        // If native function call (prefixed with @)
+    
+    // New helper to parse prefix expressions (adapted from parse_primary_expr)
+    fn parse_prefix(&mut self) -> Content {
+        // Handle native function calls prefixed with '@'
         if self.at().kind == TokenType::At {
-            self.consume(); // consume the '@'
+            self.consume(); // consume '@'
             let ident_token = self.expect(TokenType::Identifier, "Expected identifier after '@'");
-            let ident = Identifier {
-                name: ident_token.value.clone(),
-                location: ident_token.location(),
-            };
-            // Expect the call syntax: => | ... |
+            let ident = Identifier { name: ident_token.value.clone(), location: ident_token.location() };
             self.expect(TokenType::FatArrow, "Expected '=>' after native function identifier");
             self.expect(TokenType::Pipe, "Expected '|' before native function arguments");
             let mut args = Vec::new();
             while self.at().kind != TokenType::Pipe {
-                let expr = self.parse_expr();
+                let expr = self.parse_expression(0);
                 match expr {
                     Content::Expression(e) => args.push(e),
                     _ => panic!("Expected expression for native function argument"),
@@ -739,25 +723,20 @@ impl Parser {
             })));
         }
         
-        // Original handling for identifiers (user-defined function calls)
+        // Handle identifiers, literals, grouping, etc.
         match self.at().kind {
             TokenType::Identifier => {
                 let ident_token = self.expect(TokenType::Identifier, "Expected identifier");
-                let ident = Identifier {
-                    name: ident_token.value.clone(),
-                    location: ident_token.location(),
-                };
-      
+                let ident = Identifier { name: ident_token.value.clone(), location: ident_token.location() };
                 if self.at().kind == TokenType::FatArrow {
                     if ident.name == "println" {
                         panic!("Native function 'println' must be called with '@'");
                     }
-      
                     self.consume(); // consume '=>'
                     self.expect(TokenType::Pipe, "Expected '|' before function arguments");
                     let mut args = Vec::new();
                     while self.at().kind != TokenType::Pipe {
-                        let expr = self.parse_expr();
+                        let expr = self.parse_expression(0);
                         match expr {
                             Content::Expression(e) => args.push(e),
                             _ => panic!("Expected expression in call arguments"),
@@ -777,37 +756,85 @@ impl Parser {
                 }
                 Content::Expression(Box::new(Expr::Identifier(ident)))
             },
-            // ... other cases (Int, Float, String, OpenParen etc.) remain the same
             TokenType::Int => {
                 let int_lit = self.expect(TokenType::Int, "Expected integer literal");
-                Content::Expression(Box::new(Expr::IntLit(IntLit { 
-                    value: int_lit.value.parse().unwrap(), 
+                Content::Expression(Box::new(Expr::IntLit(IntLit {
+                    value: int_lit.value.parse().unwrap(),
                     location: int_lit.location(),
                 })))
             },
             TokenType::Float => {
                 let float_lit = self.expect(TokenType::Float, "Expected float literal");
-                Content::Expression(Box::new(Expr::FloatLit(FloatLit { 
-                    value: float_lit.value.parse().unwrap(), 
+                Content::Expression(Box::new(Expr::FloatLit(FloatLit {
+                    value: float_lit.value.parse().unwrap(),
                     location: float_lit.location(),
                 })))
             },
             TokenType::String => {
                 let string_token = self.expect(TokenType::String, "Expected string literal");
-                Content::Expression(Box::new(Expr::StringLit(StringLit { 
-                    value: string_token.value.clone(), 
+                Content::Expression(Box::new(Expr::StringLit(StringLit {
+                    value: string_token.value.clone(),
                     location: string_token.location(),
                 })))
             },
             TokenType::OpenParen => {
-                self.consume(); // Consume '('
-                let expr = self.parse_expr();
+                self.consume(); // consume '('
+                let expr = self.parse_expression(0);
                 self.expect(TokenType::CloseParen, "Expected ')' after expression");
                 expr
             },
             TokenType::OpenBrace => self.parse_object_lit(),
             TokenType::OpenBracket => self.parse_array_lit(),
-            _ => panic!("Unexpected token: {:?}", self.at().kind),
+            _ => panic!("Unexpected token: {:?} with value '{}'", self.at().kind, self.at().value),
+        }
+    }
+    
+    // Helper to retrieve the binding power of an infix operator
+    fn get_infix_precedence(&self) -> Option<u8> {
+        match self.at().kind {
+            TokenType::ArithOp(ref op) => {
+                let prec = match op {
+                    ArithOp::Add | ArithOp::Sub => 10,
+                    ArithOp::Mul | ArithOp::Div | ArithOp::Mod => 20,
+                };
+                Some(prec)
+            },
+            TokenType::BinOp(ref op) => {
+                let prec = match op {
+                    BinOp::And | BinOp::Or => 5,
+                    BinOp::Eq | BinOp::Neq | BinOp::Less | BinOp::Greater | BinOp::LessEq | BinOp::GreaterEq => 7,
+                    _ => 0,
+                };
+                Some(prec)
+            },
+            TokenType::AssignOp(_) => Some(2),
+            _ => None,
+        }
+    }
+    
+    // Helper to convert an operator token to its string representation
+    fn operator_string_from_token(&self, token: &Token) -> String {
+        match &token.kind {
+            TokenType::ArithOp(op) => match op {
+                ArithOp::Add => "+".to_string(),
+                ArithOp::Sub => "-".to_string(),
+                ArithOp::Mul => "*".to_string(),
+                ArithOp::Div => "/".to_string(),
+                ArithOp::Mod => "%".to_string(),
+            },
+            TokenType::BinOp(op) => match op {
+                BinOp::And => "&&".to_string(),
+                BinOp::Or  => "||".to_string(),
+                BinOp::Eq  => "==".to_string(),
+                BinOp::Neq => "!=".to_string(),
+                BinOp::Less => "<".to_string(),
+                BinOp::Greater => ">".to_string(),
+                BinOp::LessEq => "<=".to_string(),
+                BinOp::GreaterEq => ">=".to_string(),
+                _ => "".to_string(),
+            },
+            TokenType::AssignOp(_) => "=".to_string(),
+            _ => "".to_string(),
         }
     }
 }

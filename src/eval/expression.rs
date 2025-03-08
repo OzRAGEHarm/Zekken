@@ -2,7 +2,7 @@ use crate::ast::*;
 use crate::environment::{Environment, Value};
 use std::collections::HashMap;
 use crate::eval::statement::evaluate_statement;
-use crate::errors::{ZekkenError, runtime_error};
+use crate::errors::{ZekkenError, RuntimeErrorType, runtime_error};
 use regex::Regex;
 use crate::lexer::DataType;
 
@@ -12,6 +12,8 @@ fn check_value_type(value: &Value, expected: &DataType) -> bool {
         (Value::Float(_), DataType::Float) => true,
         (Value::String(_), DataType::String) => true,
         (Value::Boolean(_), DataType::Bool) => true,
+        (Value::Array(_), DataType::Array) => true,
+        (Value::Object(_), DataType::Object) => true,
         _ => false,
     }
 }
@@ -42,8 +44,9 @@ pub fn evaluate_expression(expr: &Expr, env: &mut Environment) -> Result<Value, 
                 Some(value) => Ok(value),
                 None => Err(runtime_error(
                     &format!("Variable '{}' not found", ident.name),
+                    RuntimeErrorType::UndefinedVariable,
                     ident.location.line,
-                    ident.location.column,
+                    ident.location.column
                 ))
             }
         },
@@ -51,7 +54,9 @@ pub fn evaluate_expression(expr: &Expr, env: &mut Environment) -> Result<Value, 
         Expr::Call(call) => evaluate_call_expression(call, env),
         Expr::Member(member) => evaluate_member_expression(member, env),
         Expr::Assign(assign) => evaluate_assignment(assign, env),
-        Expr::Property(_) => Err(ZekkenError::InternalError("Property expression not supported in this context".to_string()))
+        Expr::Property(_) => Err(ZekkenError::InternalError(
+            "Property expression not supported in this context".to_string()
+        ))
     }
 }
 
@@ -63,6 +68,7 @@ fn evaluate_binary_expression(expr: &BinaryExpr, env: &mut Environment) -> Resul
        (matches!(left, Value::Float(_)) && matches!(right, Value::Int(_))) {
         return Err(runtime_error(
             &format!("Type error: Cannot perform '{}' operation between int and float", expr.operator),
+            RuntimeErrorType::TypeError,
             expr.location.line,
             expr.location.column,
         ));
@@ -70,30 +76,40 @@ fn evaluate_binary_expression(expr: &BinaryExpr, env: &mut Environment) -> Resul
     
     match expr.operator.as_str() {
         "+" => add_values(&left, &right)
-            .map_err(|msg| runtime_error(&msg, expr.location.line, expr.location.column)),
+            .map_err(|msg| runtime_error(&msg, RuntimeErrorType::TypeError, expr.location.line, expr.location.column)),
         "-" => subtract_values(&left, &right)
-            .map_err(|msg| runtime_error(&msg, expr.location.line, expr.location.column)),
+            .map_err(|msg| runtime_error(&msg, RuntimeErrorType::TypeError, expr.location.line, expr.location.column)),
         "*" => multiply_values(&left, &right)
-            .map_err(|msg| runtime_error(&msg, expr.location.line, expr.location.column)),
+            .map_err(|msg| runtime_error(&msg, RuntimeErrorType::TypeError, expr.location.line, expr.location.column)),
         "/" => divide_values(&left, &right)
-            .map_err(|msg| runtime_error(&msg, expr.location.line, expr.location.column)),
+            .map_err(|msg| runtime_error(
+                &msg, 
+                if msg.contains("zero") { RuntimeErrorType::DivisionByZero } else { RuntimeErrorType::TypeError },
+                expr.location.line,
+                expr.location.column
+            )),
         "%" => modulo_values(left, right)
-                .map_err(|msg| runtime_error(&msg, expr.location.line, expr.location.column)),
+            .map_err(|msg| runtime_error(&msg, RuntimeErrorType::TypeError, expr.location.line, expr.location.column)),
         "==" => Ok(Value::Boolean(compare_values(&left, &right))),
         "!=" => Ok(Value::Boolean(!compare_values(&left, &right))),
         "<" => compare_less_than(left, right)
-            .map_err(|e| runtime_error(&e, expr.location.line, expr.location.column)),
+            .map_err(|e| runtime_error(&e, RuntimeErrorType::TypeError, expr.location.line, expr.location.column)),
         ">" => compare_greater_than(left, right)
-            .map_err(|e| runtime_error(&e, expr.location.line, expr.location.column)),
+            .map_err(|e| runtime_error(&e, RuntimeErrorType::TypeError, expr.location.line, expr.location.column)),
         "<=" => compare_less_equal(left, right)
-            .map_err(|e| runtime_error(&e, expr.location.line, expr.location.column)),
+            .map_err(|e| runtime_error(&e, RuntimeErrorType::TypeError, expr.location.line, expr.location.column)),
         ">=" => compare_greater_equal(left, right)
-            .map_err(|e| runtime_error(&e, expr.location.line, expr.location.column)),
+            .map_err(|e| runtime_error(&e, RuntimeErrorType::TypeError, expr.location.line, expr.location.column)),
         "&&" => logical_and(left, right)
-            .map_err(|e| runtime_error(&e, expr.location.line, expr.location.column)),
+            .map_err(|e| runtime_error(&e, RuntimeErrorType::TypeError, expr.location.line, expr.location.column)),
         "||" => logical_or(left, right)
-            .map_err(|e| runtime_error(&e, expr.location.line, expr.location.column)),
-        operator => Err(runtime_error(&format!("Unknown operator: {}", operator), expr.location.line, expr.location.column))
+            .map_err(|e| runtime_error(&e, RuntimeErrorType::TypeError, expr.location.line, expr.location.column)),
+        operator => Err(runtime_error(
+            &format!("Unknown operator: {}", operator), 
+            RuntimeErrorType::Other,
+            expr.location.line, 
+            expr.location.column
+        ))
     }
 }
 
@@ -109,7 +125,6 @@ fn interpolate_string(template: &str, env: &Environment) -> String {
 }
 
 pub fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
-    // Special-case for native function "println"
     if let Expr::Identifier(ref ident) = *call.callee {
         if ident.name == "println" {
             let mut output = String::new();
@@ -117,7 +132,6 @@ pub fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Resul
                 let evaluated = evaluate_expression(arg, env)?;
                 match evaluated {
                     Value::String(ref s) if s.contains('{') => {
-                        // Use your interpolation helper, for example:
                         output.push_str(&interpolate_string(s, env));
                     },
                     other => output.push_str(&format!("{}", other)),
@@ -129,7 +143,6 @@ pub fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Resul
         }
     }
     
-    // Evaluate the callee expression normally.
     let callee = evaluate_expression(&call.callee, env)?;
     match callee {
         Value::NativeFunction(native_func) => {
@@ -137,60 +150,40 @@ pub fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Resul
             for arg in &call.args {
                 args.push(evaluate_expression(arg, env)?);
             }
-            native_func(args).map_err(|s| ZekkenError::RuntimeError {
-                message: s,
-                filename: None,
-                line: Some(call.location.line),
-                column: Some(call.location.column),
-                line_content: None,
-                pointer: None,
-                expected: None,
-                found: None,
-            })
+            native_func(args).map_err(|s| runtime_error(&s, RuntimeErrorType::InvalidArgument, call.location.line, call.location.column))
         },
         Value::Function(func) => {
+            if call.args.len() != func.params.len() {
+                return Err(runtime_error(
+                    &format!("Expected {} arguments but got {}", func.params.len(), call.args.len()),
+                    RuntimeErrorType::InvalidArgument,
+                    call.location.line,
+                    call.location.column
+                ));
+            }
+
             let mut args = Vec::new();
             for arg in &call.args {
                 args.push(evaluate_expression(arg, env)?);
             }
-            if args.len() != func.params.len() {
-                return Err(ZekkenError::RuntimeError {
-                    message: format!("Expected {} arguments but got {}", func.params.len(), args.len()),
-                    filename: None,
-                    line: Some(call.location.line),
-                    column: Some(call.location.column),
-                    line_content: None,
-                    pointer: None,
-                    expected: None,
-                    found: None,
-                });
-            }
-            // Check type match for each parameter
+
             for (param, arg) in func.params.iter().zip(args.iter()) {
                 if !check_value_type(arg, &param.type_) {
-                    return Err(ZekkenError::RuntimeError {
-                        message: format!(
-                            "Type mismatch in function call: parameter '{}' expects '{:?}' but received '{}'",
-                            param.ident,
-                            param.type_,
-                            arg
-                        ),
-                        filename: None,
-                        line: Some(call.location.line),
-                        column: Some(call.location.column),
-                        line_content: None,
-                        pointer: None,
-                        expected: None,
-                        found: None,
-                    });
+                    return Err(runtime_error(
+                        &format!("Type mismatch: parameter '{}' expects {:?} but got {:?}", 
+                            param.ident, param.type_, arg),
+                        RuntimeErrorType::TypeError,
+                        call.location.line,
+                        call.location.column
+                    ));
                 }
             }
-            // Create a new environment for the function call.
+
             let mut function_env = Environment::new_with_parent(env.clone());
-            // Bind parameters.
             for (param, arg) in func.params.iter().zip(args.into_iter()) {
                 function_env.declare(param.ident.clone(), arg, false);
             }
+
             let mut result = Value::Void;
             for stmt in &func.body {
                 match **stmt {
@@ -198,7 +191,7 @@ pub fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Resul
                         result = evaluate_expression(expr, &mut function_env)?;
                     },
                     Content::Statement(ref stmt) => {
-                        if let Ok(Some(val)) = crate::eval::statement::evaluate_statement(stmt, &mut function_env) {
+                        if let Ok(Some(val)) = evaluate_statement(stmt, &mut function_env) {
                             result = val;
                         }
                     }
@@ -206,44 +199,73 @@ pub fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Resul
             }
             Ok(result)
         },
-        _ => Err(ZekkenError::RuntimeError {
-            message: "Cannot call non-function value".to_string(),
-            filename: None,
-            line: Some(call.location.line),
-            column: Some(call.location.column),
-            line_content: None,
-            pointer: None,
-            expected: None,
-            found: None,
-        })
+        _ => Err(runtime_error(
+            "Cannot call non-function value",
+            RuntimeErrorType::TypeError,
+            call.location.line,
+            call.location.column
+        ))
     }
 }
 
+// In function evaluate_member_expression, update the non-computed property branch:
+
 fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
     let object = evaluate_expression(&member.object, env)?;
-    let property = if member.computed {
+    let mut property = if member.computed {
         evaluate_expression(&member.property, env)?
     } else {
         match *member.property {
             Expr::Identifier(ref ident) => Value::String(ident.name.clone()),
-            _ => return Err(runtime_error("Invalid property access", member.location.line, member.location.column))
+            // Added support for string literals as property names
+            Expr::StringLit(ref lit) => Value::String(lit.value.clone()),
+            _ => return Err(runtime_error(
+                    "Invalid property access",
+                    RuntimeErrorType::TypeError,
+                    member.location.line,
+                    member.location.column,
+                )),
         }
     };
-
+    // New conversion: if object is Array and property is a string that represents an integer,
+    // convert property to Value::Int.
+    if let Value::Array(_) = object {
+        if let Value::String(ref s) = property {
+            if let Ok(idx) = s.parse::<i64>() {
+                property = Value::Int(idx);
+            }
+        }
+    }
+    
     match (object, property) {
         (Value::Object(map), Value::String(key)) => {
             map.get(&key)
                .cloned()
-               .ok_or_else(|| runtime_error(&format!("Property '{}' not found", key), member.location.line, member.location.column))
+               .ok_or_else(|| runtime_error(
+                   &format!("Property '{}' not found", key),
+                   RuntimeErrorType::ReferenceError,
+                   member.location.line,
+                   member.location.column,
+               ))
         },
         (Value::Array(arr), Value::Int(index)) => {
             if index < 0 || index >= arr.len() as i64 {
-                Err(runtime_error(&format!("Index {} out of bounds", index), member.location.line, member.location.column))
+                Err(runtime_error(
+                    &format!("Index {} out of bounds", index),
+                    RuntimeErrorType::IndexOutOfBounds,
+                    member.location.line,
+                    member.location.column,
+                ))
             } else {
                 Ok(arr[index as usize].clone())
             }
         },
-        _ => Err(runtime_error("Invalid member access", member.location.line, member.location.column))
+        _ => Err(runtime_error(
+            "Invalid member access",
+            RuntimeErrorType::TypeError,
+            member.location.line,
+            member.location.column,
+        )),
     }
 }
 
@@ -253,7 +275,7 @@ fn evaluate_assignment(assign: &AssignExpr, env: &mut Environment) -> Result<Val
     match *assign.left {
         Expr::Identifier(ref ident) => {
             env.assign(&ident.name, value.clone())
-                .map_err(|e| runtime_error(&e, assign.location.line, assign.location.column))?;
+                .map_err(|e| runtime_error(&e, RuntimeErrorType::ReferenceError, assign.location.line, assign.location.column))?;
             Ok(value)
         },
         Expr::Member(ref member) => {
@@ -263,7 +285,12 @@ fn evaluate_assignment(assign: &AssignExpr, env: &mut Environment) -> Result<Val
             } else {
                 match *member.property {
                     Expr::Identifier(ref ident) => Value::String(ident.name.clone()),
-                    _ => return Err(runtime_error("Invalid property access", member.location.line, member.location.column))
+                    _ => return Err(runtime_error(
+                        "Invalid property access",
+                        RuntimeErrorType::TypeError,
+                        member.location.line,
+                        member.location.column
+                    ))
                 }
             };
 
@@ -271,23 +298,38 @@ fn evaluate_assignment(assign: &AssignExpr, env: &mut Environment) -> Result<Val
                 (Value::Object(ref mut map), Value::String(key)) => {
                     map.insert(key, value.clone());
                     env.assign(&format!("{:?}", member.object), object)
-                        .map_err(|e| runtime_error(&e, assign.location.line, assign.location.column))?;
+                        .map_err(|e| runtime_error(&e, RuntimeErrorType::ReferenceError, assign.location.line, assign.location.column))?;
                     Ok(value)
                 },
                 (Value::Array(ref mut arr), Value::Int(index)) => {
                     if index < 0 || index >= arr.len() as i64 {
-                        Err(runtime_error(&format!("Index {} out of bounds", index), member.location.line, member.location.column))
+                        Err(runtime_error(
+                            &format!("Index {} out of bounds", index),
+                            RuntimeErrorType::IndexOutOfBounds,
+                            member.location.line,
+                            member.location.column
+                        ))
                     } else {
                         arr[index as usize] = value.clone();
                         env.assign(&format!("{:?}", member.object), object)
-                            .map_err(|e| runtime_error(&e, assign.location.line, assign.location.column))?;
+                            .map_err(|e| runtime_error(&e, RuntimeErrorType::ReferenceError, assign.location.line, assign.location.column))?;
                         Ok(value)
                     }
                 },
-                _ => Err(runtime_error("Invalid assignment target", assign.location.line, assign.location.column))
+                _ => Err(runtime_error(
+                    "Invalid assignment target",
+                    RuntimeErrorType::TypeError,
+                    assign.location.line,
+                    assign.location.column
+                ))
             }
         },
-        _ => Err(runtime_error("Invalid assignment target", assign.location.line, assign.location.column))
+        _ => Err(runtime_error(
+            "Invalid assignment target",
+            RuntimeErrorType::TypeError,
+            assign.location.line,
+            assign.location.column
+        ))
     }
 }
 
@@ -296,8 +338,11 @@ fn add_values(left: &Value, right: &Value) -> Result<Value, String> {
         (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l + r)),
         (Value::Float(l), Value::Float(r)) => Ok(Value::Float(l + r)),
         (Value::String(l), Value::String(r)) => Ok(Value::String(l.clone() + r)),
-        (Value::Int(_), Value::Float(_)) => Err("Cannot add int and float".to_string()),
-        (Value::Float(_), Value::Int(_)) => Err("Cannot add float and int".to_string()),
+        (Value::Array(l), Value::Array(r)) => {
+            let mut result = l.clone();
+            result.extend(r.clone());
+            Ok(Value::Array(result))
+        },
         _ => Err("Invalid operand types for addition".to_string())
     }
 }
@@ -306,8 +351,6 @@ fn subtract_values(left: &Value, right: &Value) -> Result<Value, String> {
     match (left, right) {
         (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l - r)),
         (Value::Float(l), Value::Float(r)) => Ok(Value::Float(l - r)),
-        (Value::Int(_), Value::Float(_)) => Err("Cannot subtract int and float".to_string()),
-        (Value::Float(_), Value::Int(_)) => Err("Cannot subtract float and int".to_string()),
         _ => Err("Invalid operand types for subtraction".to_string())
     }
 }
@@ -316,8 +359,6 @@ fn multiply_values(left: &Value, right: &Value) -> Result<Value, String> {
     match (left, right) {
         (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l * r)),
         (Value::Float(l), Value::Float(r)) => Ok(Value::Float(l * r)),
-        (Value::Int(_), Value::Float(_)) => Err("Cannot multiply int and float".to_string()),
-        (Value::Float(_), Value::Int(_)) => Err("Cannot multiply float and int".to_string()),
         _ => Err("Invalid operand types for multiplication".to_string())
     }
 }
@@ -338,8 +379,6 @@ fn divide_values(left: &Value, right: &Value) -> Result<Value, String> {
                 Ok(Value::Float(l / r))
             }
         },
-        (Value::Int(_), Value::Float(_)) => Err("Cannot divide int by float".to_string()),
-        (Value::Float(_), Value::Int(_)) => Err("Cannot divide float by int".to_string()),
         _ => Err("Invalid operand types for division".to_string())
     }
 }
@@ -352,11 +391,8 @@ fn modulo_values(left: Value, right: Value) -> Result<Value, String> {
             } else {
                 Ok(Value::Int(l % r))
             }
-        }
-        (Value::Float(_), Value::Float(_)) => Err("Type error: modulo is not supported for floats".to_string()),
-        (Value::Int(_), Value::Float(_)) => Err("Type error: cannot perform modulo with int and float".to_string()),
-        (Value::Float(_), Value::Int(_)) => Err("Type error: cannot perform modulo with float and int".to_string()),
-        _ => Err("Invalid modulo operation".to_string())
+        },
+        _ => Err("Invalid operand types for modulo".to_string())
     }
 }
 

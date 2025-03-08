@@ -3,39 +3,56 @@ pub mod math;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 use crate::environment::Environment;
-use crate::errors::ZekkenError;
+use crate::errors::{ZekkenError, RuntimeErrorType, runtime_error};
+use std::env;
 
+/// Type alias for library registration functions
 type LibraryFunction = fn(&mut Environment) -> Result<(), String>;
+
+/// Global registry of available libraries
 static LIBRARIES: OnceLock<HashMap<&'static str, LibraryFunction>> = OnceLock::new();
 
-pub fn load_library(library: &str, env: &mut Environment) -> Result<(), ZekkenError> {
-    let libs = LIBRARIES.get_or_init(|| {
-        let mut map: HashMap<&'static str, LibraryFunction> = HashMap::new();
-        map.insert("math", math::register);
-        map
-    });
+/// Initialize the standard library registry
+fn init_libraries() -> HashMap<&'static str, LibraryFunction> {
+    let mut map: HashMap<&'static str, LibraryFunction> = HashMap::new();
+    
+    // Register standard libraries
+    map.insert("math", math::register);
+    // Add other standard libraries here...
+    
+    map
+}
 
+/// Load and initialize a library by name
+pub fn load_library(library: &str, env: &mut Environment) -> Result<(), ZekkenError> {
+    // Get current source location for error reporting
+    let filename = env::var("ZEKKEN_CURRENT_FILE").unwrap_or_default();
+    let line: usize = env::var("ZEKKEN_CURRENT_LINE").unwrap_or_default().parse().unwrap_or(0);
+    let column = env::var("ZEKKEN_CURRENT_COLUMN").unwrap_or_default().parse().unwrap_or(0);
+    let line_content = env::var("ZEKKEN_SOURCE_LINES")
+        .unwrap_or_default()
+        .lines()
+        .nth(line.saturating_sub(1))
+        .unwrap_or("")
+        .to_string();
+
+    // Get or initialize library registry
+    let libs = LIBRARIES.get_or_init(init_libraries);
+
+    // Attempt to load the library
     if let Some(register_fn) = libs.get(library) {
-        register_fn(env).map_err(|e| ZekkenError::RuntimeError {
-            message: format!("Failed to load native library '{}': {}", library, e),
-            filename: None,
-            line: None,
-            column: None,
-            line_content: None,
-            pointer: None,
-            expected: None,
-            found: None,
-        })
+        register_fn(env).map_err(|e| runtime_error(
+            &format!("Failed to load library '{}': {}", library, e),
+            RuntimeErrorType::ReferenceError,
+            line,
+            column
+        ))
     } else {
-        Err(ZekkenError::RuntimeError {
-            message: format!("Native library '{}' not found", library),
-            filename: None,
-            line: None,
-            column: None,
-            line_content: None,
-            pointer: None,
-            expected: None,
-            found: None,
-        })
+        Err(runtime_error(
+            &format!("Library '{}' not found", library),
+            RuntimeErrorType::ReferenceError,
+            line,
+            column
+        ))
     }
 }

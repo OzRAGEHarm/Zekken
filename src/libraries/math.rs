@@ -11,11 +11,11 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
         "sqrt".to_string(),
         Value::NativeFunction(|args| {
             if args.len() != 1 {
-                return Err("sqrt expects one argument".to_string());
+                return Err(format!("sqrt error: expected one argument, received {}", args.len()));
             }
-            let num = args[0].as_float().ok_or("Argument must be numeric")?;
+            let num = args[0].as_float().ok_or("sqrt error: argument must be numeric")?;
             if num < 0.0 {
-                return Err("Cannot compute square root of negative number".to_string());
+                return Err("sqrt error: cannot compute square root of negative number".to_string());
             }
             Ok(Value::Float(num.sqrt()))
         }),
@@ -27,10 +27,10 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
         "complex".to_string(),
         Value::NativeFunction(|args| {
             if args.len() != 2 {
-                return Err("complex expects two arguments (real, imag)".to_string());
+                return Err(format!("complex error: expected two arguments (real, imag), received {}", args.len()));
             }
-            let real = args[0].as_float().ok_or("First argument must be numeric")?;
-            let imag = args[1].as_float().ok_or("Second argument must be numeric")?;
+            let real = args[0].as_float().ok_or("complex error: first argument must be numeric")?;
+            let imag = args[1].as_float().ok_or("complex error: second argument must be numeric")?;
             Ok(Value::Complex { real, imag })
         }),
         true,
@@ -41,7 +41,7 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
         "vector".to_string(),
         Value::NativeFunction(|args| {
             let vec: Vec<f64> = args.iter()
-                .map(|v| v.as_float().ok_or("Vector elements must be numeric"))
+                .map(|v| v.as_float().ok_or("vector error: all vector elements must be numeric"))
                 .collect::<Result<_, _>>()?;
             Ok(Value::Vector(vec))
         }),
@@ -53,14 +53,14 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
         "matrix".to_string(),
         Value::NativeFunction(|args| {
             if args.is_empty() {
-                return Err("matrix expects at least one row".to_string());
+                return Err("matrix error: expected at least one row".to_string());
             }
             let mut matrix = Vec::new();
             for arg in args {
                 if let Value::Vector(row) = arg {
                     matrix.push(row.clone());
                 } else {
-                    return Err("matrix expects vector arguments for rows".to_string());
+                    return Err("matrix error: each row must be a vector".to_string());
                 }
             }
             Ok(Value::Matrix(matrix))
@@ -73,9 +73,9 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
         "abs".to_string(),
         Value::NativeFunction(|args| {
             if args.len() != 1 {
-                return Err("abs expects one argument".to_string());
+                return Err(format!("abs error: expected one argument, received {}", args.len()));
             }
-            let num = args[0].as_float().ok_or("Argument must be numeric")?;
+            let num = args[0].as_float().ok_or("abs error: argument must be numeric")?;
             Ok(Value::Float(num.abs()))
         }),
         true,

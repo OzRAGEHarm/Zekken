@@ -1,8 +1,8 @@
 use math;
 
-func add |a: float, b: float| {
-  return a + b;
-}
+let myObject: obj = {
+  name: "John",
+  age: 30
+};
 
-let result: float = add => |1.0, 2.0|;
-@println => |"penis {result}"|
+@println => |myObject|

@@ -2,9 +2,11 @@ use crate::ast::*;
 use crate::environment::{Environment, Value, FunctionValue};
 use crate::parser::Parser;
 use super::expression::evaluate_expression;
-use crate::errors::ZekkenError;
+use crate::errors::{ZekkenError, RuntimeErrorType, Location, runtime_error, type_error};
 use crate::libraries::load_library;
 use crate::lexer::DataType;
+use std::env;
+use std::collections::HashMap;
 
 fn check_value_type(value: &Value, expected: &DataType) -> bool {
     match (value, expected) {
@@ -12,20 +14,9 @@ fn check_value_type(value: &Value, expected: &DataType) -> bool {
         (Value::Float(_), DataType::Float) => true,
         (Value::String(_), DataType::String) => true,
         (Value::Boolean(_), DataType::Bool) => true,
+        (Value::Array(_), DataType::Array) => true,
+        (Value::Object(_), DataType::Object) => true,
         _ => false,
-    }
-}
-
-fn runtime_error(error: &str, line: usize, column: usize) -> ZekkenError {
-    ZekkenError::RuntimeError {
-        message: error.to_string(),
-        filename: None,
-        line: Some(line),
-        column: Some(column),
-        line_content: None,
-        pointer: None,
-        expected: None,
-        found: None,
     }
 }
 
@@ -49,29 +40,38 @@ pub fn evaluate_statement(stmt: &Stmt, env: &mut Environment) -> Result<Option<V
 }
 
 fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
+    let current_file = env::var("ZEKKEN_CURRENT_FILE").unwrap_or_default();
+    
+    // Process imports first
     for import in &program.imports {
         if let Content::Statement(stmt) = &*import {
-            match &**stmt {
-                Stmt::Include(include) => evaluate_include(include, env)?,
-                Stmt::Use(use_stmt) => evaluate_use(use_stmt, env)?,
-                _ => return Ok(None)
+            match **stmt {
+                Stmt::Include(ref include) => evaluate_include(include, env)?,
+                Stmt::Use(ref use_stmt) => evaluate_use(use_stmt, env)?,
+                _ => return Err(runtime_error(
+                    "Invalid import statement",
+                    RuntimeErrorType::SyntaxError,
+                    0,
+                    0
+                ))
             };
         }
     }
 
-    // Process all content
+    // Process main content
+    let mut last_value = None;
     for content in &program.content {
         match &**content {
             Content::Statement(stmt) => {
-                evaluate_statement(stmt, env)?;
+                last_value = evaluate_statement(stmt, env)?;
             },
             Content::Expression(expr) => {
-                evaluate_expression(expr, env)?;
+                last_value = Some(evaluate_expression(expr, env)?);
             }
         }
     }
 
-    Ok(None)
+    Ok(last_value)
 }
 
 fn evaluate_var_declaration(decl: &VarDecl, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
@@ -80,10 +80,21 @@ fn evaluate_var_declaration(decl: &VarDecl, env: &mut Environment) -> Result<Opt
             Content::Expression(expr) => {
                 let val = evaluate_expression(expr, env)?;
                 if !check_value_type(&val, &decl.type_) {
-                    return Err(runtime_error(
-                        &format!("Type mismatch in variable declaration '{}': expected {:?} but got {}", decl.ident, decl.type_, val),
-                        decl.location.line,
-                        decl.location.column,
+                    return Err(type_error(
+                        &format!("Type mismatch in variable declaration '{}'", decl.ident),
+                        &format!("{:?}", decl.type_),
+                        &format!("{:?}", val),
+                        Location {
+                            filename: env::var("ZEKKEN_CURRENT_FILE").unwrap_or_default(),
+                            line: decl.location.line,
+                            column: decl.location.column,
+                            line_content: env::var("ZEKKEN_SOURCE_LINES")
+                                .unwrap_or_default()
+                                .lines()
+                                .nth(decl.location.line - 1)
+                                .unwrap_or("")
+                                .to_string(),
+                        }
                     ));
                 }
                 Some(val)
@@ -113,7 +124,13 @@ fn evaluate_object_declaration(obj: &ObjectDecl, env: &mut Environment) -> Resul
     let mut object_map = std::collections::HashMap::new();
 
     for property in &obj.properties {
-        let value = evaluate_expression(&property.value, env)?;
+        let value = evaluate_expression(&property.value, env)
+            .map_err(|e| runtime_error(
+                &format!("Failed to evaluate property '{}': {}", property.key, e),
+                RuntimeErrorType::TypeError,
+                obj.location.line,
+                obj.location.column
+            ))?;
         object_map.insert(property.key.clone(), value);
     }
 
@@ -125,39 +142,20 @@ fn evaluate_if_statement(if_stmt: &IfStmt, env: &mut Environment) -> Result<Opti
     let test_result = evaluate_expression(&if_stmt.test, env)?;
     
     match test_result {
-        Value::Boolean(true) => {
-            let mut result = None;
-            for stmt in &if_stmt.body {
-                match **stmt {
-                    Content::Statement(ref stmt) => {
-                        result = evaluate_statement(stmt, env)?;
-                    }
-                    Content::Expression(ref expr) => {
-                        result = Some(evaluate_expression(expr, env)?);
-                    }
-                }
-            }
-            Ok(result)
-        }
+        Value::Boolean(true) => evaluate_block_content(&if_stmt.body, env),
         Value::Boolean(false) => {
             if let Some(alt) = &if_stmt.alt {
-                let mut result = None;
-                for stmt in alt {
-                    match **stmt {
-                        Content::Statement(ref stmt) => {
-                            result = evaluate_statement(stmt, env)?;
-                        }
-                        Content::Expression(ref expr) => {
-                            result = Some(evaluate_expression(expr, env)?);
-                        }
-                    }
-                }
-                Ok(result)
+                evaluate_block_content(alt, env)
             } else {
                 Ok(None)
             }
         }
-        _ => Err(runtime_error("If statement condition must evaluate to a boolean", if_stmt.location.line, if_stmt.location.column)),
+        _ => Err(runtime_error(
+            "If statement condition must evaluate to a boolean",
+            RuntimeErrorType::TypeError,
+            if_stmt.location.line,
+            if_stmt.location.column
+        ))
     }
 }
 
@@ -167,65 +165,47 @@ fn evaluate_for_statement(for_stmt: &ForStmt, env: &mut Environment) -> Result<O
             let collection_value = match &var_decl.value {
                 Some(content) => match content {
                     Content::Expression(expr) => evaluate_expression(expr, env)?,
-                    _ => panic!("Expected expression in for loop initialization"),
+                    _ => return Err(runtime_error(
+                        "Expected expression in for loop initialization",
+                        RuntimeErrorType::SyntaxError,
+                        for_stmt.location.line,
+                        for_stmt.location.column
+                    )),
                 },
-                None => panic!("Expected expression in for loop initialization"),
+                None => return Err(runtime_error(
+                    "For loop initialization requires a value",
+                    RuntimeErrorType::SyntaxError,
+                    for_stmt.location.line,
+                    for_stmt.location.column
+                )),
             };
             
             match collection_value {
-                Value::Object(map) => {
-                    let idents: Vec<String> = var_decl.ident.split(", ").map(|s| s.to_string()).collect();
-                    
-                    for (key, value) in map {
-                        // Declare key and value in the environment
-                        env.declare(idents[0].clone(), Value::String(key.clone()), false); // Key
-                        env.declare(idents[1].clone(), value.clone(), false); // Value
-                        
-                        // Execute the body of the for loop
-                        for content in &for_stmt.body {
-                            match **content {
-                                Content::Statement(ref stmt) => {
-                                    evaluate_statement(stmt, env)?;
-                                }
-                                Content::Expression(ref expr) => {
-                                    evaluate_expression(expr, env)?;
-                                }
-                            }
-                        }
-                    }
-                }
-                Value::Array(arr) => {
-                    let idents: Vec<String> = var_decl.ident.split(", ").map(|s| s.to_string()).collect();
-                    
-                    for value in arr {
-                        // Declare value in the environment
-                        env.declare(idents[0].clone(), value.clone(), false); // Value
-                        
-                        // Execute the body of the for loop
-                        for content in &for_stmt.body {
-                            match **content {
-                                Content::Statement(ref stmt) => {
-                                    evaluate_statement(stmt, env)?;
-                                }
-                                Content::Expression(ref expr) => {
-                                    evaluate_expression(expr, env)?;
-                                }
-                            }
-                        }
-                    }
-                }
-                _ => {
-                    return Err(runtime_error("For loop must iterate over an object or array", for_stmt.location.line, for_stmt.location.column));
-                }
+                Value::Object(map) => evaluate_for_object(map, var_decl, &for_stmt.body, env),
+                Value::Array(arr) => evaluate_for_array(arr, var_decl, &for_stmt.body, env),
+                _ => Err(runtime_error(
+                    "For loop must iterate over an object or array",
+                    RuntimeErrorType::TypeError,
+                    for_stmt.location.line,
+                    for_stmt.location.column
+                ))
             }
         } else {
-            panic!("Expected variable declaration in for loop initialization");
+            Err(runtime_error(
+                "For loop requires a variable declaration",
+                RuntimeErrorType::SyntaxError,
+                for_stmt.location.line,
+                for_stmt.location.column
+            ))
         }
     } else {
-        panic!("For loop requires an initialization");
+        Err(runtime_error(
+            "For loop requires an initialization",
+            RuntimeErrorType::SyntaxError,
+            for_stmt.location.line,
+            for_stmt.location.column
+        ))
     }
-    
-    Ok(None)
 }
 
 fn evaluate_while_statement(while_stmt: &WhileStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
@@ -233,59 +213,31 @@ fn evaluate_while_statement(while_stmt: &WhileStmt, env: &mut Environment) -> Re
         match evaluate_expression(&while_stmt.test, env)? {
             Value::Boolean(false) => break,
             Value::Boolean(true) => {
-                let mut result = None;
-                for stmt in &while_stmt.body {
-                    match **stmt {
-                        Content::Statement(ref stmt) => {
-                            result = evaluate_statement(stmt, env)?;
-                        }
-                        Content::Expression(ref expr) => {
-                            result = Some(evaluate_expression(expr, env)?);
-                        }
-                    }
-                }
+                let result = evaluate_block_content(&while_stmt.body, env)?;
                 if result.is_some() {
                     return Ok(result);
                 }
             }
-            _ => return Err(runtime_error("While loop condition must evaluate to a boolean", while_stmt.location.line, while_stmt.location.column)),
+            _ => return Err(runtime_error(
+                "While loop condition must evaluate to a boolean",
+                RuntimeErrorType::TypeError,
+                while_stmt.location.line,
+                while_stmt.location.column
+            )),
         }
     }
     Ok(None)
 }
 
 fn evaluate_try_catch(try_catch: &TryCatchStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
-    let try_result = (|| -> Result<Option<Value>, ZekkenError> {
-        let mut result = None;
-        for stmt in &try_catch.try_block {
-            match **stmt {
-                Content::Statement(ref stmt) => {
-                    result = evaluate_statement(stmt, env)?;
-                }
-                Content::Expression(ref expr) => {
-                    result = Some(evaluate_expression(expr, env)?);
-                }
-            }
-        }
-        Ok(result)
-    })();
-
-    match try_result {
+    match evaluate_block_content(&try_catch.try_block, env) {
         Ok(value) => Ok(value),
         Err(error) => {
             if let Some(catch_block) = &try_catch.catch_block {
-                let mut result = None;
-                for stmt in catch_block {
-                    match **stmt {
-                        Content::Statement(ref stmt) => {
-                            result = evaluate_statement(stmt, env)?;
-                        }
-                        Content::Expression(ref expr) => {
-                            result = Some(evaluate_expression(expr, env)?);
-                        }
-                    }
-                }
-                Ok(result)
+                // Create new environment with error variable
+                let mut catch_env = Environment::new_with_parent(env.clone());
+                catch_env.declare("error".to_string(), Value::String(error.to_string()), true);
+                evaluate_block_content(catch_block, &mut catch_env)
             } else {
                 Err(error)
             }
@@ -294,8 +246,12 @@ fn evaluate_try_catch(try_catch: &TryCatchStmt, env: &mut Environment) -> Result
 }
 
 fn evaluate_block(block: &BlockStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
+    evaluate_block_content(&block.body, env)
+}
+
+fn evaluate_block_content(content: &Vec<Box<Content>>, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     let mut result = None;
-    for stmt in &block.body {
+    for stmt in content {
         match **stmt {
             Content::Statement(ref stmt) => {
                 result = evaluate_statement(stmt, env)?;
@@ -332,13 +288,24 @@ fn evaluate_lambda(lambda: &LambdaDecl, env: &mut Environment) -> Result<Option<
 }
 
 fn evaluate_use(use_stmt: &UseStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
-    load_library(&use_stmt.module, env)?;
+    load_library(&use_stmt.module, env)
+        .map_err(|e| runtime_error(
+            &format!("Failed to load module '{}': {}", use_stmt.module, e),
+            RuntimeErrorType::ReferenceError,
+            use_stmt.location.line,
+            use_stmt.location.column
+        ))?;
     Ok(None)
 }
 
 fn evaluate_include(include: &IncludeStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     let file_contents = std::fs::read_to_string(&include.file_path)
-        .map_err(|e| runtime_error(&format!("Failed to include file '{}': {}", include.file_path, e), include.location.line, include.location.column))?;
+        .map_err(|e| runtime_error(
+            &format!("Failed to include file '{}': {}", include.file_path, e),
+            RuntimeErrorType::ReferenceError,
+            include.location.line,
+            include.location.column
+        ))?;
 
     let mut parser = Parser::new();
     let included_ast = parser.produce_ast(file_contents);
@@ -352,7 +319,12 @@ fn evaluate_include(include: &IncludeStmt, env: &mut Environment) -> Result<Opti
                 if let Some(value) = temp_env.lookup(method) {
                     env.declare(method.clone(), value, false);
                 } else {
-                    return Err(runtime_error(&format!("Method '{}' not found in included file", method), include.location.line, include.location.column));
+                    return Err(runtime_error(
+                        &format!("Method '{}' not found in included file", method),
+                        RuntimeErrorType::ReferenceError,
+                        include.location.line,
+                        include.location.column
+                    ));
                 }
             }
         }
@@ -370,18 +342,61 @@ fn evaluate_export(exports: &ExportStmt, env: &mut Environment) -> Result<Option
         if let Some(value) = env.lookup(name) {
             env.declare(name.clone(), value, false);
         } else {
-            return Err(ZekkenError::RuntimeError {
-                message: format!("Cannot export undefined value '{}'", name),
-                filename: None,
-                line: None,
-                column: None,
-                line_content: None,
-                pointer: None,
-                expected: None,
-                found: None,
-            });
+            return Err(runtime_error(
+                &format!("Cannot export undefined value '{}'", name),
+                RuntimeErrorType::ReferenceError,
+                exports.location.line,
+                exports.location.column
+            ));
         }
     }
-    
+    Ok(None)
+}
+
+// Helper functions for for-loop evaluation
+fn evaluate_for_object(
+    map: HashMap<String, Value>,
+    var_decl: &VarDecl,
+    body: &Vec<Box<Content>>,
+    env: &mut Environment
+) -> Result<Option<Value>, ZekkenError> {
+    let idents: Vec<String> = var_decl.ident.split(", ").map(|s| s.to_string()).collect();
+    if idents.len() != 2 {
+        return Err(runtime_error(
+            "Object iteration requires two identifiers (key, value)",
+            RuntimeErrorType::SyntaxError,
+            var_decl.location.line,
+            var_decl.location.column
+        ));
+    }
+
+    for (key, value) in map {
+        env.declare(idents[0].clone(), Value::String(key), false);
+        env.declare(idents[1].clone(), value, false);
+        evaluate_block_content(body, env)?;
+    }
+    Ok(None)
+}
+
+fn evaluate_for_array(
+    arr: Vec<Value>,
+    var_decl: &VarDecl,
+    body: &Vec<Box<Content>>,
+    env: &mut Environment
+) -> Result<Option<Value>, ZekkenError> {
+    let idents: Vec<String> = var_decl.ident.split(", ").map(|s| s.to_string()).collect();
+    if idents.len() != 1 {
+        return Err(runtime_error(
+            "Array iteration requires one identifier",
+            RuntimeErrorType::SyntaxError,
+            var_decl.location.line,
+            var_decl.location.column
+        ));
+    }
+
+    for value in arr {
+        env.declare(idents[0].clone(), value, false);
+        evaluate_block_content(body, env)?;
+    }
     Ok(None)
 }
