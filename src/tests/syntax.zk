@@ -1,37 +1,37 @@
-// this is a single-lined comment
+// this is a single-lined comment (done)
 
 /*
- this is a multi-lined comment
+ this is a multi-lined comment (done)
 */
 
-// use native library statement
+// use native library statement (semi-done)
 use math; // use all of the math module
 use { read_file, write_file } from fs; // use only the read and write methods from fs module
 
 
-// include from file statement
+// include from file statement (done)
 include "file.zk"; // include every exported value
-include method from "file.zk";
-include { method1, method2 } from "file.zk";
+include method from "file.zk"; // include only a single exported value
+include { method1, method2 } from "file.zk"; // include specific exported values
 
 
-// integer varaible declaration
+// integer varaible declaration (done)
 let x: int = 45; 
 const y: int = 90;
 
-// export from file statement
+// export from file statement (done)
 export x, y;
 
 
-// floating point variable declaration
+// floating point variable declaration (done)
 let a: float = 12.34;
 const b: float = 56.78;
 
-// string variable declaration
+// string variable declaration (done)
 let z: string = "Hello World!";
 
 
-// log to the console with println
+// log to the console with println (done)
 @println => | z | // output: Hello World!
 
 // function declaration (done)
@@ -61,33 +61,33 @@ if x == 45 {
 }
 
 
-// object declaration
+// object declaration (done)
 let myObj: obj = {
   key1: "value1",
   key2: "value2"
 };
 
-// for-loop
-for |x| in myObj {
-  @println => | x |
+// for-loop (done)
+for |key, value| in myObj {
+  @println => |"key: " + key, "value: " + value|
 }
 
 
-// arithmitic operators
+// arithmitic operators (done)
 x + y
 x - y
 x * y
 x / y
 
 
-// assignment operators
+// assignment operators (done)
 x += y
 x -= y
 x *= y
 x /= y
 
 
-// try-catch statement
+// try-catch statement (not done)
 try {
   x + y
 } catch |e| {

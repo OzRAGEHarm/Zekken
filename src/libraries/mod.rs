@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub mod math;
 
 use std::collections::HashMap;
@@ -26,10 +28,10 @@ fn init_libraries() -> HashMap<&'static str, LibraryFunction> {
 /// Load and initialize a library by name
 pub fn load_library(library: &str, env: &mut Environment) -> Result<(), ZekkenError> {
     // Get current source location for error reporting
-    let filename = env::var("ZEKKEN_CURRENT_FILE").unwrap_or_default();
+    let _filename = env::var("ZEKKEN_CURRENT_FILE").unwrap_or_default();
     let line: usize = env::var("ZEKKEN_CURRENT_LINE").unwrap_or_default().parse().unwrap_or(0);
     let column = env::var("ZEKKEN_CURRENT_COLUMN").unwrap_or_default().parse().unwrap_or(0);
-    let line_content = env::var("ZEKKEN_SOURCE_LINES")
+    let _line_content = env::var("ZEKKEN_SOURCE_LINES")
         .unwrap_or_default()
         .lines()
         .nth(line.saturating_sub(1))

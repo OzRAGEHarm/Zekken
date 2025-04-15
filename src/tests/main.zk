@@ -1,8 +1,7 @@
-use math;
+include "src/tests/include.zk";
 
-let myObject: obj = {
-  name: "John",
-  age: 30
-};
-
-@println => |myObject|
+@println => |"These values are all from 'src/tests/include.zk'"|
+@println => |""|
+@println => |"X:", x|
+@println => |"Y:", y|
+@println => |"Z:", z|

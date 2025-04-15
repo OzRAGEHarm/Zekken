@@ -1,0 +1,40 @@
+// Variable declarations
+let name: string = "Alice";
+let age: int = 25;
+let height: float = 1.75;
+
+// Print some information
+@println => |"Hello, my name is " + name|
+@println => |"I am", age, "years old"|
+@println => |"My height is", height, "meters"|
+
+// Define a function to calculate BMI
+func calculateBMI | weight: float, height: float | {
+  return weight / (height * height);
+}
+
+// Create an object with personal info
+let person: obj = {
+  name: name,
+  age: age,
+  height: height,
+  weight: 65.5
+};
+
+// Calculate and print BMI
+let bmi: float = calculateBMI => |person.weight, person.height|;
+@println => |"My BMI is:", bmi|
+
+// Use a conditional statement
+if bmi < 25.0 {
+  @println => |"BMI is in the normal range"|
+} else {
+  @println => |"BMI is above normal range"|
+}
+
+// Demonstrate iteration over object properties
+@println => |""|
+@println => |"Person details:"|
+for |key, value| in person {
+  @println => |key, ":", value|
+}

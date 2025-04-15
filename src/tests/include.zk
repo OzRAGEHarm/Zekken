@@ -1,0 +1,5 @@
+let x: int = 1;
+let y: float = 2.0;
+let z: string = "Hello, World!";
+
+export x, y, z;

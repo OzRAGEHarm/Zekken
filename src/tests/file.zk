@@ -1,4 +1,0 @@
-let x: int = 45; 
-const y: int = 90;
-
-export x, y;

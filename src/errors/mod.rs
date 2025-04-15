@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::fmt;
 use std::error::Error;
 use std::env;
@@ -105,8 +107,8 @@ impl fmt::Display for ZekkenError {
                 column,
                 line_content,
                 pointer,
-                expected,
-                found
+                expected: _expected,
+                found: _found,
             } => {
                 if let (Some(fname), Some(l), Some(c), Some(lc), Some(ptr)) = 
                     (filename, line, column, line_content, pointer) {

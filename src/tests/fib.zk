@@ -1,0 +1,18 @@
+// calculate fibonacci sequence
+func fibonacci | n: int, a: int, b: int, count: int | {
+    if count < n {
+        @println => |a|
+        fibonacci => |n, b, a + b, count + 1|
+    }
+}
+
+func startFibonacci | n: int  | {
+    if n > 0 {
+        fibonacci => |n, 0, 1, 0|
+    }
+}
+
+// amount of terms for the sequence to occur
+let numTerms: int = 12;
+
+startFibonacci => |numTerms|

@@ -40,7 +40,7 @@ pub fn evaluate_statement(stmt: &Stmt, env: &mut Environment) -> Result<Option<V
 }
 
 fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
-    let current_file = env::var("ZEKKEN_CURRENT_FILE").unwrap_or_default();
+    //let current_file = env::var("ZEKKEN_CURRENT_FILE").unwrap_or_default();
     
     // Process imports first
     for import in &program.imports {
@@ -122,6 +122,7 @@ fn evaluate_function_declaration(func: &FuncDecl, env: &mut Environment) -> Resu
 
 fn evaluate_object_declaration(obj: &ObjectDecl, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     let mut object_map = std::collections::HashMap::new();
+    let mut key_order = Vec::new();
 
     for property in &obj.properties {
         let value = evaluate_expression(&property.value, env)
@@ -132,8 +133,9 @@ fn evaluate_object_declaration(obj: &ObjectDecl, env: &mut Environment) -> Resul
                 obj.location.column
             ))?;
         object_map.insert(property.key.clone(), value);
+        key_order.push(property.key.clone());
     }
-
+    
     env.declare(obj.ident.clone(), Value::Object(object_map), false);
     Ok(None)
 }
@@ -181,7 +183,7 @@ fn evaluate_for_statement(for_stmt: &ForStmt, env: &mut Environment) -> Result<O
             };
             
             match collection_value {
-                Value::Object(map) => evaluate_for_object(map, var_decl, &for_stmt.body, env),
+                Value::Object(map) => evaluate_for_object(&map, var_decl, &for_stmt.body, env),
                 Value::Array(arr) => evaluate_for_array(arr, var_decl, &for_stmt.body, env),
                 _ => Err(runtime_error(
                     "For loop must iterate over an object or array",
@@ -353,14 +355,14 @@ fn evaluate_export(exports: &ExportStmt, env: &mut Environment) -> Result<Option
     Ok(None)
 }
 
-// Helper functions for for-loop evaluation
 fn evaluate_for_object(
-    map: HashMap<String, Value>,
-    var_decl: &VarDecl,
+    map_data: &HashMap<String, Value>,
+    var_decl: &VarDecl, 
     body: &Vec<Box<Content>>,
     env: &mut Environment
 ) -> Result<Option<Value>, ZekkenError> {
     let idents: Vec<String> = var_decl.ident.split(", ").map(|s| s.to_string()).collect();
+
     if idents.len() != 2 {
         return Err(runtime_error(
             "Object iteration requires two identifiers (key, value)",
@@ -370,10 +372,14 @@ fn evaluate_for_object(
         ));
     }
 
-    for (key, value) in map {
-        env.declare(idents[0].clone(), Value::String(key), false);
-        env.declare(idents[1].clone(), value, false);
-        evaluate_block_content(body, env)?;
+    let keys: Vec<String> = map_data.keys().cloned().collect();
+
+    for key in keys {
+        if let Some(value) = map_data.get(&key) {
+            env.declare(idents[0].clone(), Value::String(key.clone()), false);
+            env.declare(idents[1].clone(), value.clone(), false);
+            evaluate_block_content(body, env)?;
+        }
     }
     Ok(None)
 }
@@ -394,8 +400,8 @@ fn evaluate_for_array(
         ));
     }
 
-    for value in arr {
-        env.declare(idents[0].clone(), value, false);
+    for value in arr.iter() {
+        env.declare(idents[0].clone(), value.clone(), false);
         evaluate_block_content(body, env)?;
     }
     Ok(None)
