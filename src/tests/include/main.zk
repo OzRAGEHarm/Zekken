@@ -1,0 +1,11 @@
+include "export.zk";
+
+@println => |"Included integer:", integer_value|
+@println => |"Included float:", float_value|
+@println => |"Included string:", string_value|
+
+let result: int = function => |5|;
+@println => |"Result of included function:", result|
+
+let combinedString: string = string_value + " Used in main.zk";
+@println => |combinedString|

@@ -140,6 +140,29 @@ impl Environment {
         })
       );
 
+      env.declare("input".to_string(), Value::NativeFunction(|args| {
+          use std::io::{Write, stdin, stdout};
+
+          if args.is_empty() {
+              return Err("Input requires a prompt string".to_string());
+          }
+
+          let mut stdout = stdout();
+
+          // Print the prompt
+          write!(stdout, "{}", args[0]).map_err(|e| e.to_string())?;
+          stdout.flush().map_err(|e| e.to_string())?;
+
+          // Read user input
+          let mut input = String::new();
+          stdin().read_line(&mut input).map_err(|e| e.to_string())?;
+
+          // Trim whitespace and newline
+          let input = input.trim().to_string();
+
+          Ok(Value::String(input))
+      }), false);
+
       env
   }
 

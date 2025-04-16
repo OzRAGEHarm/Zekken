@@ -1,0 +1,2 @@
+let name: string = @input => |"What's your name? "|;
+@println => |"Hi, " + name + "!"|

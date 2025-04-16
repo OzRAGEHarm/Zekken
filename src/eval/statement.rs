@@ -97,17 +97,21 @@ fn evaluate_var_declaration(decl: &VarDecl, env: &mut Environment) -> Result<Opt
                         }
                     ));
                 }
-                Some(val)
+                val // Return the value directly instead of Some(val)
             },
-            Content::Statement(stmt) => evaluate_statement(stmt, env)?,
+            Content::Statement(stmt) => {
+                if let Some(val) = evaluate_statement(stmt, env)? {
+                    val
+                } else {
+                    Value::Void
+                }
+            },
         },
-        None => None,
+        None => Value::Void,
     };
 
-    if let Some(val) = value.clone() {
-        env.declare(decl.ident.clone(), val, decl.constant);
-    }
-    Ok(value)
+    env.declare(decl.ident.clone(), value.clone(), decl.constant);
+    Ok(Some(value))
 }
 
 fn evaluate_function_declaration(func: &FuncDecl, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
@@ -301,9 +305,34 @@ fn evaluate_use(use_stmt: &UseStmt, env: &mut Environment) -> Result<Option<Valu
 }
 
 fn evaluate_include(include: &IncludeStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
-    let file_contents = std::fs::read_to_string(&include.file_path)
+    let current_dir = env.lookup("ZEKKEN_CURRENT_DIR")
+        .and_then(|v| if let Value::String(s) = v { Some(s) } else { None })
+        .unwrap_or_default();
+
+    let file_path = if include.file_path.contains("../") || include.file_path.starts_with("./") {
+        // This is a relative path, combine it with current directory
+        let mut path = std::path::PathBuf::from(current_dir);
+        // canonicalize() will resolve .. and . in paths
+        path.push(&include.file_path);
+        std::fs::canonicalize(path)
+            .map_err(|e| runtime_error(
+                &format!("Invalid include path: {}", e),
+                RuntimeErrorType::ReferenceError,
+                include.location.line,
+                include.location.column
+            ))?
+            .to_string_lossy()
+            .to_string()
+    } else {
+        // Treat as a path relative to current directory
+        let mut path = std::path::PathBuf::from(current_dir);
+        path.push(&include.file_path);
+        path.to_string_lossy().to_string()
+    };
+    
+    let file_contents = std::fs::read_to_string(&file_path)
         .map_err(|e| runtime_error(
-            &format!("Failed to include file '{}': {}", include.file_path, e),
+            &format!("Failed to include file '{}': {}", file_path, e),
             RuntimeErrorType::ReferenceError,
             include.location.line,
             include.location.column

@@ -1,7 +1,0 @@
-include "src/tests/include.zk";
-
-@println => |"These values are all from 'src/tests/include.zk'"|
-@println => |""|
-@println => |"X:", x|
-@println => |"Y:", y|
-@println => |"Z:", z|

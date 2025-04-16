@@ -46,6 +46,14 @@ fn main() {
     
     let mut env = Environment::new();
 
+    let file_path = std::path::Path::new(filename);
+    let current_dir = file_path.parent()
+        .unwrap_or_else(|| std::path::Path::new(""))
+        .to_string_lossy()
+        .to_string();
+
+    env.declare("ZEKKEN_CURRENT_DIR".to_string(), Value::String(current_dir), false);
+
     match evaluate_statement(&Stmt::Program(ast), &mut env) {
         Ok(result) => {
             std::io::stdout().flush().unwrap();

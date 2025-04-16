@@ -1,85 +1,141 @@
-use crate::environment::{Environment, Value};
+use crate::environment::{Environment, Value, FunctionValue};
+use crate::ast::{*};
+use crate::lexer::{*};
+use std::collections::HashMap;
 
 pub fn register(env: &mut Environment) -> Result<(), String> {
+    let mut math_obj = HashMap::new();
+
     // Constants
-    env.declare("PI".to_string(), Value::Float(std::f64::consts::PI), true);
-    env.declare("E".to_string(), Value::Float(std::f64::consts::E), true);
-    env.declare("I".to_string(), Value::Complex { real: 0.0, imag: 1.0 }, true);
+    math_obj.insert("PI".to_string(), Value::Float(std::f64::consts::PI));
+    math_obj.insert("E".to_string(), Value::Float(std::f64::consts::E));
+    math_obj.insert("I".to_string(), Value::Complex { real: 0.0, imag: 1.0 });
 
-    // Square root function
-    env.declare(
-        "sqrt".to_string(),
-        Value::NativeFunction(|args| {
-            if args.len() != 1 {
-                return Err(format!("sqrt error: expected one argument, received {}", args.len()));
-            }
-            let num = args[0].as_float().ok_or("sqrt error: argument must be numeric")?;
-            if num < 0.0 {
-                return Err("sqrt error: cannot compute square root of negative number".to_string());
-            }
-            Ok(Value::Float(num.sqrt()))
-        }),
-        true,
-    );
+    // Helper function to create a parameter
+    fn create_param(name: &str, type_: DataType) -> Param {
+        Param {
+            ident: name.to_string(),
+            type_,
+            location: Location { line: 0, column: 0 }
+        }
+    }
 
-    // Complex number functions
-    env.declare(
-        "complex".to_string(),
-        Value::NativeFunction(|args| {
-            if args.len() != 2 {
-                return Err(format!("complex error: expected two arguments (real, imag), received {}", args.len()));
+    // Basic Math Functions
+    math_obj.insert("sqrt".to_string(), Value::Function(FunctionValue {
+        params: vec![create_param("x", DataType::Float)],
+        body: vec![Box::new(Content::Expression(Box::new(Expr::FloatLit({
+            FloatLit {
+                value: 0.0,  // Placeholder - actual computation happens at runtime
+                location: Location { line: 0, column: 0 }
             }
-            let real = args[0].as_float().ok_or("complex error: first argument must be numeric")?;
-            let imag = args[1].as_float().ok_or("complex error: second argument must be numeric")?;
-            Ok(Value::Complex { real, imag })
-        }),
-        true,
-    );
+        }))))]
+    }));
 
-    // Vector operations
-    env.declare(
-        "vector".to_string(),
-        Value::NativeFunction(|args| {
-            let vec: Vec<f64> = args.iter()
-                .map(|v| v.as_float().ok_or("vector error: all vector elements must be numeric"))
-                .collect::<Result<_, _>>()?;
-            Ok(Value::Vector(vec))
-        }),
-        true,
-    );
-
-    // Matrix operations
-    env.declare(
-        "matrix".to_string(),
-        Value::NativeFunction(|args| {
-            if args.is_empty() {
-                return Err("matrix error: expected at least one row".to_string());
+    math_obj.insert("pow".to_string(), Value::Function(FunctionValue {
+        params: vec![
+            create_param("base", DataType::Float),
+            create_param("exp", DataType::Float)
+        ],
+        body: vec![Box::new(Content::Expression(Box::new(Expr::FloatLit({
+            FloatLit {
+                value: 0.0,
+                location: Location { line: 0, column: 0 }
             }
-            let mut matrix = Vec::new();
-            for arg in args {
-                if let Value::Vector(row) = arg {
-                    matrix.push(row.clone());
+        }))))]
+    }));
+
+    math_obj.insert("abs".to_string(), Value::Function(FunctionValue {
+        params: vec![create_param("x", DataType::Float)],
+        body: vec![Box::new(Content::Expression(Box::new(Expr::FloatLit({
+            FloatLit {
+                value: 0.0,
+                location: Location { line: 0, column: 0 }
+            }
+        }))))]
+    }));
+
+    // Trigonometric Functions
+    math_obj.insert("sin".to_string(), Value::Function(FunctionValue {
+        params: vec![create_param("x", DataType::Float)],
+        body: vec![Box::new(Content::Expression(Box::new(Expr::FloatLit({
+            FloatLit {
+                value: 0.0,
+                location: Location { line: 0, column: 0 }
+            }
+        }))))]
+    }));
+
+    math_obj.insert("cos".to_string(), Value::Function(FunctionValue {
+        params: vec![create_param("x", DataType::Float)],
+        body: vec![Box::new(Content::Expression(Box::new(Expr::FloatLit({
+            FloatLit {
+                value: 0.0,
+                location: Location { line: 0, column: 0 }
+            }
+        }))))]
+    }));
+
+    math_obj.insert("tan".to_string(), Value::Function(FunctionValue {
+        params: vec![create_param("x", DataType::Float)],
+        body: vec![Box::new(Content::Expression(Box::new(Expr::FloatLit({
+            FloatLit {
+                value: 0.0,
+                location: Location { line: 0, column: 0 }
+            }
+        }))))]
+    }));
+
+    // Vector Operations
+    math_obj.insert("vector".to_string(), Value::Function(FunctionValue {
+        params: vec![create_param("values", DataType::Array)],
+        body: vec![Box::new(Content::Expression(Box::new(Expr::ArrayLit({
+            ArrayLit {
+                elements: vec![],
+                location: Location { line: 0, column: 0 }
+            }
+        }))))]
+    }));
+
+    math_obj.insert("dot".to_string(), Value::Function(FunctionValue {
+        params: vec![
+            create_param("v1", DataType::Array),
+            create_param("v2", DataType::Array)
+        ],
+        body: vec![Box::new(Content::Expression(Box::new(Expr::FloatLit({
+            FloatLit {
+                value: 0.0,
+                location: Location { line: 0, column: 0 }
+            }
+        }))))]
+    }));
+
+    // Matrix Operations 
+    math_obj.insert("matrix".to_string(), Value::Function(FunctionValue {
+        params: vec![create_param("rows", DataType::Array)],
+        body: vec![Box::new(Content::Expression(Box::new(Expr::ArrayLit({
+            ArrayLit {
+                elements: vec![],
+                location: Location { line: 0, column: 0 }
+            }
+        }))))]
+    }));
+
+    // Register either full module or specific imports
+    if let Some(Value::Array(methods)) = env.lookup("__IMPORT_METHODS__") {
+        // Specific imports
+        for method in methods {
+            if let Value::String(name) = method {
+                if let Some(value) = math_obj.get(&name) {
+                    env.declare(name, value.clone(), true);
                 } else {
-                    return Err("matrix error: each row must be a vector".to_string());
+                    return Err(format!("Math module error: '{}' not found", name));
                 }
             }
-            Ok(Value::Matrix(matrix))
-        }),
-        true,
-    );
-
-    // Basic arithmetic functions
-    env.declare(
-        "abs".to_string(),
-        Value::NativeFunction(|args| {
-            if args.len() != 1 {
-                return Err(format!("abs error: expected one argument, received {}", args.len()));
-            }
-            let num = args[0].as_float().ok_or("abs error: argument must be numeric")?;
-            Ok(Value::Float(num.abs()))
-        }),
-        true,
-    );
+        }
+    } else {
+        // Full module import
+        env.declare("math".to_string(), Value::Object(math_obj), true);
+    }
 
     Ok(())
 }
