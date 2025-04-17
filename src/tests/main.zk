@@ -1,0 +1,8 @@
+let myObj: obj = {
+  name: "Oz RAGE Harm",
+  age: 18
+};
+
+for |key, value| in myObj {
+  @println => |key + ":", value|
+}

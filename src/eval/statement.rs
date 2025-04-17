@@ -125,9 +125,8 @@ fn evaluate_function_declaration(func: &FuncDecl, env: &mut Environment) -> Resu
 }
 
 fn evaluate_object_declaration(obj: &ObjectDecl, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
-    let mut object_map = std::collections::HashMap::new();
-    let mut key_order = Vec::new();
-
+    let mut object_map = HashMap::new();
+    let mut keys = Vec::new();
     for property in &obj.properties {
         let value = evaluate_expression(&property.value, env)
             .map_err(|e| runtime_error(
@@ -136,10 +135,11 @@ fn evaluate_object_declaration(obj: &ObjectDecl, env: &mut Environment) -> Resul
                 obj.location.line,
                 obj.location.column
             ))?;
+        keys.push(property.key.clone());
         object_map.insert(property.key.clone(), value);
-        key_order.push(property.key.clone());
     }
-    
+    // Store key order as a hidden property
+    object_map.insert("__keys__".to_string(), Value::Array(keys.iter().map(|k| Value::String(k.clone())).collect()));
     env.declare(obj.ident.clone(), Value::Object(object_map), false);
     Ok(None)
 }
@@ -187,7 +187,7 @@ fn evaluate_for_statement(for_stmt: &ForStmt, env: &mut Environment) -> Result<O
             };
             
             match collection_value {
-                Value::Object(map) => evaluate_for_object(&map, var_decl, &for_stmt.body, env),
+                Value::Object(ref map) => evaluate_for_object(map, var_decl, &for_stmt.body, env),
                 Value::Array(arr) => evaluate_for_array(arr, var_decl, &for_stmt.body, env),
                 _ => Err(runtime_error(
                     "For loop must iterate over an object or array",
@@ -385,29 +385,39 @@ fn evaluate_export(exports: &ExportStmt, env: &mut Environment) -> Result<Option
 }
 
 fn evaluate_for_object(
-    map_data: &HashMap<String, Value>,
-    var_decl: &VarDecl, 
+    map: &HashMap<String, Value>,
+    var_decl: &VarDecl,
     body: &Vec<Box<Content>>,
     env: &mut Environment
 ) -> Result<Option<Value>, ZekkenError> {
     let idents: Vec<String> = var_decl.ident.split(", ").map(|s| s.to_string()).collect();
-
     if idents.len() != 2 {
         return Err(runtime_error(
             "Object iteration requires two identifiers (key, value)",
             RuntimeErrorType::SyntaxError,
             var_decl.location.line,
-            var_decl.location.column
+            var_decl.location.column,
         ));
     }
+    // Use the stored key order
+    let keys = if let Some(Value::Array(keys)) = map.get("__keys__") {
+        keys
+    } else {
+        return Err(runtime_error(
+            "Object missing key order",
+            RuntimeErrorType::TypeError,
+            var_decl.location.line,
+            var_decl.location.column,
+        ));
+    };
 
-    let keys: Vec<String> = map_data.keys().cloned().collect();
-
-    for key in keys {
-        if let Some(value) = map_data.get(&key) {
-            env.declare(idents[0].clone(), Value::String(key.clone()), false);
-            env.declare(idents[1].clone(), value.clone(), false);
-            evaluate_block_content(body, env)?;
+    for key_val in keys {
+        if let Value::String(ref key) = key_val {
+            if let Some(value) = map.get(key) {
+                env.declare(idents[0].clone(), Value::String(key.clone()), false);
+                env.declare(idents[1].clone(), value.clone(), false);
+                evaluate_block_content(body, env)?;
+            }
         }
     }
     Ok(None)

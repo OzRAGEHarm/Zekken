@@ -580,9 +580,11 @@ impl Parser {
     
     fn parse_object_properties(&mut self) -> Vec<Property> {
         let mut properties = Vec::new();
+        let mut key_order = Vec::new();
         while self.at().kind != TokenType::CloseBrace {
             let start_location = self.at().location();
             let key = self.expect(TokenType::Identifier, "Expected property key").value;
+            key_order.push(key.clone());
             self.expect(TokenType::Colon, "Expected ':' after property key");
             let value = match self.parse_expr() {
                 Content::Expression(expr) => expr,
@@ -595,6 +597,18 @@ impl Parser {
                 break;
             }
         }
+        // Add the key order as a hidden property
+        properties.push(Property {
+            key: "__keys__".to_string(),
+            value: Box::new(Expr::ArrayLit(ArrayLit {
+                elements: key_order.iter().map(|k| Box::new(Expr::StringLit(StringLit {
+                    value: k.clone(),
+                    location: Location { line: 0, column: 0 }
+                }))).collect(),
+                location: Location { line: 0, column: 0 }
+            })),
+            location: Location { line: 0, column: 0 }
+        });
         properties
     }
     
@@ -754,6 +768,23 @@ impl Parser {
                         location: ident_token.location(),
                     })));
                 }
+
+                if self.at().kind == TokenType::OpenBracket {
+                    self.consume(); // consume '['
+                    let index = self.parse_expression(0);
+                    self.expect(TokenType::CloseBracket, "Expected ']' after index");
+                    
+                    return Content::Expression(Box::new(Expr::Member(MemberExpr {
+                        object: Box::new(Expr::Identifier(ident)),
+                        property: match index {
+                            Content::Expression(expr) => expr,
+                            _ => panic!("Expected expression for index")
+                        },
+                        computed: true,
+                        location: ident_token.location(),
+                    })));
+                }
+                
                 Content::Expression(Box::new(Expr::Identifier(ident)))
             },
             TokenType::Int => {

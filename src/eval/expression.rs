@@ -220,13 +220,14 @@ fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Res
             // Added support for string literals as property names
             Expr::StringLit(ref lit) => Value::String(lit.value.clone()),
             _ => return Err(runtime_error(
-                    "Invalid property access",
-                    RuntimeErrorType::TypeError,
-                    member.location.line,
-                    member.location.column,
-                )),
+                "Invalid property access",
+                RuntimeErrorType::TypeError,
+                member.location.line,
+                member.location.column,
+            )),
         }
     };
+
     // New conversion: if object is Array and property is a string that represents an integer,
     // convert property to Value::Int.
     if let Value::Array(_) = object {
@@ -236,8 +237,44 @@ fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Res
             }
         }
     }
-    
+
     match (object, property) {
+        // Array indexing with numeric index
+        (Value::Array(arr), Value::Int(index)) => {
+            if index < 0 || index >= arr.len() as i64 {
+                return Err(runtime_error(
+                    &format!("Array index out of bounds: {}", index),
+                    RuntimeErrorType::IndexOutOfBounds,
+                    member.location.line,
+                    member.location.column
+                ));
+            }
+            Ok(arr[index as usize].clone())
+        },
+
+        // Object access with numeric index - treat as accessing nth key
+        (Value::Object(map), Value::Int(index)) => {
+            // Retrieve keys in order
+            let keys: Vec<_> = map.keys().collect();
+            if index < 0 || index >= keys.len() as i64 {
+                return Err(runtime_error(
+                    &format!("Object index out of bounds: {}", index),
+                    RuntimeErrorType::IndexOutOfBounds,
+                    member.location.line,
+                    member.location.column
+                ));
+            }
+            map.get(keys[index as usize])
+               .cloned()
+               .ok_or_else(|| runtime_error(
+                   &format!("Property at index {} not found", index),
+                   RuntimeErrorType::ReferenceError,
+                   member.location.line,
+                   member.location.column
+               ))
+        },
+
+        // Object access with string key
         (Value::Object(map), Value::String(key)) => {
             map.get(&key)
                .cloned()
@@ -245,20 +282,8 @@ fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Res
                    &format!("Property '{}' not found", key),
                    RuntimeErrorType::ReferenceError,
                    member.location.line,
-                   member.location.column,
+                   member.location.column
                ))
-        },
-        (Value::Array(arr), Value::Int(index)) => {
-            if index < 0 || index >= arr.len() as i64 {
-                Err(runtime_error(
-                    &format!("Index {} out of bounds", index),
-                    RuntimeErrorType::IndexOutOfBounds,
-                    member.location.line,
-                    member.location.column,
-                ))
-            } else {
-                Ok(arr[index as usize].clone())
-            }
         },
         _ => Err(runtime_error(
             "Invalid member access",
