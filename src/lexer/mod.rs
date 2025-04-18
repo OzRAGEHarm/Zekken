@@ -115,6 +115,7 @@ pub static KEYWORDS: &[(&str, TokenType)] = &[
     ("if", TokenType::If),
     ("else", TokenType::Else),
     ("for", TokenType::For),
+    ("while", TokenType::While),
     ("use", TokenType::Use),
     ("include", TokenType::Include),
     ("export", TokenType::Export),

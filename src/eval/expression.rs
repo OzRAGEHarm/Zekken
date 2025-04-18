@@ -363,6 +363,8 @@ fn add_values(left: &Value, right: &Value) -> Result<Value, String> {
         (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l + r)),
         (Value::Float(l), Value::Float(r)) => Ok(Value::Float(l + r)),
         (Value::String(l), Value::String(r)) => Ok(Value::String(l.clone() + r)),
+        (Value::String(l), other) => Ok(Value::String(l.clone() + &other.to_string())),
+        (other, Value::String(r)) => Ok(Value::String(other.to_string() + r)),
         (Value::Array(l), Value::Array(r)) => {
             let mut result = l.clone();
             result.extend(r.clone());

@@ -220,8 +220,19 @@ fn evaluate_while_statement(while_stmt: &WhileStmt, env: &mut Environment) -> Re
             Value::Boolean(false) => break,
             Value::Boolean(true) => {
                 let result = evaluate_block_content(&while_stmt.body, env)?;
-                if result.is_some() {
-                    return Ok(result);
+                // If body returns a value, update the variable used in condition
+                if let Some(value) = result {
+                    // Extract variable name from test expression
+                    if let Expr::Binary(ref binary) = *while_stmt.test {
+                        if let Expr::Identifier(ref ident) = *binary.left {
+                            env.assign(&ident.name, value).map_err(|e| runtime_error(
+                                &format!("Failed to assign to variable '{}': {}", ident.name, e),
+                                RuntimeErrorType::ReferenceError,
+                                while_stmt.location.line,
+                                while_stmt.location.column
+                            ))?;
+                        }
+                    }
                 }
             }
             _ => return Err(runtime_error(
@@ -240,9 +251,19 @@ fn evaluate_try_catch(try_catch: &TryCatchStmt, env: &mut Environment) -> Result
         Ok(value) => Ok(value),
         Err(error) => {
             if let Some(catch_block) = &try_catch.catch_block {
-                // Create new environment with error variable
                 let mut catch_env = Environment::new_with_parent(env.clone());
-                catch_env.declare("error".to_string(), Value::String(error.to_string()), true);
+                // Convert error to string value that can be used in catch block
+                let error_str = match error {
+                    ZekkenError::RuntimeError { message, .. } => message,
+                    ZekkenError::TypeError { message, .. } => message,
+                    ZekkenError::ReferenceError { message, .. } => message,
+                    _ => error.to_string()
+                };
+                
+                // Make error available as 'e' variable in catch block
+                catch_env.declare("e".to_string(), Value::String(error_str), false);
+                
+                // Evaluate catch block with error value
                 evaluate_block_content(catch_block, &mut catch_env)
             } else {
                 Err(error)

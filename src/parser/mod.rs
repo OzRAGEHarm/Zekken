@@ -20,15 +20,6 @@ impl Parser {
         }
     }
 
-    fn skip_comments(&mut self) -> bool {
-        if matches!(self.at().kind, TokenType::SingleLineComment | TokenType::MultiLineComment) {
-            self.consume();
-            true
-        } else {
-            false
-        }
-    }
-
     pub fn produce_ast(&mut self, source_code: String) -> Program {
         let source_lines: Vec<String> = source_code.lines().map(String::from).collect();
         std::env::set_var("ZEKKEN_SOURCE_LINES", source_lines.join("\n"));
@@ -78,12 +69,27 @@ impl Parser {
     }
 
     fn at(&self) -> &Token {
-        &self.tokens[self.current]
+        let mut idx = self.current;
+        while idx < self.tokens.len() {
+            if !matches!(self.tokens[idx].kind, TokenType::SingleLineComment | TokenType::MultiLineComment) {
+                break;
+            }
+            idx += 1;
+        }
+        if idx >= self.tokens.len() {
+            &self.tokens[self.tokens.len() - 1] // Return EOF token
+        } else {
+            &self.tokens[idx]
+        }
     }
 
     fn consume(&mut self) {
         if self.not_eof() {
             self.current += 1;
+            while self.not_eof() && matches!(self.tokens[self.current].kind, 
+                TokenType::SingleLineComment | TokenType::MultiLineComment) {
+                self.current += 1;
+            }
         }
     }
 
