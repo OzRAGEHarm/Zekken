@@ -1,95 +1,62 @@
-// this is a single-lined comment (done)
+// This is a single-line comment
 
 /*
- this is a multi-lined comment (done)
+  This is a multi-line comment
 */
 
-// use native library statement (semi-done)
-use math; // use all of the math module
-use { read_file, write_file } from fs; // use only the read and write methods from fs module
+// Use built-in libraries
+use math;
+use { read, write } from fs;
 
+// Include exported values from other files
+include "file.zk";
+include { variable1, variable2 } from "file.zk";
 
-// include from file statement (done)
-include "file.zk"; // include every exported value
-include method from "file.zk"; // include only a single exported value
-include { method1, method2 } from "file.zk"; // include specific exported values
+// Different variable data types | let/const variable keywords
+let x: int = 45;
+const y: float = 3.14;
+let z: bool = true;
+const w: string = "Hello, World!";
+let a: arr = [1, 2, 3];
+const b: obj = { hello: "Hello", world: "World!" };
 
+// Export values
+export x, y, z, w, a, b;
 
-// integer varaible declaration (done)
-let x: int = 45; 
-const y: int = 90;
-
-// export from file statement (done)
-export x, y;
-
-
-// floating point variable declaration (done)
-let a: float = 12.34;
-const b: float = 56.78;
-
-// string variable declaration (done)
-let z: string = "Hello World!";
-
-
-// log to the console with println (done)
-@println => | z | // output: Hello World!
-
-// function declaration (done)
-func add | a: int, b: int | {
+// Functions
+func add |a: int, b: int| {
   return a + b;
 }
 
+// Setting the value of a variable to the return value of a func
+let result: int = add => |1, 2|;
 
-// lambda function (done)
-const multiply -> | a: float, b: float | { 
-  return a * b;
+// Printing the result to the console
+@println => |result|
+
+// If statements
+if x == y {
+  @println => |"X equals Y"|
+} else if x < y {
+  @println => |"X is less than Y"|
+} else if x > y {
+  @println => |"X is greater than Y"|
 }
 
-
-// method call expressions (done)
-add => | x, y |
-multiply => | a, b |
-
-
-// if-else statement (done)
-if x == 45 {
-  x + 5
-} else if x == 40 {
-  x + 10
-} else {
-  x + 15
+// For-loop
+for |key, value| in b {
+  @println => |key + ": " + value|
 }
 
-
-// object declaration (done)
-let myObj: obj = {
-  key1: "value1",
-  key2: "value2"
-};
-
-// for-loop (done)
-for |key, value| in myObj {
-  @println => |"key: " + key, "value: " + value|
+// While-loop
+while x > 0 {
+  @println => |x|
+  x - 1
 }
 
-
-// arithmitic operators (done)
-x + y
-x - y
-x * y
-x / y
-
-
-// assignment operators (done)
-x += y
-x -= y
-x *= y
-x /= y
-
-
-// try-catch statement (not done)
+// Try-Catch statements
 try {
   x + y
 } catch |e| {
-  x * y
+  @println => |"Error: " + e |
 }
