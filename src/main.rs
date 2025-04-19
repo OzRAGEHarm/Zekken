@@ -33,15 +33,14 @@ fn main() {
     let mut parser = Parser::new();
     let ast = parser.produce_ast(source_code);
 
-    //println!("{:#?}", ast);
-
     /*
+    println!("{:#?}", ast);
+
     let source = env::var("ZEKKEN_SOURCE_LINES").unwrap_or_else(|_| "<unknown>".to_string());
     let tokens = env::var("ZEKKEN_TOKENS").unwrap_or_else(|_| "<unknown>".to_string());
 
     println!("Source code: \n{}", source);
     println!("Tokens: {}", tokens);
-
     */
     
     let mut env = Environment::new();
