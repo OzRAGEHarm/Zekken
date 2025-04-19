@@ -5,7 +5,7 @@
 
 </div>
 
-## Version History
+## Version History:
 
 ### Early Development Build #1 (2/23/25):
 - Initial github commit (a little bit into development)
