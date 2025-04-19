@@ -78,3 +78,4 @@
 - Made unexpected tokens log in the syntax error format
 - Fixed boolean values not working for variable declarations
 - Made escape characters in strings work properly
+- Added `updates.md` file
