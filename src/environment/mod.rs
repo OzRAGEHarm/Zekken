@@ -183,15 +183,17 @@ impl Environment {
   }
 
   pub fn assign(&mut self, name: &str, value: Value) -> Result<(), String> {
-      if self.constants.contains_key(name) {
-          return Err(format!("Cannot reassign constant '{}'", name));
-      }
-
+      // First check if variable exists in current scope
       if self.variables.contains_key(name) {
+          // Check if the variable is declared as constant
+          if self.constants.contains_key(name) {
+              return Err(format!("Cannot reassign constant '{}'", name));
+          }
           self.variables.insert(name.to_string(), value);
           return Ok(());
       }
 
+      // If not in current scope, try parent scope
       if let Some(ref mut parent) = self.parent {
           return parent.assign(name, value);
       }

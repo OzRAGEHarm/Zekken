@@ -52,6 +52,7 @@ pub enum TokenType {
     Float,
     Identifier,
     String,
+    Boolean(bool),
 
     // Data Types
     DataType(DataType),
@@ -130,6 +131,8 @@ pub static KEYWORDS: &[(&str, TokenType)] = &[
     ("bool", TokenType::DataType(DataType::Bool)),
     ("obj", TokenType::DataType(DataType::Object)),
     ("arr", TokenType::DataType(DataType::Array)),
+    ("true", TokenType::Boolean(true)),
+    ("false", TokenType::Boolean(false)),
 ];
 
 pub static TOKEN_CHAR: &[(&str, TokenType)] = &[
@@ -305,20 +308,32 @@ fn parse_number(src: &Vec<char>, index: &mut usize, initial: char, line: usize, 
 
 fn parse_string(src: &Vec<char>, index: &mut usize, quote: char, line: usize, column: usize) -> Token {
     let mut content = String::new();
+    let mut escaped = false;
+
     while *index < src.len() {
         let c = src[*index];
         *index += 1;
-        if c == quote {
+
+        if escaped {
+            match c {
+                'n' => content.push('\n'),
+                't' => content.push('\t'),
+                'r' => content.push('\r'),
+                '\\' => content.push('\\'),
+                '"' => content.push('"'),
+                '\'' => content.push('\''),
+                _ => content.push(c),
+            }
+            escaped = false;
+        } else if c == '\\' {
+            escaped = true;
+        } else if c == quote {
             break;
+        } else {
+            content.push(c);
         }
-        if c == '\\' && *index < src.len() {
-            let escaped = src[*index];
-            content.push(escaped);
-            *index += 1;
-            continue;
-        }
-        content.push(c);
     }
+    
     Token::new(content, TokenType::String, line, column)
 }
 
