@@ -64,33 +64,24 @@ impl Parser {
         program
     }
 
-    fn not_eof(&self) -> bool {
-        self.current < self.tokens.len() && self.tokens[self.current].kind != TokenType::EOF
+    fn skip_comments(&mut self) {
+        if matches!(self.at().kind, TokenType::SingleLineComment | TokenType::MultiLineComment) {
+            self.consume();
+        }
     }
 
-    fn at(&self) -> &Token {
-        let mut idx = self.current;
-        while idx < self.tokens.len() {
-            if !matches!(self.tokens[idx].kind, TokenType::SingleLineComment | TokenType::MultiLineComment) {
-                break;
-            }
-            idx += 1;
-        }
-        if idx >= self.tokens.len() {
-            &self.tokens[self.tokens.len() - 1] // Return EOF token
-        } else {
-            &self.tokens[idx]
-        }
+    fn not_eof(&self) -> bool {
+        self.current < self.tokens.len() && self.tokens[self.current].kind != TokenType::EOF
     }
 
     fn consume(&mut self) {
         if self.not_eof() {
             self.current += 1;
-            while self.not_eof() && matches!(self.tokens[self.current].kind, 
-                TokenType::SingleLineComment | TokenType::MultiLineComment) {
-                self.current += 1;
-            }
         }
+    }
+    
+    fn at(&self) -> &Token {
+        &self.tokens[self.current]
     }
 
     fn expect(&mut self, type_: TokenType, err: &str) -> Token {
@@ -124,6 +115,10 @@ impl Parser {
 
     fn parse_stmt(&mut self) -> Content {
         match self.at().kind {
+            TokenType::SingleLineComment | TokenType::MultiLineComment => {
+                self.skip_comments();
+                return self.parse_stmt();
+            }
             TokenType::Let | TokenType::Const => self.parse_var_decl(),
             TokenType::Func => self.parse_func_decl(),
             TokenType::If => self.parse_if_stmt(),

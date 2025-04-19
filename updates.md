@@ -72,10 +72,16 @@
 - Fixed Try-Catch statements not working as expected (specifically the catch block)
 - Fixed While loops not working as expected
 
-### Early Development Build #15 (4/19/25):
+### Early Development Build #15 (4/18/25):
 - Fixed variable reassignment not working 
 - Fixed functions not being able to take in objects or arrays as parameter data types
 - Made unexpected tokens log in the syntax error format
 - Fixed boolean values not working for variable declarations
 - Made escape characters in strings work properly
 - Added `updates.md` file
+
+### Early Development Build #16 (4/19/25):
+- Fixed how comments are parsed
+- Updated `README.md`
+- Moved `tests` directory out of `src` directory
+- Fixed an issue where commenting out a native function would still cause the function to execute
