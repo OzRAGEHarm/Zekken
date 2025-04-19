@@ -300,7 +300,12 @@ fn evaluate_assignment(assign: &AssignExpr, env: &mut Environment) -> Result<Val
     match *assign.left {
         Expr::Identifier(ref ident) => {
             env.assign(&ident.name, value.clone())
-                .map_err(|e| runtime_error(&e, RuntimeErrorType::ReferenceError, assign.location.line, assign.location.column))?;
+                .map_err(|e| runtime_error(
+                    &e,
+                    RuntimeErrorType::ReferenceError,
+                    assign.location.line,
+                    assign.location.column
+                ))?;
             Ok(value)
         },
         Expr::Member(ref member) => {

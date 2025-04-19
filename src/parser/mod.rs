@@ -173,34 +173,14 @@ impl Parser {
     fn parse_normal_var_decl(&mut self, constant: bool, ident: String, start_location: Location) -> Content {
         self.expect(TokenType::Colon, "Expected ':' after variable identifier");
         let type_ = match self.at().kind {
-            TokenType::DataType(DataType::Int) => {
+            TokenType::DataType(t) => {
                 self.consume();
-                DataType::Int
-            }
-            TokenType::DataType(DataType::Float) => {
-                self.consume();
-                DataType::Float
-            }
-            TokenType::DataType(DataType::String) => {
-                self.consume();
-                DataType::String
-            }
-            TokenType::DataType(DataType::Bool) => {
-                self.consume();
-                DataType::Bool
-            }
-            TokenType::DataType(DataType::Object) => {
-                self.consume();
-                DataType::Object
-            }
-            TokenType::DataType(DataType::Array) => {
-                self.consume();
-                DataType::Array
-            }
+                t
+            },
             _ => {
                 let token = self.expect(
-                    TokenType::DataType(DataType::Any), 
-                    "Expected type (int, float, string, bool, object, array) after ':'"
+                    TokenType::DataType(DataType::Any),
+                    "Expected type (int, float, string, bool) after ':'"
                 );
                 match token.kind {
                     TokenType::DataType(t) => t,
@@ -208,10 +188,30 @@ impl Parser {
                 }
             }
         };
+    
         self.expect(TokenType::AssignOp(AssignOp::Assign), "Expected '=' after type declaration");
-        let value = Some(self.parse_expr());
+    
+        // Add special handling for boolean literals
+        let value = if matches!(self.at().kind, TokenType::Boolean(_)) {
+            let bool_token = self.at().clone();
+            self.consume();
+            Some(Content::Expression(Box::new(Expr::BoolLit(BoolLit {
+                value: matches!(bool_token.kind, TokenType::Boolean(true)),
+                location: bool_token.location(),
+            }))))
+        } else {
+            Some(self.parse_expr())
+        };
+    
         self.expect(TokenType::Semicolon, "Expected ';' after variable declaration");
-        Content::Statement(Box::new(Stmt::VarDecl(VarDecl { constant, ident, type_, value, location: start_location })))
+        
+        Content::Statement(Box::new(Stmt::VarDecl(VarDecl {
+            constant,
+            ident,
+            type_,
+            value,
+            location: start_location
+        })))
     }
 
     fn parse_func_decl(&mut self) -> Content {
@@ -253,10 +253,18 @@ impl Parser {
                     self.consume();
                     DataType::Bool
                 },
+                TokenType::DataType(DataType::Object) => {
+                    self.consume();
+                    DataType::Object
+                },
+                TokenType::DataType(DataType::Array) => {
+                    self.consume();
+                    DataType::Array
+                },
                 _ => {
                     let token = self.expect(
                         TokenType::DataType(DataType::Any), 
-                        "Expected type (int, float, string, bool) after ':'"
+                        "Expected type (int, float, string, bool, obj, arr) after ':'"
                     );
                     match token.kind {
                         TokenType::DataType(t) => t,
@@ -666,6 +674,22 @@ impl Parser {
     fn parse_expression(&mut self, min_prec: u8) -> Content {
         let mut left = self.parse_prefix();
         loop {
+            if self.at().kind == TokenType::AssignOp(AssignOp::Assign) {
+                self.consume(); // consume '='
+                let right = self.parse_expression(0);
+                return Content::Expression(Box::new(Expr::Assign(AssignExpr {
+                    left: match left {
+                        Content::Expression(expr) => expr,
+                        _ => panic!("Expected expression")
+                    },
+                    right: match right {
+                        Content::Expression(expr) => expr,
+                        _ => panic!("Expected expression")
+                    },
+                    location: self.at().location(),
+                })));
+            }
+
             // Handle member access (dot operator)
             if self.at().kind == TokenType::Dot {
                 self.consume(); // consume the dot
@@ -814,6 +838,14 @@ impl Parser {
                     location: string_token.location(),
                 })))
             },
+            TokenType::Boolean(value) => {
+                let token = self.at().clone();
+                self.consume();
+                Content::Expression(Box::new(Expr::BoolLit(BoolLit {
+                    value,
+                    location: token.location(),
+                })))
+            },
             TokenType::OpenParen => {
                 self.consume(); // consume '('
                 let expr = self.parse_expression(0);
@@ -822,7 +854,27 @@ impl Parser {
             },
             TokenType::OpenBrace => self.parse_object_lit(),
             TokenType::OpenBracket => self.parse_array_lit(),
-            _ => panic!("Unexpected token: {:?} with value '{}'", self.at().kind, self.at().value),
+            _ => {
+                let token = self.at().clone();
+                let line_content = self.source_lines.get(token.line - 1)
+                    .unwrap_or(&String::from("<unknown>"))
+                    .clone();
+                let pointer = " ".repeat(token.column - 1) + "┈┈↳";
+                let filename = std::env::var("ZEKKEN_CURRENT_FILE")
+                    .unwrap_or_else(|_| String::from("<unknown>"));
+                
+                let error = ZekkenError::SyntaxError {
+                    message: format!("Unexpected token in expression"),
+                    filename,
+                    line: token.line,
+                    column: token.column,
+                    line_content,
+                    pointer,
+                    expected: "expression".to_string(),
+                    found: format!("{:?} ({})", token.kind, token.value),
+                };
+                panic!("{}", error);
+            }
         }
     }
     
