@@ -1,4 +1,4 @@
-<img src="images/Zekken_Lang_Logo.png" alt="Zekken Logo" style="max-width: 100%; height: auto; text-align: center;" />
+<img src="images/Zekken_Lang_Logo.png" alt="Zekken Logo" style="max-width: 60%; height: auto; text-align: center;" />
 Zekken is a general-purpose language created purely with the Rust programming language, meant to be easy to learn and understand!
 
 ## Why did I create this language?
