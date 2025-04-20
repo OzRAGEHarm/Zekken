@@ -1,5 +1,5 @@
 <div style="text-align: center;">
-    <img src="images/Zekken_Lang_Logo.png" alt="Zekken Logo" style="width: 500px; height: 200px;" />
+    <img src="images/Zekken_Lang_Logo.png" alt="Zekken Logo" style="width: 500px; height: 200px; text-align: center;" />
 </div>
 Zekken is a general-purpose language created purely with the Rust programming language, meant to be easy to learn and understand!
 
