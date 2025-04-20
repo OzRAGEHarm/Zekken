@@ -1,8 +1,10 @@
 <div style="text-align: center;">
-    <img src="images/Zekken_Lang_Logo.png" alt="Zekken Logo" />
+    <img src="images/Zekken_Lang_Logo.png" alt="Zekken Logo" style="width: 500px; height: 200px;" />
 </div>
+Zekken is a general-purpose language created purely with the Rust programming language, meant to be easy to learn and understand!
 
 ## Why did I create this language?
-I was bored one day and decided to learn how programming languages work, so I did some research, I practiced the concepts that I was learning, and then decided to create this programming language! I've had a few setbacks for many things along my journey of building the language, but I can safely say that this is one of my favorite projects that I've done!
+I created this programming language because I was bored one day and didn't know what to do, so I decided to learn how programming languages work.
 
-There isn't much I can really say about the language as it is still in it's early development stage, however, if you would like to see the many updates and such that I've done to the language, feel free to read [Updates.md](https://github.com/OzRAGEHarm/zekken/blob/main/updates.md#early-development-build-1-22325)!
+## Documentation
+There isn't much documentation that I can resourcefully give as the language is still in early developement stages and hasn't fully matured and/or been tested 100%.
