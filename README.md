@@ -1,6 +1,6 @@
 <div align="center">
   <picture>
-    <img src="images/Zekken_Lang_Logo.png" alt="Zekken Logo" width="50%"/>
+    <img src="images/Zekken_Lang_Logo.png" alt="Zekken Logo" width="75%"/>
   </picture>
 </div>
 
