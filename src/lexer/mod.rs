@@ -227,6 +227,7 @@ pub fn tokenize(source: String) -> Vec<Token> {
             column += 1;
         }
         if c.is_whitespace() {
+            column += 1;
             continue;
         }
         if let Some(token) = tokenize_char(&src, &mut index, c, line, column) {

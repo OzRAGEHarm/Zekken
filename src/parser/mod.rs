@@ -38,7 +38,6 @@ impl Parser {
         let start_location = self.at().location();
         let mut program = Program {
             imports: Vec::new(),
-            comments: Vec::new(),
             content: Vec::new(),
             location: start_location,
         };
@@ -47,7 +46,6 @@ impl Parser {
         while self.not_eof() {
             match self.at().kind {
                 TokenType::SingleLineComment | TokenType::MultiLineComment => {
-                    program.comments.push(self.at().value.clone());
                     self.consume();
                 },
                 TokenType::Use | TokenType::Include => {

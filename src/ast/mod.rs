@@ -52,7 +52,6 @@ pub enum Content {
 #[derive(Debug, Clone)]
 pub struct Program {
     pub imports: Vec<Content>,
-    pub comments: Vec<String>,
     pub content: Vec<Box<Content>>,
     pub location: Location,
 }

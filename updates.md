@@ -85,3 +85,9 @@
 - Updated `README.md`
 - Moved `tests` directory out of `src` directory
 - Fixed an issue where commenting out a native function would still cause the function to execute
+
+### Early Development Build #17 (4/21/25):
+- Removed comments from AST
+- Improved Parser
+- Updated The logo image
+- Improved optimization/disk size of the executable when built

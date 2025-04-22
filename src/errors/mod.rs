@@ -6,7 +6,6 @@ use std::env;
 
 #[derive(Debug)]
 pub enum ZekkenError {
-    // Syntax related errors
     SyntaxError {
         message: String,
         filename: String,
@@ -18,7 +17,6 @@ pub enum ZekkenError {
         found: String,
     },
     
-    // Runtime errors
     RuntimeError {
         message: String,
         error_type: RuntimeErrorType,
@@ -31,7 +29,6 @@ pub enum ZekkenError {
         found: Option<String>,
     },
 
-    // Type system errors
     TypeError {
         message: String,
         expected_type: String,
@@ -39,14 +36,12 @@ pub enum ZekkenError {
         location: Location,
     },
 
-    // Reference errors
     ReferenceError {
         message: String,
         name: String,
         location: Location,
     },
 
-    // Internal compiler errors
     InternalError(String),
 }
 

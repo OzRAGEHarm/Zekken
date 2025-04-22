@@ -65,6 +65,7 @@ fn main() {
         },
         Err(error) => {
             eprintln!("{}", error);
+            eprintln!();
             process::exit(1);
         }
     }
