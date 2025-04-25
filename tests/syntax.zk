@@ -28,11 +28,17 @@ func add |a: int, b: int| {
   return a + b;
 }
 
+// Lambda Functions
+let sub: fn -> |a: int, b: int| {
+  return a - b;
+};
+
 // Setting the value of a variable to the return value of a func
-let result: int = add => |1, 2|;
+let result_1: int = add => |1, 2|;
+let result_2: int = sub => |2, 1|;
 
 // Printing the result to the console
-@println => |result|
+@println => |"Add: " + result_1, "Sub: " + result_2|
 
 // If statements
 if x == y {

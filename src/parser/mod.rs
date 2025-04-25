@@ -100,8 +100,8 @@ impl Parser {
                 filename,
                 line: token.line,
                 column: token.column,
-                line_content,
                 pointer,
+                line_content,
                 expected: format!("{:?}", type_),
                 found: format!("{:?} ({})", token.kind, token_value),
             };
@@ -136,23 +136,21 @@ impl Parser {
         let constant = matches!(self.at().kind, TokenType::Const);
         self.consume();
         let ident = self.expect(TokenType::Identifier, "Expected variable identifier").value;
-
-        if self.at().kind == TokenType::ThinArrow {
-            self.parse_lambda_decl(constant, ident)
-        } else {
-            self.parse_normal_var_decl(constant, ident, start_location)
-        }
+        self.parse_normal_var_decl(constant, ident, start_location)
     }
 
     fn parse_lambda_decl(&mut self, constant: bool, ident: String) -> Content {
         let start_location = self.at().location();
-        self.expect(TokenType::ThinArrow, "Expected '->' after variable identifier");
+        
+        self.consume(); // Consume the ->
         self.expect(TokenType::Pipe, "Expected '|' after '->'");
         let params = self.parse_params();
+        
         self.expect(TokenType::Pipe, "Expected '|' after parameters");
         self.expect(TokenType::OpenBrace, "Expected '{' after parameters");
         let body = self.parse_block_stmt();
         self.expect(TokenType::CloseBrace, "Expected '}' after lambda body");
+        self.expect(TokenType::Semicolon, "Expected ';' after lambda declaration");
         
         Content::Statement(Box::new(Stmt::Lambda(LambdaDecl {
             constant,
@@ -168,12 +166,15 @@ impl Parser {
         let type_ = match self.at().kind {
             TokenType::DataType(t) => {
                 self.consume();
+                if t == DataType::Fn {
+                    return self.parse_lambda_decl(constant, ident);
+                }
                 t
             },
             _ => {
                 let token = self.expect(
                     TokenType::DataType(DataType::Any),
-                    "Expected type (int, float, string, bool) after ':'"
+                    "Expected type (int, float, string, bool, obj, arr, fn) after ':'"
                 );
                 match token.kind {
                     TokenType::DataType(t) => t,

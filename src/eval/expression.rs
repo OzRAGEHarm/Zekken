@@ -14,6 +14,7 @@ fn check_value_type(value: &Value, expected: &DataType) -> bool {
         (Value::Boolean(_), DataType::Bool) => true,
         (Value::Array(_), DataType::Array) => true,
         (Value::Object(_), DataType::Object) => true,
+        (Value::Function(_), DataType::Fn) => true,
         _ => false,
     }
 }

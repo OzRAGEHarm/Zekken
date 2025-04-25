@@ -1,11 +1,9 @@
 <div align="center">
 
-<h1>Development Log/Version Changelog</h1>
-<h3>This markdown file contains all update information for the Zekken programming language! Stay informed about the latest changes, improvements, and fixes.</h3>
+<h1>Early Development Log - Zekken Programming Language</h1>
+<h3>This file contains updates from the initial development phase (February 2025 - April 2025).</h3>
 
 </div>
-
-## Version History:
 
 ### Early Development Build #1 (2/23/25):
 - Initial github commit (a little bit into development)
@@ -91,3 +89,9 @@
 - Improved Parser
 - Updated The logo image
 - Improved optimization/disk size of the executable when built
+
+### Early Development Build #18 (4/24/25):
+- Added support for lambda functions
+- Moved `fibonacci.zk` and `bmi_calc.zk` from the `tests` directory to a new `examples` directory
+- Fixed a parser bug (the bug wasn't a major one but it bugged me, get it?)
+- Created a `dev-log` directory that holds all development logs, for each version, such as this version

@@ -42,6 +42,7 @@ pub enum DataType {
     Bool,
     Object,
     Array,
+    Fn,
     Any,
 }
 
@@ -131,6 +132,7 @@ pub static KEYWORDS: &[(&str, TokenType)] = &[
     ("bool", TokenType::DataType(DataType::Bool)),
     ("obj", TokenType::DataType(DataType::Object)),
     ("arr", TokenType::DataType(DataType::Array)),
+    ("fn", TokenType::DataType(DataType::Fn)),
     ("true", TokenType::Boolean(true)),
     ("false", TokenType::Boolean(false)),
 ];

@@ -86,12 +86,12 @@ impl fmt::Display for ZekkenError {
                      \x1b[1;90m  ┌─\x1b[0m \x1b[1;37m{}\x1b[0m\n\
                      \x1b[1;90m  ├─[\x1b[0m Line \x1b[1;37m{}\x1b[0m, Column \x1b[1;37m{}\x1b[0m \x1b[1;90m]\x1b[0m\n\
                      \x1b[1;90m  │\x1b[0m\n\
-                     \x1b[1;90m  │\x1b[0m {}\n\
+                     \x1b[1;90m  │\x1b[0m {}\t\
                      \x1b[1;90m  │\x1b[0m {}\n\
                      \x1b[1;90m  │\x1b[0m\n\
                      \x1b[1;90m  │\x1b[0m Expected: \x1b[1;32m{}\x1b[0m\n\
                      \x1b[1;90m  │\x1b[0m Found:    \x1b[1;31m{}\x1b[0m\n",
-                    message, filename, line, column, line_content, pointer, expected, found
+                    message, filename, line, column, pointer, line_content, expected, found
                 )
             },
             ZekkenError::RuntimeError { 
@@ -113,9 +113,9 @@ impl fmt::Display for ZekkenError {
                          \x1b[1;90m  ┌─\x1b[0m \x1b[1;37m{}\x1b[0m\n\
                          \x1b[1;90m  ├─[\x1b[0m Line \x1b[1;37m{}\x1b[0m, Column \x1b[1;37m{}\x1b[0m \x1b[1;90m]\x1b[0m\n\
                          \x1b[1;90m  │\x1b[0m\n\
-                         \x1b[1;90m  │\x1b[0m {}\n\
+                         \x1b[1;90m  │\x1b[0m {}\t\
                          \x1b[1;90m  │\x1b[0m {}\n",
-                        message, error_type, fname, l, c, lc, ptr
+                        message, error_type, fname, l, c, ptr, lc
                     )
                 } else {
                     write!(f, "\n\x1b[1;31mRuntime Error\x1b[0m: {} ({:?})", message, error_type)

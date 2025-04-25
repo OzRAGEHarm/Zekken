@@ -6,6 +6,4 @@ include "export.zk";
 
 let result: int = function => |5|;
 @println => |"Result of included function:", result|
-
-let combinedString: string = string_value + " Used in main.zk";
-@println => |combinedString|
+@println => |string_value|
