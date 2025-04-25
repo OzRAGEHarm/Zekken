@@ -11,7 +11,7 @@ Zekken is a general-purpose language created purely with the Rust programming la
 - **Reliability**: Create code faster and easier than that of other languages.
 - **Easy to learn**: Zekken's syntax is easy to understand and learn.
 
-## Benchmark (speed test against other languages):
+## Benchmark:
 | Language | Execution Time |
 |:---------|---------------:|
 | Zekken | 0.35 seconds |
