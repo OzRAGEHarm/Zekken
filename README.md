@@ -7,7 +7,7 @@
 Zekken is a general-purpose language created purely with the Rust programming language, meant to be easy to learn and understand!
 
 ## Why Zekken?
-- **Performance**: Fast and Effient for most applications. (see [Benchmark](https://github.com/OzRAGEHarm/Zekken?tab=readme-ov-file#benchmark) for more info.)
+- **Performance**: Fast and efficient for most applications. (see [Benchmark](https://github.com/OzRAGEHarm/Zekken?tab=readme-ov-file#benchmark) for more info.)
 - **Reliability**: Create code faster and easier than that of other languages.
 - **Easy to learn**: Zekken's syntax is easy to understand and learn.
 
