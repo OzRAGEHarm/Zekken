@@ -17,7 +17,7 @@ Zekken is a general-purpose language created purely with the Rust programming la
 | Zekken | 0.35 seconds |
 | Javascript | 4.149 seconds |
 | Python | 2.222 seconds |
-| Rust | 4.703 seconds (compiled) |
+| Rust | 4.703 seconds |
 
 ## Development Logs / Changelog
 This section contains all update information for the Zekken programming language. Stay informed about the latest changes, improvements, and fixes.
