@@ -1,7 +1,7 @@
 <div align="center">
 
 <h1>Early Development Log - Zekken Programming Language</h1>
-<h3>This file contains updates from the initial development phase (February 2025 - April 2025).</h3>
+<h3>This file contains updates from the initial development phase (February 2025 - Now).</h3>
 
 </div>
 
