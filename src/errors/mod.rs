@@ -113,7 +113,7 @@ impl fmt::Display for ZekkenError {
                          \x1b[1;90m  ┌─\x1b[0m \x1b[1;37m{}\x1b[0m\n\
                          \x1b[1;90m  ├─[\x1b[0m Line \x1b[1;37m{}\x1b[0m, Column \x1b[1;37m{}\x1b[0m \x1b[1;90m]\x1b[0m\n\
                          \x1b[1;90m  │\x1b[0m\n\
-                         \x1b[1;90m  │\x1b[0m {}\t\
+                         \x1b[1;90m  │\x1b[0m {}\
                          \x1b[1;90m  │\x1b[0m {}\n",
                         message, error_type, fname, l, c, ptr, lc
                     )
@@ -155,7 +155,7 @@ impl fmt::Display for ZekkenError {
                     "\n\x1b[1;31mReference Error\x1b[0m: {}\n\
                      \x1b[1;90m  ┌─\x1b[0m \x1b[1;37m{}\x1b[0m\n\
                      \x1b[1;90m  ├─[\x1b[0m Line \x1b[1;37m{}\x1b[0m, Column \x1b[1;37m{}\x1b[0m \x1b[1;90m]\x1b[0m\n\
-                     \x1b[1;90m  │\x1b[0m\n\
+                     \x1b[1;90m  │\x1b[0m\
                      \x1b[1;90m  │\x1b[0m {}\n\
                      \x1b[1;90m  │\x1b[0m Variable: \x1b[1;31m{}\x1b[0m\n",
                     message,

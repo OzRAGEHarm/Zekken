@@ -95,3 +95,8 @@
 - Moved `fibonacci.zk` and `bmi_calc.zk` from the `tests` directory to a new `examples` directory
 - Fixed a parser bug (the bug wasn't a major one but it bugged me, get it?)
 - Created a `dev-log` directory that holds all development logs, for each version, such as this version
+
+### Early Development Build #19 (4/25/25):
+- Added support for `fs` built-in library/module
+- Added file system test in `tests` directory
+- Fixed an issue with displaying runtime errors

@@ -6,7 +6,7 @@
 
 // Use built-in libraries
 use math;
-use { read, write } from fs;
+use { read_file, write_file } from fs;
 
 // Include exported values from other files
 include "file.zk";
@@ -70,3 +70,13 @@ try {
 // User input
 let input: string = @input => |"Enter your name: "|;
 @println => |"Hello, " + input + "!"|
+
+// File I/O
+// Read and write to a file
+let data: string = read_file => |"data.txt"|; // Iniially contains "this is some text"
+@println => |data| // output: this is some text
+
+write_file => |"data.txt", "this is some more text"| // Overwrite the file with new content
+
+data = read_file => |"data.txt"| // Read the file again
+@println => |data| // output: this is some more text
