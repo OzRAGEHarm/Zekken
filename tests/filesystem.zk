@@ -1,4 +1,4 @@
-use { write_file } from fs;
+use { write_file, read_file, read_dir, create_dir, is_file, is_dir, remove_dir, remove_file } from fs;
 
 // create a file
 let input: string = @input => |"Enter some text: "|;
