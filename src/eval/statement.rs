@@ -8,6 +8,7 @@ use crate::lexer::DataType;
 use std::env;
 use std::collections::HashMap;
 
+// Check if the value type matches the expected type
 fn check_value_type(value: &Value, expected: &DataType) -> bool {
     match (value, expected) {
         (Value::Int(_), DataType::Int) => true,
@@ -21,6 +22,7 @@ fn check_value_type(value: &Value, expected: &DataType) -> bool {
     }
 }
 
+// Evaluate a statement and return the result
 pub fn evaluate_statement(stmt: &Stmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     match stmt {
         Stmt::Program(program) => evaluate_program(program, env),
@@ -40,6 +42,7 @@ pub fn evaluate_statement(stmt: &Stmt, env: &mut Environment) -> Result<Option<V
     }
 }
 
+// Evaluate the entire program
 fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     //let current_file = env::var("ZEKKEN_CURRENT_FILE").unwrap_or_default();
     
@@ -75,6 +78,7 @@ fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<V
     Ok(last_value)
 }
 
+// Handle variable declarations
 fn evaluate_var_declaration(decl: &VarDecl, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     let value = match &decl.value {
         Some(content) => match content {
@@ -115,6 +119,7 @@ fn evaluate_var_declaration(decl: &VarDecl, env: &mut Environment) -> Result<Opt
     Ok(Some(value))
 }
 
+// Handle function declarations
 fn evaluate_function_declaration(func: &FuncDecl, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     let function_value = FunctionValue {
         params: func.params.clone(),
@@ -125,6 +130,7 @@ fn evaluate_function_declaration(func: &FuncDecl, env: &mut Environment) -> Resu
     Ok(None)
 }
 
+// Handle object declarations
 fn evaluate_object_declaration(obj: &ObjectDecl, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     let mut object_map = HashMap::new();
     let mut keys = Vec::new();
@@ -145,6 +151,7 @@ fn evaluate_object_declaration(obj: &ObjectDecl, env: &mut Environment) -> Resul
     Ok(None)
 }
 
+// Handle if statements
 fn evaluate_if_statement(if_stmt: &IfStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     let test_result = evaluate_expression(&if_stmt.test, env)?;
     
@@ -166,6 +173,7 @@ fn evaluate_if_statement(if_stmt: &IfStmt, env: &mut Environment) -> Result<Opti
     }
 }
 
+// Handle for statements
 fn evaluate_for_statement(for_stmt: &ForStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     if let Some(ref init) = for_stmt.init {
         if let Stmt::VarDecl(var_decl) = &**init {
@@ -215,6 +223,7 @@ fn evaluate_for_statement(for_stmt: &ForStmt, env: &mut Environment) -> Result<O
     }
 }
 
+// Handle while statements
 fn evaluate_while_statement(while_stmt: &WhileStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     loop {
         match evaluate_expression(&while_stmt.test, env)? {
@@ -247,6 +256,7 @@ fn evaluate_while_statement(while_stmt: &WhileStmt, env: &mut Environment) -> Re
     Ok(None)
 }
 
+// Handle try-catch statements
 fn evaluate_try_catch(try_catch: &TryCatchStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     match evaluate_block_content(&try_catch.try_block, env) {
         Ok(value) => Ok(value),
@@ -273,10 +283,12 @@ fn evaluate_try_catch(try_catch: &TryCatchStmt, env: &mut Environment) -> Result
     }
 }
 
+// Handle code blocks
 fn evaluate_block(block: &BlockStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     evaluate_block_content(&block.body, env)
 }
 
+// Handle code block content
 fn evaluate_block_content(content: &Vec<Box<Content>>, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     let mut result = None;
     for stmt in content {
@@ -292,6 +304,7 @@ fn evaluate_block_content(content: &Vec<Box<Content>>, env: &mut Environment) ->
     Ok(result)
 }
 
+// Handle return values in functions
 fn evaluate_return(ret: &ReturnStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     match &ret.value {
         Some(content) => match &**content {
@@ -305,6 +318,7 @@ fn evaluate_return(ret: &ReturnStmt, env: &mut Environment) -> Result<Option<Val
     }
 }
 
+// Handle lambda expressions
 fn evaluate_lambda(lambda: &LambdaDecl, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     let function_value = FunctionValue {
         params: lambda.params.clone(),
@@ -315,17 +329,27 @@ fn evaluate_lambda(lambda: &LambdaDecl, env: &mut Environment) -> Result<Option<
     Ok(None)
 }
 
+// Handle use statements for importing libraries
 fn evaluate_use(use_stmt: &UseStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
-    load_library(&use_stmt.module, env)
-        .map_err(|e| runtime_error(
-            &format!("Failed to load module '{}': {}", use_stmt.module, e),
+    // Set up __IMPORT_METHODS__ for selective import
+    if let Some(methods) = &use_stmt.methods {
+        let method_values = methods.iter().map(|m| Value::String(m.clone())).collect();
+        env.declare("__IMPORT_METHODS__".to_string(), Value::Array(method_values), true);
+    }
+
+    // Load the library/module
+    match load_library(&use_stmt.module, env) {
+        Ok(_) => Ok(None),
+        Err(e) => Err(runtime_error(
+            &format!("Failed to load library '{}': {}", use_stmt.module, e),
             RuntimeErrorType::ReferenceError,
             use_stmt.location.line,
-            use_stmt.location.column
-        ))?;
-    Ok(None)
+            use_stmt.location.column,
+        )),
+    }
 }
 
+// Handle include statements for including external files
 fn evaluate_include(include: &IncludeStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     let current_dir = env.lookup("ZEKKEN_CURRENT_DIR")
         .and_then(|v| if let Value::String(s) = v { Some(s) } else { None })
@@ -390,6 +414,7 @@ fn evaluate_include(include: &IncludeStmt, env: &mut Environment) -> Result<Opti
     Ok(None)
 }
 
+// Handle export statements
 fn evaluate_export(exports: &ExportStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     for name in &exports.exports {
         if let Some(value) = env.lookup(name) {
@@ -406,6 +431,7 @@ fn evaluate_export(exports: &ExportStmt, env: &mut Environment) -> Result<Option
     Ok(None)
 }
 
+// Handle for loop iterations over objects
 fn evaluate_for_object(
     map: &HashMap<String, Value>,
     var_decl: &VarDecl,
@@ -445,6 +471,7 @@ fn evaluate_for_object(
     Ok(None)
 }
 
+// Handle for loop iterations over arrays
 fn evaluate_for_array(
     arr: Vec<Value>,
     var_decl: &VarDecl,

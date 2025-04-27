@@ -7,7 +7,7 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
     let mut fs_obj = HashMap::new();
 
     // File Operations
-    env.declare("read_file".to_string(), Value::NativeFunction(|args| {
+    fs_obj.insert("read_file".to_string(), Value::NativeFunction(|args| {
         if let [Value::String(path)] = args.as_slice() {
             match fs::read_to_string(Path::new(path)) {
                 Ok(content) => Ok(Value::String(content)),
@@ -16,9 +16,9 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
         } else {
             Err("read_file expects a string path argument".to_string())
         }
-    }), true);
+    }));
 
-    env.declare("write_file".to_string(), Value::NativeFunction(|args| {
+    fs_obj.insert("write_file".to_string(), Value::NativeFunction(|args| {
         if let [Value::String(path), Value::String(content)] = args.as_slice() {
             match fs::write(Path::new(path), content) {
                 Ok(_) => Ok(Value::Void),
@@ -27,10 +27,10 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
         } else {
             Err("write_file expects path and content string arguments".to_string())
         }
-    }), true);
+    }));
 
     // Directory Operations
-    env.declare("read_dir".to_string(), Value::NativeFunction(|args| {
+    fs_obj.insert("read_dir".to_string(), Value::NativeFunction(|args| {
         if let [Value::String(path)] = args.as_slice() {
             match fs::read_dir(Path::new(path)) {
                 Ok(entries) => {
@@ -45,9 +45,9 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
         } else {
             Err("read_dir expects a string path argument".to_string())
         }
-    }), true);
+    }));
 
-    env.declare("create_dir".to_string(), Value::NativeFunction(|args| {
+    fs_obj.insert("create_dir".to_string(), Value::NativeFunction(|args| {
         if let [Value::String(path)] = args.as_slice() {
             match fs::create_dir_all(Path::new(path)) {
                 Ok(_) => Ok(Value::Boolean(true)),
@@ -56,9 +56,9 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
         } else {
             Err("create_dir expects a string path argument".to_string())
         }
-    }), true);
+    }));
 
-    env.declare("remove_dir".to_string(), Value::NativeFunction(|args| {
+    fs_obj.insert("remove_dir".to_string(), Value::NativeFunction(|args| {
         if let [Value::String(path)] = args.as_slice() {
             match fs::remove_dir_all(Path::new(path)) {
                 Ok(_) => Ok(Value::Boolean(true)),
@@ -67,34 +67,34 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
         } else {
             Err("remove_dir expects a string path argument".to_string())
         }
-    }), true);
+    }));
 
     // Path Operations
-    env.declare("exists".to_string(), Value::NativeFunction(|args| {
+    fs_obj.insert("exists".to_string(), Value::NativeFunction(|args| {
         if let [Value::String(path)] = args.as_slice() {
             Ok(Value::Boolean(Path::new(path).exists()))
         } else {
             Err("exists expects a string path argument".to_string())
         }
-    }), true);
+    }));
 
-    env.declare("is_file".to_string(), Value::NativeFunction(|args| {
+    fs_obj.insert("is_file".to_string(), Value::NativeFunction(|args| {
         if let [Value::String(path)] = args.as_slice() {
             Ok(Value::Boolean(Path::new(path).is_file()))
         } else {
             Err("is_file expects a string path argument".to_string())
         }
-    }), true);
+    }));
 
-    env.declare("is_dir".to_string(), Value::NativeFunction(|args| {
+    fs_obj.insert("is_dir".to_string(), Value::NativeFunction(|args| {
         if let [Value::String(path)] = args.as_slice() {
             Ok(Value::Boolean(Path::new(path).is_dir()))
         } else {
             Err("is_dir expects a string path argument".to_string())
         }
-    }), true);
+    }));
 
-    env.declare("remove_file".to_string(), Value::NativeFunction(|args| {
+    fs_obj.insert("remove_file".to_string(), Value::NativeFunction(|args| {
         if let [Value::String(path)] = args.as_slice() {
             match fs::remove_file(Path::new(path)) {
                 Ok(_) => Ok(Value::Boolean(true)),
@@ -103,10 +103,23 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
         } else {
             Err("remove_file expects a string path argument".to_string())
         }
-    }), true);
+    }));
 
-    // Always register the full module
-    env.declare("fs".to_string(), Value::Object(fs_obj), true);
+    if let Some(Value::Array(methods)) = env.lookup("__IMPORT_METHODS__") {
+        // Specific imports
+        for method in methods {
+            if let Value::String(name) = method {
+                if let Some(value) = fs_obj.get(&name) {
+                    env.declare(name, value.clone(), true);
+                } else {
+                    return Err(format!("FS module error: '{}' not found", name));
+                }
+            }
+        }
+    } else {
+        // Full module import
+        env.declare("fs".to_string(), Value::Object(fs_obj), true);
+    }
 
     Ok(())
 }

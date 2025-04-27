@@ -1,0 +1,41 @@
+use fs;
+
+// create a file
+let input: string = @input => |"Enter some text: "|;
+fs.write_file => |"data.txt", input|
+
+// read file content
+let data: string = fs.read_file => |"data.txt"|; // read the file
+
+// print the content of the file
+@println => |"Data.txt: " + data|
+
+// read directory content
+data = fs.read_dir => |"tests"| // read the directory
+
+// print the contents of the directory
+@println => |"Read Directory: " + data|
+
+// create directory
+fs.create_dir => |"test_dir"| // create a test directory
+data = fs.exists => |"test_dir"| // check if the directory exists
+@println => |"Directory exists: " + data| // true
+
+// is file and is directory
+data = fs.is_file => |"data.txt"| // check if the path is a file
+@println => |"Is file: " + data| // true
+
+data = fs.is_dir => |"test_dir"| // check if the path is a directory
+@println => |"Is directory: " + data| // true
+
+// remove file and directory and check if they exist afterwards
+fs.remove_dir => |"test_dir"| // remove the test directory
+data = fs.exists => |"test_dir"| // check if the directory exists
+@println => |"Directory exists after removal: " + data| // false
+
+fs.remove_file => |"data.txt"| // remove the file
+data = fs.exists => |"data.txt"| // check if the file exists
+@println => |"File exists after removal: " + data| // false
+
+
+@println => |"All tests for the fs (file system) library complete!"|

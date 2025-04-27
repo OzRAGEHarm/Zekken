@@ -731,7 +731,6 @@ impl Parser {
         left
     }
     
-    // New helper to parse prefix expressions (adapted from parse_primary_expr)
     fn parse_prefix(&mut self) -> Content {
         // Handle native function calls prefixed with '@'
         if self.at().kind == TokenType::At {
@@ -760,56 +759,15 @@ impl Parser {
                 location: ident_token.location(),
             })));
         }
-        
-        // Handle identifiers, literals, grouping, etc.
-        match self.at().kind {
+    
+        // Parse primary expressions (identifiers, literals, grouping, etc.)
+        let mut expr = match self.at().kind {
             TokenType::Identifier => {
                 let ident_token = self.expect(TokenType::Identifier, "Expected identifier");
-                let ident = Identifier { name: ident_token.value.clone(), location: ident_token.location() };
-                if self.at().kind == TokenType::FatArrow {
-                    if ident.name == "println" {
-                        panic!("Native function 'println' must be called with '@'");
-                    }
-                    self.consume(); // consume '=>'
-                    self.expect(TokenType::Pipe, "Expected '|' before function arguments");
-                    let mut args = Vec::new();
-                    while self.at().kind != TokenType::Pipe {
-                        let expr = self.parse_expression(0);
-                        match expr {
-                            Content::Expression(e) => args.push(e),
-                            _ => panic!("Expected expression in call arguments"),
-                        }
-                        if self.at().kind == TokenType::Comma {
-                            self.consume();
-                        } else {
-                            break;
-                        }
-                    }
-                    self.expect(TokenType::Pipe, "Expected '|' after function arguments");
-                    return Content::Expression(Box::new(Expr::Call(CallExpr {
-                        callee: Box::new(Expr::Identifier(ident)),
-                        args,
-                        location: ident_token.location(),
-                    })));
-                }
-
-                if self.at().kind == TokenType::OpenBracket {
-                    self.consume(); // consume '['
-                    let index = self.parse_expression(0);
-                    self.expect(TokenType::CloseBracket, "Expected ']' after index");
-                    
-                    return Content::Expression(Box::new(Expr::Member(MemberExpr {
-                        object: Box::new(Expr::Identifier(ident)),
-                        property: match index {
-                            Content::Expression(expr) => expr,
-                            _ => panic!("Expected expression for index")
-                        },
-                        computed: true,
-                        location: ident_token.location(),
-                    })));
-                }
-                
-                Content::Expression(Box::new(Expr::Identifier(ident)))
+                Content::Expression(Box::new(Expr::Identifier(Identifier {
+                    name: ident_token.value.clone(),
+                    location: ident_token.location(),
+                })))
             },
             TokenType::Int => {
                 let int_lit = self.expect(TokenType::Int, "Expected integer literal");
@@ -856,7 +814,6 @@ impl Parser {
                 let pointer = " ".repeat(token.column - 1) + "┈┈↳";
                 let filename = std::env::var("ZEKKEN_CURRENT_FILE")
                     .unwrap_or_else(|_| String::from("<unknown>"));
-                
                 let error = ZekkenError::SyntaxError {
                     message: format!("Unexpected token in expression"),
                     filename,
@@ -869,7 +826,78 @@ impl Parser {
                 };
                 panic!("{}", error);
             }
+        };
+    
+        // Handle member access (dot operator) and array indexing (brackets)
+        loop {
+            if self.at().kind == TokenType::Dot {
+                self.consume(); // consume the dot
+                let ident_token = self.expect(TokenType::Identifier, "Expected property identifier after '.'");
+                expr = Content::Expression(Box::new(Expr::Member(MemberExpr {
+                    object: match expr {
+                        Content::Expression(e) => e,
+                        _ => panic!("Expected expression before '.'"),
+                    },
+                    property: Box::new(Expr::Identifier(Identifier {
+                        name: ident_token.value.clone(),
+                        location: ident_token.location(),
+                    })),
+                    computed: false,
+                    location: ident_token.location(),
+                })));
+                continue;
+            }
+            if self.at().kind == TokenType::OpenBracket {
+                self.consume(); // consume '['
+                let index = self.parse_expression(0);
+                self.expect(TokenType::CloseBracket, "Expected ']' after index");
+                expr = Content::Expression(Box::new(Expr::Member(MemberExpr {
+                    object: match expr {
+                        Content::Expression(e) => e,
+                        _ => panic!("Expected expression before '['"),
+                    },
+                    property: match index {
+                        Content::Expression(e) => e,
+                        _ => panic!("Expected expression for index"),
+                    },
+                    computed: true,
+                    location: self.at().location(),
+                })));
+                continue;
+            }
+            break;
         }
+    
+        // Support fat arrow call on identifiers and member expressions
+        if self.at().kind == TokenType::FatArrow {
+            self.consume(); // consume '=>'
+            self.expect(TokenType::Pipe, "Expected '|' before function arguments");
+            let mut args = Vec::new();
+            while self.at().kind != TokenType::Pipe {
+                let arg = self.parse_expression(0);
+                match arg {
+                    Content::Expression(e) => args.push(e),
+                    _ => panic!("Expected expression in call arguments"),
+                }
+                if self.at().kind == TokenType::Comma {
+                    self.consume();
+                } else {
+                    break;
+                }
+            }
+            self.expect(TokenType::Pipe, "Expected '|' after function arguments");
+            let callee = match expr {
+                Content::Expression(e) => e,
+                _ => panic!("Expected expression as callee"),
+            };
+            return Content::Expression(Box::new(Expr::Call(CallExpr {
+                callee,
+                args,
+                location: self.at().location(),
+            })));
+        }
+    
+        expr
     }
     
     // Helper to retrieve the binding power of an infix operator

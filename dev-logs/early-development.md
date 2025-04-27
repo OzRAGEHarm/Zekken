@@ -100,3 +100,8 @@
 - Added support for `fs` built-in library/module
 - Added file system test in `tests` directory
 - Fixed an issue with displaying runtime errors
+
+### Early Development Build #20 (4/26/25):
+- Added tests for `math` and `fs` libraries/modules
+- Fixed `math` module
+- Updated `syntax.zk` in `tests` directory
