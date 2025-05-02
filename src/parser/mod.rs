@@ -85,29 +85,23 @@ impl Parser {
     fn expect(&mut self, type_: TokenType, err: &str) -> Token {
         let token = self.at().clone();
         if token.kind != type_ {
-            let line_content = self.source_lines.get(token.line - 1)
-                .unwrap_or(&String::from("<unknown>"))
-                .clone();
-            let pointer = " ".repeat(token.column - 1) + "┈┈↳";
-            let filename = std::env::var("ZEKKEN_CURRENT_FILE").unwrap_or_else(|_| String::from("<unknown>"));
-            let token_value = if token.kind == TokenType::EOF {
+            let expected = format!("{:?}", type_);
+            let found = if token.kind == TokenType::EOF {
                 String::from("End Of File")
             } else {
-                token.value.clone()
+                format!("{:?} ({})", token.kind, token.value)
             };
-            let error = ZekkenError::SyntaxError {
-                message: err.to_string(),
-                filename,
-                line: token.line,
-                column: token.column,
-                pointer,
-                line_content,
-                expected: format!("{:?}", type_),
-                found: format!("{:?} ({})", token.kind, token_value),
-            };
-            panic!("{}", error);
+            let error = ZekkenError::syntax(
+                err,
+                token.line,
+                token.column,
+                Some(&expected),
+                Some(&found)
+            );
+            eprintln!("{}", error);
+            std::process::exit(1);
         }
-        self.consume();
+        self.consume(); // Consume the token after validating it
         token
     }
 
@@ -808,22 +802,13 @@ impl Parser {
             TokenType::OpenBracket => self.parse_array_lit(),
             _ => {
                 let token = self.at().clone();
-                let line_content = self.source_lines.get(token.line - 1)
-                    .unwrap_or(&String::from("<unknown>"))
-                    .clone();
-                let pointer = " ".repeat(token.column - 1) + "┈┈↳";
-                let filename = std::env::var("ZEKKEN_CURRENT_FILE")
-                    .unwrap_or_else(|_| String::from("<unknown>"));
-                let error = ZekkenError::SyntaxError {
-                    message: format!("Unexpected token in expression"),
-                    filename,
-                    line: token.line,
-                    column: token.column,
-                    line_content,
-                    pointer,
-                    expected: "expression".to_string(),
-                    found: format!("{:?} ({})", token.kind, token.value),
-                };
+                let error = ZekkenError::syntax(
+                    "Unexpected token in expression",
+                    token.line,
+                    token.column,
+                    Some("expression"),
+                    Some(&format!("{:?} ({})", token.kind, token.value)),
+                );
                 panic!("{}", error);
             }
         };

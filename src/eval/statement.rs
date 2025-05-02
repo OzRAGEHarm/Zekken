@@ -2,10 +2,9 @@ use crate::ast::*;
 use crate::environment::{Environment, Value, FunctionValue};
 use crate::parser::Parser;
 use super::expression::evaluate_expression;
-use crate::errors::{ZekkenError, RuntimeErrorType, Location, runtime_error, type_error};
+use crate::errors::ZekkenError;
 use crate::libraries::load_library;
 use crate::lexer::DataType;
-use std::env;
 use std::collections::HashMap;
 
 // Check if the value type matches the expected type
@@ -19,6 +18,22 @@ fn check_value_type(value: &Value, expected: &DataType) -> bool {
         (Value::Object(_), DataType::Object) => true,
         (Value::Function(_), DataType::Fn) => true,
         _ => false,
+    }
+}
+
+// Helper to get a string name for Value type
+fn value_type_name(val: &Value) -> &'static str {
+    match val {
+        Value::Int(_) => "int",
+        Value::Float(_) => "float",
+        Value::String(_) => "string",
+        Value::Boolean(_) => "bool",
+        Value::Array(_) => "array",
+        Value::Object(_) => "object",
+        Value::Function(_) => "function",
+        Value::NativeFunction(_) => "native function",
+        Value::Void => "void",
+        _ => "unknown",
     }
 }
 
@@ -44,19 +59,18 @@ pub fn evaluate_statement(stmt: &Stmt, env: &mut Environment) -> Result<Option<V
 
 // Evaluate the entire program
 fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
-    //let current_file = env::var("ZEKKEN_CURRENT_FILE").unwrap_or_default();
-    
     // Process imports first
     for import in &program.imports {
         if let Content::Statement(stmt) = &*import {
             match **stmt {
                 Stmt::Include(ref include) => evaluate_include(include, env)?,
                 Stmt::Use(ref use_stmt) => evaluate_use(use_stmt, env)?,
-                _ => return Err(runtime_error(
+                _ => return Err(ZekkenError::syntax(
                     "Invalid import statement",
-                    RuntimeErrorType::SyntaxError,
                     0,
-                    0
+                     0,
+                    None,
+                    None,
                 ))
             };
         }
@@ -85,24 +99,15 @@ fn evaluate_var_declaration(decl: &VarDecl, env: &mut Environment) -> Result<Opt
             Content::Expression(expr) => {
                 let val = evaluate_expression(expr, env)?;
                 if !check_value_type(&val, &decl.type_) {
-                    return Err(type_error(
+                    return Err(ZekkenError::type_error(
                         &format!("Type mismatch in variable declaration '{}'", decl.ident),
                         &format!("{:?}", decl.type_),
-                        &format!("{:?}", val),
-                        Location {
-                            filename: env::var("ZEKKEN_CURRENT_FILE").unwrap_or_default(),
-                            line: decl.location.line,
-                            column: decl.location.column,
-                            line_content: env::var("ZEKKEN_SOURCE_LINES")
-                                .unwrap_or_default()
-                                .lines()
-                                .nth(decl.location.line - 1)
-                                .unwrap_or("")
-                                .to_string(),
-                        }
+                        value_type_name(&val),
+                        decl.location.line,
+                        decl.location.column
                     ));
                 }
-                val // Return the value directly instead of Some(val)
+                val
             },
             Content::Statement(stmt) => {
                 if let Some(val) = evaluate_statement(stmt, env)? {
@@ -116,7 +121,7 @@ fn evaluate_var_declaration(decl: &VarDecl, env: &mut Environment) -> Result<Opt
     };
 
     env.declare(decl.ident.clone(), value.clone(), decl.constant);
-    Ok(Some(value))
+    Ok(None)
 }
 
 // Handle function declarations
@@ -136,16 +141,16 @@ fn evaluate_object_declaration(obj: &ObjectDecl, env: &mut Environment) -> Resul
     let mut keys = Vec::new();
     for property in &obj.properties {
         let value = evaluate_expression(&property.value, env)
-            .map_err(|e| runtime_error(
+            .map_err(|e| ZekkenError::type_error(
                 &format!("Failed to evaluate property '{}': {}", property.key, e),
-                RuntimeErrorType::TypeError,
+                "object",
+                "property evaluation failed",
                 obj.location.line,
                 obj.location.column
             ))?;
         keys.push(property.key.clone());
         object_map.insert(property.key.clone(), value);
     }
-    // Store key order as a hidden property
     object_map.insert("__keys__".to_string(), Value::Array(keys.iter().map(|k| Value::String(k.clone())).collect()));
     env.declare(obj.ident.clone(), Value::Object(object_map), false);
     Ok(None)
@@ -154,7 +159,6 @@ fn evaluate_object_declaration(obj: &ObjectDecl, env: &mut Environment) -> Resul
 // Handle if statements
 fn evaluate_if_statement(if_stmt: &IfStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     let test_result = evaluate_expression(&if_stmt.test, env)?;
-    
     match test_result {
         Value::Boolean(true) => evaluate_block_content(&if_stmt.body, env),
         Value::Boolean(false) => {
@@ -164,9 +168,10 @@ fn evaluate_if_statement(if_stmt: &IfStmt, env: &mut Environment) -> Result<Opti
                 Ok(None)
             }
         }
-        _ => Err(runtime_error(
+        _ => Err(ZekkenError::type_error(
             "If statement condition must evaluate to a boolean",
-            RuntimeErrorType::TypeError,
+            "bool",
+            value_type_name(&test_result),
             if_stmt.location.line,
             if_stmt.location.column
         ))
@@ -180,80 +185,80 @@ fn evaluate_for_statement(for_stmt: &ForStmt, env: &mut Environment) -> Result<O
             let collection_value = match &var_decl.value {
                 Some(content) => match content {
                     Content::Expression(expr) => evaluate_expression(expr, env)?,
-                    _ => return Err(runtime_error(
+                    _ => return Err(ZekkenError::runtime(
                         "Expected expression in for loop initialization",
-                        RuntimeErrorType::SyntaxError,
                         for_stmt.location.line,
-                        for_stmt.location.column
+                        for_stmt.location.column,
+                        Some("for |x| in array { ... }"),
                     )),
                 },
-                None => return Err(runtime_error(
+                None => return Err(ZekkenError::runtime(
                     "For loop initialization requires a value",
-                    RuntimeErrorType::SyntaxError,
                     for_stmt.location.line,
-                    for_stmt.location.column
+                    for_stmt.location.column,
+                    None,
                 )),
             };
-            
             match collection_value {
                 Value::Object(ref map) => evaluate_for_object(map, var_decl, &for_stmt.body, env),
                 Value::Array(arr) => evaluate_for_array(arr, var_decl, &for_stmt.body, env),
-                _ => Err(runtime_error(
+                _ => Err(ZekkenError::type_error(
                     "For loop must iterate over an object or array",
-                    RuntimeErrorType::TypeError,
+                    "object or array",
+                    value_type_name(&collection_value),
                     for_stmt.location.line,
                     for_stmt.location.column
                 ))
             }
         } else {
-            Err(runtime_error(
+            Err(ZekkenError::runtime(
                 "For loop requires a variable declaration",
-                RuntimeErrorType::SyntaxError,
                 for_stmt.location.line,
-                for_stmt.location.column
+                for_stmt.location.column,
+                None
             ))
         }
     } else {
-        Err(runtime_error(
+        Err(ZekkenError::runtime(
             "For loop requires an initialization",
-            RuntimeErrorType::SyntaxError,
             for_stmt.location.line,
-            for_stmt.location.column
+            for_stmt.location.column,
+            None
         ))
     }
 }
 
 // Handle while statements
 fn evaluate_while_statement(while_stmt: &WhileStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
+    let mut result = None;
     loop {
-        match evaluate_expression(&while_stmt.test, env)? {
-            Value::Boolean(false) => break,
+        let test_result = evaluate_expression(&while_stmt.test, env)?;
+        match test_result {
             Value::Boolean(true) => {
-                let result = evaluate_block_content(&while_stmt.body, env)?;
-                // If body returns a value, update the variable used in condition
-                if let Some(value) = result {
-                    // Extract variable name from test expression
-                    if let Expr::Binary(ref binary) = *while_stmt.test {
-                        if let Expr::Identifier(ref ident) = *binary.left {
-                            env.assign(&ident.name, value).map_err(|e| runtime_error(
-                                &format!("Failed to assign to variable '{}': {}", ident.name, e),
-                                RuntimeErrorType::ReferenceError,
-                                while_stmt.location.line,
-                                while_stmt.location.column
-                            ))?;
+                for content in &while_stmt.body {
+                    match &**content {
+                        Content::Statement(stmt) => {
+                            result = evaluate_statement(stmt, env)?;
+                        }
+                        Content::Expression(expr) => {
+                            result = Some(evaluate_expression(expr, env)?);
                         }
                     }
                 }
             }
-            _ => return Err(runtime_error(
-                "While loop condition must evaluate to a boolean",
-                RuntimeErrorType::TypeError,
-                while_stmt.location.line,
-                while_stmt.location.column
-            )),
+            Value::Boolean(false) => break,
+            _ => {
+                return Err(ZekkenError::type_error(
+                    "While loop condition must evaluate to a boolean",
+                    "bool",
+                    value_type_name(&test_result),
+                    while_stmt.location.line,
+                    while_stmt.location.column
+                ))
+            }
         }
     }
-    Ok(None)
+    Ok(result)
 }
 
 // Handle try-catch statements
@@ -263,18 +268,8 @@ fn evaluate_try_catch(try_catch: &TryCatchStmt, env: &mut Environment) -> Result
         Err(error) => {
             if let Some(catch_block) = &try_catch.catch_block {
                 let mut catch_env = Environment::new_with_parent(env.clone());
-                // Convert error to string value that can be used in catch block
-                let error_str = match error {
-                    ZekkenError::RuntimeError { message, .. } => message,
-                    ZekkenError::TypeError { message, .. } => message,
-                    ZekkenError::ReferenceError { message, .. } => message,
-                    _ => error.to_string()
-                };
-                
-                // Make error available as 'e' variable in catch block
+                let error_str = error.to_string();
                 catch_env.declare("e".to_string(), Value::String(error_str), false);
-                
-                // Evaluate catch block with error value
                 evaluate_block_content(catch_block, &mut catch_env)
             } else {
                 Err(error)
@@ -331,20 +326,18 @@ fn evaluate_lambda(lambda: &LambdaDecl, env: &mut Environment) -> Result<Option<
 
 // Handle use statements for importing libraries
 fn evaluate_use(use_stmt: &UseStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
-    // Set up __IMPORT_METHODS__ for selective import
     if let Some(methods) = &use_stmt.methods {
         let method_values = methods.iter().map(|m| Value::String(m.clone())).collect();
         env.declare("__IMPORT_METHODS__".to_string(), Value::Array(method_values), true);
     }
 
-    // Load the library/module
     match load_library(&use_stmt.module, env) {
         Ok(_) => Ok(None),
-        Err(e) => Err(runtime_error(
+        Err(e) => Err(ZekkenError::runtime(
             &format!("Failed to load library '{}': {}", use_stmt.module, e),
-            RuntimeErrorType::ReferenceError,
             use_stmt.location.line,
             use_stmt.location.column,
+            None,
         )),
     }
 }
@@ -356,61 +349,73 @@ fn evaluate_include(include: &IncludeStmt, env: &mut Environment) -> Result<Opti
         .unwrap_or_default();
 
     let file_path = if include.file_path.contains("../") || include.file_path.starts_with("./") {
-        // This is a relative path, combine it with current directory
         let mut path = std::path::PathBuf::from(current_dir);
-        // canonicalize() will resolve .. and . in paths
         path.push(&include.file_path);
         std::fs::canonicalize(path)
-            .map_err(|e| runtime_error(
+            .map_err(|e| ZekkenError::runtime(
                 &format!("Invalid include path: {}", e),
-                RuntimeErrorType::ReferenceError,
                 include.location.line,
-                include.location.column
+                include.location.column,
+                None,
             ))?
             .to_string_lossy()
             .to_string()
     } else {
-        // Treat as a path relative to current directory
         let mut path = std::path::PathBuf::from(current_dir);
         path.push(&include.file_path);
         path.to_string_lossy().to_string()
     };
     
     let file_contents = std::fs::read_to_string(&file_path)
-        .map_err(|e| runtime_error(
+        .map_err(|e| ZekkenError::runtime(
             &format!("Failed to include file '{}': {}", file_path, e),
-            RuntimeErrorType::ReferenceError,
             include.location.line,
-            include.location.column
+            include.location.column,
+            None,
         ))?;
+
+    // Save previous file context
+    let prev_file = std::env::var("ZEKKEN_CURRENT_FILE").unwrap_or_else(|_| "<unknown>".to_string());
+    // Set current file context to included file
+    std::env::set_var("ZEKKEN_CURRENT_FILE", &file_path);
 
     let mut parser = Parser::new();
     let included_ast = parser.produce_ast(file_contents);
 
-    let mut temp_env = Environment::new();
-    evaluate_statement(&Stmt::Program(included_ast), &mut temp_env)?;
+    // Create a new child environment with current env as parent
+    let mut child_env = Environment::new_with_parent(env.clone());
 
+    // Evaluate included AST in child environment
+    let result = evaluate_statement(&Stmt::Program(included_ast), &mut child_env);
+
+    // Restore previous file context
+    std::env::set_var("ZEKKEN_CURRENT_FILE", prev_file);
+
+    result?;
+
+    // Copy exported methods or all variables from child_env to current env
     match &include.methods {
         Some(methods) => {
             for method in methods {
-                if let Some(value) = temp_env.lookup(method) {
+                if let Some(value) = child_env.lookup(method) {
                     env.declare(method.clone(), value, false);
                 } else {
-                    return Err(runtime_error(
+                    return Err(ZekkenError::runtime(
                         &format!("Method '{}' not found in included file", method),
-                        RuntimeErrorType::ReferenceError,
                         include.location.line,
-                        include.location.column
+                        include.location.column,
+                        None,
                     ));
                 }
             }
         }
         None => {
-            for (name, value) in &temp_env.variables {
+            for (name, value) in &child_env.variables {
                 env.declare(name.clone(), value.clone(), false);
             }
         }
     }
+
     Ok(None)
 }
 
@@ -420,11 +425,11 @@ fn evaluate_export(exports: &ExportStmt, env: &mut Environment) -> Result<Option
         if let Some(value) = env.lookup(name) {
             env.declare(name.clone(), value, false);
         } else {
-            return Err(runtime_error(
+            return Err(ZekkenError::runtime(
                 &format!("Cannot export undefined value '{}'", name),
-                RuntimeErrorType::ReferenceError,
                 exports.location.line,
-                exports.location.column
+                exports.location.column,
+                None,
             ));
         }
     }
@@ -440,20 +445,21 @@ fn evaluate_for_object(
 ) -> Result<Option<Value>, ZekkenError> {
     let idents: Vec<String> = var_decl.ident.split(", ").map(|s| s.to_string()).collect();
     if idents.len() != 2 {
-        return Err(runtime_error(
+        return Err(ZekkenError::syntax(
             "Object iteration requires two identifiers (key, value)",
-            RuntimeErrorType::SyntaxError,
             var_decl.location.line,
             var_decl.location.column,
+            None,
+            None,
         ));
     }
-    // Use the stored key order
     let keys = if let Some(Value::Array(keys)) = map.get("__keys__") {
         keys
     } else {
-        return Err(runtime_error(
+        return Err(ZekkenError::type_error(
             "Object missing key order",
-            RuntimeErrorType::TypeError,
+            "array",
+            "missing",
             var_decl.location.line,
             var_decl.location.column,
         ));
@@ -480,11 +486,12 @@ fn evaluate_for_array(
 ) -> Result<Option<Value>, ZekkenError> {
     let idents: Vec<String> = var_decl.ident.split(", ").map(|s| s.to_string()).collect();
     if idents.len() != 1 {
-        return Err(runtime_error(
+        return Err(ZekkenError::syntax(
             "Array iteration requires one identifier",
-            RuntimeErrorType::SyntaxError,
             var_decl.location.line,
-            var_decl.location.column
+            var_decl.location.column,
+            None,
+            None,
         ));
     }
 

@@ -105,3 +105,9 @@
 - Added tests for `math` and `fs` libraries/modules
 - Fixed `math` module
 - Updated `syntax.zk` in `tests` directory
+
+### Early Development Build #21 (5/1/25):
+- Updated error handler and made it better
+- Fixed issue where lines and columns wouldn't be correctly counted
+- Fixed a few issues with parsing
+- TODO: Fix 'Reference Error'

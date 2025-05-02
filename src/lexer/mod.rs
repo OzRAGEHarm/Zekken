@@ -221,85 +221,115 @@ pub fn tokenize(source: String) -> Vec<Token> {
 
     while index < len {
         let c = src[index];
-        index += 1;
+
+        // Handle newlines
         if c == '\n' {
             line += 1;
             column = 1;
-        } else {
-            column += 1;
+            index += 1;
+            continue;
         }
+
+        // Handle whitespace (except newlines)
         if c.is_whitespace() {
+            index += 1;
             column += 1;
             continue;
         }
-        if let Some(token) = tokenize_char(&src, &mut index, c, line, column) {
-            tokens.push(token);
+
+        // Get token
+        match tokenize_char(&src, index, line, column) {
+            Some(token) => {
+                column += token.length;
+                tokens.push(token.clone());
+                index += token.length;
+            }
+            None => {
+                index += 1;
+                column += 1;
+            }
         }
     }
+
     tokens.push(Token::new("".to_string(), TokenType::EOF, line, column));
     tokens
 }
 
-fn tokenize_char(src: &Vec<char>, index: &mut usize, cur: char, line: usize, column: usize) -> Option<Token> {
+fn tokenize_char(src: &Vec<char>, start: usize, line: usize, column: usize) -> Option<Token> {
     let len = src.len();
-    // Handle comment cases (for '/' we check next char)
-    if cur == '/' && *index < len {
-        if src[*index] == '/' {
-            return Some(parse_single_line_comment(src, index, line, column));
-        } else if src[*index] == '*' {
-            return Some(parse_multi_line_comment(src, index, line, column));
+    if start >= len {
+        return None;
+    }
+
+    let cur = src[start];
+
+    // Handle comments
+    if cur == '/' && start + 1 < len {
+        let next_char = src[start + 1];
+        if next_char == '/' {
+            return Some(parse_single_line_comment(src, start, line, column));
+        } else if next_char == '*' {
+            return Some(parse_multi_line_comment(src, start, line, column));
         }
     }
-    // Check for 2-character tokens
-    if *index < len {
-        let next_char = src[*index];
-        match (cur, next_char) {
-            ('=', '>') => { *index += 1; return Some(Token::new("=>".to_string(), TokenType::FatArrow, line, column)); }
-            ('-', '>') => { *index += 1; return Some(Token::new("->".to_string(), TokenType::ThinArrow, line, column)); }
-            ('|', '|') => { *index += 1; return Some(Token::new("||".to_string(), TokenType::BinOp(BinOp::Or), line, column)); }
-            ('&', '&') => { *index += 1; return Some(Token::new("&&".to_string(), TokenType::BinOp(BinOp::And), line, column)); }
-            ('!', '=') => { *index += 1; return Some(Token::new("!=".to_string(), TokenType::BinOp(BinOp::Neq), line, column)); }
-            ('=', '=') => { *index += 1; return Some(Token::new("==".to_string(), TokenType::BinOp(BinOp::Eq), line, column)); }
-            ('<', '=') => { *index += 1; return Some(Token::new("<=".to_string(), TokenType::BinOp(BinOp::LessEq), line, column)); }
-            ('>', '=') => { *index += 1; return Some(Token::new(">=".to_string(), TokenType::BinOp(BinOp::GreaterEq), line, column)); }
-            _ => {}
+
+    // Check for multi-character tokens like '=>' and '->'
+    if start + 1 < len {
+        let two_chars = format!("{}{}", cur, src[start + 1]);
+        for &(ch, ref token_type) in TOKEN_CHAR.iter() {
+            if ch == two_chars {
+                return Some(Token::new(ch.to_string(), *token_type, line, column));
+            }
         }
     }
-    // Handle numbers
-    if cur.is_digit(10) || (cur == '-' && *index < len && src[*index].is_digit(10)) {
-        return Some(parse_number(src, index, cur, line, column, true));
+
+    // Check for identifiers
+    if cur.is_alphabetic() || cur == '_' {
+        return Some(parse_identifier(src, start, line, column));
     }
-    // Handle string literals
-    if cur == '"' || cur == '\'' {
-        return Some(parse_string(src, index, cur, line, column));
-    }
-    // Check TOKEN_CHAR mapping (compare cur.to_string())
-    if let Some(token_type) = TOKEN_CHAR.iter().find_map(|&(ref s, ref tt)| {
-        if s == &cur.to_string() { Some(*tt) } else { None }
-    }) {
-        return Some(Token::new(cur.to_string(), token_type, line, column));
-    }
-    // Handle operators
-    if let Some(token) = parse_operators(src, index, line, column, cur) {
+
+    // Check for operators
+    if let Some(token) = parse_operators(src, start, line, column, cur) {
         return Some(token);
     }
-    // Handle identifier & keywords
-    if cur.is_alphabetic() || cur == '_' {
-        return Some(parse_identifier(src, index, cur, line, column));
+
+    // Check for numbers
+    if cur.is_digit(10) || (cur == '-' && start + 1 < len && src[start + 1].is_digit(10)) {
+        return Some(parse_number(src, start, line, column));
     }
+
+    // Check for strings
+    if cur == '"' || cur == '\'' {
+        return Some(parse_string(src, start, line, column));
+    }
+
+    // Check for single character tokens like colon, comma, semicolon, etc.
+    for &(ch, ref token_type) in TOKEN_CHAR.iter() {
+        if ch.len() == 1 && ch.chars().next().unwrap() == cur {
+            return Some(Token::new(ch.to_string(), *token_type, line, column));
+        }
+    }
+
     None
 }
 
-fn parse_number(src: &Vec<char>, index: &mut usize, initial: char, line: usize, column: usize, mut is_integer: bool) -> Token {
-    let mut num = initial.to_string();
-    while *index < src.len() {
-        let c = src[*index];
+fn parse_number(src: &Vec<char>, start: usize, line: usize, column: usize) -> Token {
+    let mut num = String::new();
+    let mut idx = start;
+    let len = src.len();
+    let mut is_integer = true;
+    if src[idx] == '-' {
+        num.push('-');
+        idx += 1;
+    }
+    while idx < len {
+        let c = src[idx];
         if c.is_digit(10) {
             num.push(c);
-            *index += 1;
+            idx += 1;
         } else if c == '.' && is_integer {
             num.push(c);
-            *index += 1;
+            idx += 1;
             is_integer = false;
         } else {
             break;
@@ -309,14 +339,15 @@ fn parse_number(src: &Vec<char>, index: &mut usize, initial: char, line: usize, 
     Token::new(num, token_type, line, column)
 }
 
-fn parse_string(src: &Vec<char>, index: &mut usize, quote: char, line: usize, column: usize) -> Token {
+fn parse_string(src: &Vec<char>, start: usize, line: usize, column: usize) -> Token {
+    let quote = src[start];
     let mut content = String::new();
     let mut escaped = false;
+    let mut idx = start + 1;
+    let len = src.len();
 
-    while *index < src.len() {
-        let c = src[*index];
-        *index += 1;
-
+    while idx < len {
+        let c = src[idx];
         if escaped {
             match c {
                 'n' => content.push('\n'),
@@ -331,35 +362,44 @@ fn parse_string(src: &Vec<char>, index: &mut usize, quote: char, line: usize, co
         } else if c == '\\' {
             escaped = true;
         } else if c == quote {
+            idx += 1; // Consume the closing quote
             break;
         } else {
             content.push(c);
         }
+        idx += 1;
     }
-    
-    Token::new(content, TokenType::String, line, column)
+    let length = idx - start;
+    Token::new(content, TokenType::String, line, column).with_length(length)
 }
 
-fn parse_single_line_comment(src: &Vec<char>, index: &mut usize, line: usize, column: usize) -> Token {
+// Add a method to Token to set length
+impl Token {
+    pub fn with_length(mut self, length: usize) -> Self {
+        self.length = length;
+        self
+    }
+}
+
+fn parse_single_line_comment(src: &Vec<char>, start: usize, line: usize, column: usize) -> Token {
     let mut content = String::new();
-    // Skip the already-consumed '/' and the next '/'
-    *index += 1;
-    while *index < src.len() && src[*index] != '\n' {
-        content.push(src[*index]);
-        *index += 1;
+    let mut idx = start + 2; // skip both slashes
+    let len = src.len();
+    while idx < len && src[idx] != '\n' {
+        content.push(src[idx]);
+        idx += 1;
     }
     Token::new(content, TokenType::SingleLineComment, line, column)
 }
 
-fn parse_multi_line_comment(src: &Vec<char>, index: &mut usize, mut line: usize, mut column: usize) -> Token {
+fn parse_multi_line_comment(src: &Vec<char>, start: usize, mut line: usize, mut column: usize) -> Token {
     let mut content = String::new();
-    // Skip the already-consumed '*' after '/'
-    *index += 1;
-    while *index < src.len() {
-        let c = src[*index];
-        *index += 1;
-        if c == '*' && *index < src.len() && src[*index] == '/' {
-            *index += 1;
+    let mut idx = start + 2; // skip '/*'
+    let len = src.len();
+    while idx < len {
+        let c = src[idx];
+        if c == '*' && idx + 1 < len && src[idx + 1] == '/' {
+            idx += 2; // consume closing */
             break;
         }
         if c == '\n' {
@@ -369,43 +409,21 @@ fn parse_multi_line_comment(src: &Vec<char>, index: &mut usize, mut line: usize,
             column += 1;
         }
         content.push(c);
+        idx += 1;
     }
-    Token::new(content, TokenType::MultiLineComment, line, column)
+    let length = idx - start;
+    Token::new(content, TokenType::MultiLineComment, line, column).with_length(length)
 }
 
-fn parse_operators(src: &Vec<char>, index: &mut usize, line: usize, column: usize, cur: char) -> Option<Token> {
-    match cur {
-        '=' => parse_operator(src, index, line, column, "=", TokenType::AssignOp(AssignOp::Assign)),
-        '!' => parse_operator(src, index, line, column, "!", TokenType::BinOp(BinOp::Not)),
-        '&' => parse_operator(src, index, line, column, "&", TokenType::Ampersand),
-        '|' => parse_operator(src, index, line, column, "|", TokenType::Pipe),
-        '+' => parse_operator(src, index, line, column, "+", TokenType::ArithOp(ArithOp::Add)),
-        '-' => parse_operator(src, index, line, column, "-", TokenType::ArithOp(ArithOp::Sub)),
-        '*' => parse_operator(src, index, line, column, "*", TokenType::ArithOp(ArithOp::Mul)),
-        '/' => parse_operator(src, index, line, column, "/", TokenType::ArithOp(ArithOp::Div)),
-        '%' => parse_operator(src, index, line, column, "%", TokenType::ArithOp(ArithOp::Mod)),
-        '<' => parse_operator(src, index, line, column, "<", TokenType::BinOp(BinOp::Less)),
-        '>' => parse_operator(src, index, line, column, ">", TokenType::BinOp(BinOp::Greater)),
-        _ => None,
-    }
-}
-
-fn parse_operator(src: &Vec<char>, index: &mut usize, line: usize, column: usize, single: &str, single_type: TokenType) -> Option<Token> {
-    let mut token_val = single.to_string();
-    if *index < src.len() && src[*index] == single.chars().next().unwrap() {
-        token_val.push(src[*index]);
-        *index += 1;
-    }
-    Some(Token::new(token_val, single_type, line, column))
-}
-
-fn parse_identifier(src: &Vec<char>, index: &mut usize, initial: char, line: usize, column: usize) -> Token {
-    let mut ident = initial.to_string();
-    while *index < src.len() {
-        let c = src[*index];
+fn parse_identifier(src: &Vec<char>, start: usize, line: usize, column: usize) -> Token {
+    let mut ident = String::new();
+    let mut idx = start;
+    let len = src.len();
+    while idx < len {
+        let c = src[idx];
         if c.is_alphanumeric() || c == '_' {
             ident.push(c);
-            *index += 1;
+            idx += 1;
         } else {
             break;
         }
@@ -415,4 +433,21 @@ fn parse_identifier(src: &Vec<char>, index: &mut usize, initial: char, line: usi
         .find_map(|&(kw, ref tt)| if kw == ident { Some(*tt) } else { None })
         .unwrap_or(TokenType::Identifier);
     Token::new(ident, token_type, line, column)
+}
+
+fn parse_operators(_src: &Vec<char>, _start: usize, line: usize, column: usize, cur: char) -> Option<Token> {
+    match cur {
+        '=' => Some(Token::new("=".to_string(), TokenType::AssignOp(AssignOp::Assign), line, column)),
+        '!' => Some(Token::new("!".to_string(), TokenType::BinOp(BinOp::Not), line, column)),
+        '&' => Some(Token::new("&".to_string(), TokenType::Ampersand, line, column)),
+        '|' => Some(Token::new("|".to_string(), TokenType::Pipe, line, column)),
+        '+' => Some(Token::new("+".to_string(), TokenType::ArithOp(ArithOp::Add), line, column)),
+        '-' => Some(Token::new("-".to_string(), TokenType::ArithOp(ArithOp::Sub), line, column)),
+        '*' => Some(Token::new("*".to_string(), TokenType::ArithOp(ArithOp::Mul), line, column)),
+        '/' => Some(Token::new("/".to_string(), TokenType::ArithOp(ArithOp::Div), line, column)),
+        '%' => Some(Token::new("%".to_string(), TokenType::ArithOp(ArithOp::Mod), line, column)),
+        '<' => Some(Token::new("<".to_string(), TokenType::BinOp(BinOp::Less), line, column)),
+        '>' => Some(Token::new(">".to_string(), TokenType::BinOp(BinOp::Greater), line, column)),
+        _ => None,
+    }
 }

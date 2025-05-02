@@ -2,7 +2,7 @@ use crate::ast::*;
 use crate::environment::{Environment, Value};
 use std::collections::HashMap;
 use crate::eval::statement::evaluate_statement;
-use crate::errors::{ZekkenError, RuntimeErrorType, runtime_error};
+use crate::errors::ZekkenError;
 use regex::Regex;
 use crate::lexer::DataType;
 
@@ -43,9 +43,9 @@ pub fn evaluate_expression(expr: &Expr, env: &mut Environment) -> Result<Value, 
         Expr::Identifier(ident) => {
             match env.lookup(&ident.name) {
                 Some(value) => Ok(value),
-                None => Err(runtime_error(
+                None => Err(ZekkenError::reference(
                     &format!("Variable '{}' not found", ident.name),
-                    RuntimeErrorType::UndefinedVariable,
+                    &ident.name,
                     ident.location.line,
                     ident.location.column
                 ))
@@ -55,8 +55,8 @@ pub fn evaluate_expression(expr: &Expr, env: &mut Environment) -> Result<Value, 
         Expr::Call(call) => evaluate_call_expression(call, env),
         Expr::Member(member) => evaluate_member_expression(member, env),
         Expr::Assign(assign) => evaluate_assignment(assign, env),
-        Expr::Property(_) => Err(ZekkenError::InternalError(
-            "Property expression not supported in this context".to_string()
+        Expr::Property(_) => Err(ZekkenError::internal(
+            "Property expression not supported in this context",
         ))
     }
 }
@@ -67,9 +67,10 @@ fn evaluate_binary_expression(expr: &BinaryExpr, env: &mut Environment) -> Resul
 
     if (matches!(left, Value::Int(_)) && matches!(right, Value::Float(_))) ||
        (matches!(left, Value::Float(_)) && matches!(right, Value::Int(_))) {
-        return Err(runtime_error(
-            &format!("Type error: Cannot perform '{}' operation between int and float", expr.operator),
-            RuntimeErrorType::TypeError,
+        return Err(ZekkenError::type_error(
+            &format!("Cannot perform '{}' operation between int and float", expr.operator),
+            "int or float",
+            "mixed types",
             expr.location.line,
             expr.location.column,
         ));
@@ -77,39 +78,39 @@ fn evaluate_binary_expression(expr: &BinaryExpr, env: &mut Environment) -> Resul
     
     match expr.operator.as_str() {
         "+" => add_values(&left, &right)
-            .map_err(|msg| runtime_error(&msg, RuntimeErrorType::TypeError, expr.location.line, expr.location.column)),
+            .map_err(|msg| ZekkenError::type_error(&msg, "valid types", "invalid types", expr.location.line, expr.location.column)),
         "-" => subtract_values(&left, &right)
-            .map_err(|msg| runtime_error(&msg, RuntimeErrorType::TypeError, expr.location.line, expr.location.column)),
+            .map_err(|msg| ZekkenError::type_error(&msg, "valid types", "invalid types", expr.location.line, expr.location.column)),
         "*" => multiply_values(&left, &right)
-            .map_err(|msg| runtime_error(&msg, RuntimeErrorType::TypeError, expr.location.line, expr.location.column)),
+            .map_err(|msg| ZekkenError::type_error(&msg, "valid types", "invalid types", expr.location.line, expr.location.column)),
         "/" => divide_values(&left, &right)
-            .map_err(|msg| runtime_error(
+            .map_err(|msg| ZekkenError::runtime(
                 &msg, 
-                if msg.contains("zero") { RuntimeErrorType::DivisionByZero } else { RuntimeErrorType::TypeError },
                 expr.location.line,
-                expr.location.column
+                expr.location.column,
+                if msg.contains("zero") { Some("division by zero") } else { None },
             )),
         "%" => modulo_values(left, right)
-            .map_err(|msg| runtime_error(&msg, RuntimeErrorType::TypeError, expr.location.line, expr.location.column)),
+            .map_err(|msg| ZekkenError::type_error(&msg, "valid types", "invalid types", expr.location.line, expr.location.column)),
         "==" => Ok(Value::Boolean(compare_values(&left, &right))),
         "!=" => Ok(Value::Boolean(!compare_values(&left, &right))),
         "<" => compare_less_than(left, right)
-            .map_err(|e| runtime_error(&e, RuntimeErrorType::TypeError, expr.location.line, expr.location.column)),
+            .map_err(|e| ZekkenError::type_error(&e, "valid types", "invalid types", expr.location.line, expr.location.column)),
         ">" => compare_greater_than(left, right)
-            .map_err(|e| runtime_error(&e, RuntimeErrorType::TypeError, expr.location.line, expr.location.column)),
+            .map_err(|e| ZekkenError::type_error(&e, "valid types", "invalid types", expr.location.line, expr.location.column)),
         "<=" => compare_less_equal(left, right)
-            .map_err(|e| runtime_error(&e, RuntimeErrorType::TypeError, expr.location.line, expr.location.column)),
+            .map_err(|e| ZekkenError::type_error(&e, "valid types", "invalid types", expr.location.line, expr.location.column)),
         ">=" => compare_greater_equal(left, right)
-            .map_err(|e| runtime_error(&e, RuntimeErrorType::TypeError, expr.location.line, expr.location.column)),
+            .map_err(|e| ZekkenError::type_error(&e, "valid types", "invalid types", expr.location.line, expr.location.column)),
         "&&" => logical_and(left, right)
-            .map_err(|e| runtime_error(&e, RuntimeErrorType::TypeError, expr.location.line, expr.location.column)),
+            .map_err(|e| ZekkenError::type_error(&e, "boolean", "non-boolean", expr.location.line, expr.location.column)),
         "||" => logical_or(left, right)
-            .map_err(|e| runtime_error(&e, RuntimeErrorType::TypeError, expr.location.line, expr.location.column)),
-        operator => Err(runtime_error(
+            .map_err(|e| ZekkenError::type_error(&e, "boolean", "non-boolean", expr.location.line, expr.location.column)),
+        operator => Err(ZekkenError::runtime(
             &format!("Unknown operator: {}", operator), 
-            RuntimeErrorType::Other,
             expr.location.line, 
-            expr.location.column
+            expr.location.column,
+            None
         ))
     }
 }
@@ -151,15 +152,15 @@ pub fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Resul
             for arg in &call.args {
                 args.push(evaluate_expression(arg, env)?);
             }
-            native_func(args).map_err(|s| runtime_error(&s, RuntimeErrorType::InvalidArgument, call.location.line, call.location.column))
+            native_func(args).map_err(|s| ZekkenError::runtime(&s, call.location.line, call.location.column, None))
         },
         Value::Function(func) => {
             if call.args.len() != func.params.len() {
-                return Err(runtime_error(
+                return Err(ZekkenError::runtime(
                     &format!("Expected {} arguments but got {}", func.params.len(), call.args.len()),
-                    RuntimeErrorType::InvalidArgument,
                     call.location.line,
-                    call.location.column
+                    call.location.column,
+                    Some("argument mismatch"),
                 ));
             }
 
@@ -170,10 +171,11 @@ pub fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Resul
 
             for (param, arg) in func.params.iter().zip(args.iter()) {
                 if !check_value_type(arg, &param.type_) {
-                    return Err(runtime_error(
-                        &format!("Type mismatch: parameter '{}' expects {:?} but got {:?}", 
+                    return Err(ZekkenError::type_error(
+                        &format!("Parameter '{}' expects {:?} but got {:?}", 
                             param.ident, param.type_, arg),
-                        RuntimeErrorType::TypeError,
+                        &format!("{:?}", param.type_),
+                        &format!("{:?}", arg),
                         call.location.line,
                         call.location.column
                     ));
@@ -200,16 +202,15 @@ pub fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Resul
             }
             Ok(result)
         },
-        _ => Err(runtime_error(
+        _ => Err(ZekkenError::type_error(
             "Cannot call non-function value",
-            RuntimeErrorType::TypeError,
+            "function",
+            "non-function",
             call.location.line,
             call.location.column
         ))
     }
 }
-
-// In function evaluate_member_expression, update the non-computed property branch:
 
 fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
     let object = evaluate_expression(&member.object, env)?;
@@ -218,19 +219,17 @@ fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Res
     } else {
         match *member.property {
             Expr::Identifier(ref ident) => Value::String(ident.name.clone()),
-            // Added support for string literals as property names
             Expr::StringLit(ref lit) => Value::String(lit.value.clone()),
-            _ => return Err(runtime_error(
+            _ => return Err(ZekkenError::type_error(
                 "Invalid property access",
-                RuntimeErrorType::TypeError,
+                "string",
+                "non-string",
                 member.location.line,
                 member.location.column,
             )),
         }
     };
 
-    // New conversion: if object is Array and property is a string that represents an integer,
-    // convert property to Value::Int.
     if let Value::Array(_) = object {
         if let Value::String(ref s) = property {
             if let Ok(idx) = s.parse::<i64>() {
@@ -240,55 +239,50 @@ fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Res
     }
 
     match (object, property) {
-        // Array indexing with numeric index
         (Value::Array(arr), Value::Int(index)) => {
             if index < 0 || index >= arr.len() as i64 {
-                return Err(runtime_error(
+                return Err(ZekkenError::runtime(
                     &format!("Array index out of bounds: {}", index),
-                    RuntimeErrorType::IndexOutOfBounds,
                     member.location.line,
-                    member.location.column
+                    member.location.column,
+                    Some("array indexing"),
                 ));
             }
             Ok(arr[index as usize].clone())
         },
-
-        // Object access with numeric index - treat as accessing nth key
         (Value::Object(map), Value::Int(index)) => {
-            // Retrieve keys in order
             let keys: Vec<_> = map.keys().collect();
             if index < 0 || index >= keys.len() as i64 {
-                return Err(runtime_error(
+                return Err(ZekkenError::runtime(
                     &format!("Object index out of bounds: {}", index),
-                    RuntimeErrorType::IndexOutOfBounds,
                     member.location.line,
-                    member.location.column
+                    member.location.column,
+                    Some("object indexing"),
                 ));
             }
             map.get(keys[index as usize])
                .cloned()
-               .ok_or_else(|| runtime_error(
+               .ok_or_else(|| ZekkenError::reference(
                    &format!("Property at index {} not found", index),
-                   RuntimeErrorType::ReferenceError,
+                   "<object>",
                    member.location.line,
                    member.location.column
                ))
         },
-
-        // Object access with string key
         (Value::Object(map), Value::String(key)) => {
             map.get(&key)
                .cloned()
-               .ok_or_else(|| runtime_error(
+               .ok_or_else(|| ZekkenError::reference(
                    &format!("Property '{}' not found", key),
-                   RuntimeErrorType::ReferenceError,
+                   &key,
                    member.location.line,
                    member.location.column
                ))
         },
-        _ => Err(runtime_error(
+        _ => Err(ZekkenError::type_error(
             "Invalid member access",
-            RuntimeErrorType::TypeError,
+            "object or array",
+            "other",
             member.location.line,
             member.location.column,
         )),
@@ -297,13 +291,13 @@ fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Res
 
 fn evaluate_assignment(assign: &AssignExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
     let value = evaluate_expression(&assign.right, env)?;
-    
+
     match *assign.left {
         Expr::Identifier(ref ident) => {
             env.assign(&ident.name, value.clone())
-                .map_err(|e| runtime_error(
+                .map_err(|e| ZekkenError::reference(
                     &e,
-                    RuntimeErrorType::ReferenceError,
+                    &ident.name,
                     assign.location.line,
                     assign.location.column
                 ))?;
@@ -316,9 +310,10 @@ fn evaluate_assignment(assign: &AssignExpr, env: &mut Environment) -> Result<Val
             } else {
                 match *member.property {
                     Expr::Identifier(ref ident) => Value::String(ident.name.clone()),
-                    _ => return Err(runtime_error(
+                    _ => return Err(ZekkenError::type_error(
                         "Invalid property access",
-                        RuntimeErrorType::TypeError,
+                        "string",
+                        "non-string",
                         member.location.line,
                         member.location.column
                     ))
@@ -329,35 +324,47 @@ fn evaluate_assignment(assign: &AssignExpr, env: &mut Environment) -> Result<Val
                 (Value::Object(ref mut map), Value::String(key)) => {
                     map.insert(key, value.clone());
                     env.assign(&format!("{:?}", member.object), object)
-                        .map_err(|e| runtime_error(&e, RuntimeErrorType::ReferenceError, assign.location.line, assign.location.column))?;
+                        .map_err(|e| ZekkenError::reference(
+                            &e,
+                            "<object>",
+                            assign.location.line,
+                            assign.location.column
+                        ))?;
                     Ok(value)
                 },
                 (Value::Array(ref mut arr), Value::Int(index)) => {
                     if index < 0 || index >= arr.len() as i64 {
-                        Err(runtime_error(
+                        Err(ZekkenError::runtime(
                             &format!("Index {} out of bounds", index),
-                            RuntimeErrorType::IndexOutOfBounds,
                             member.location.line,
-                            member.location.column
+                            member.location.column,
+                            Some("array assignment"),
                         ))
                     } else {
                         arr[index as usize] = value.clone();
                         env.assign(&format!("{:?}", member.object), object)
-                            .map_err(|e| runtime_error(&e, RuntimeErrorType::ReferenceError, assign.location.line, assign.location.column))?;
+                            .map_err(|e| ZekkenError::reference(
+                                &e,
+                                "<array>",
+                                assign.location.line,
+                                assign.location.column
+                            ))?;
                         Ok(value)
                     }
                 },
-                _ => Err(runtime_error(
+                _ => Err(ZekkenError::type_error(
                     "Invalid assignment target",
-                    RuntimeErrorType::TypeError,
+                    "object or array",
+                    "other",
                     assign.location.line,
                     assign.location.column
                 ))
             }
         },
-        _ => Err(runtime_error(
+        _ => Err(ZekkenError::type_error(
             "Invalid assignment target",
-            RuntimeErrorType::TypeError,
+            "identifier, object, or array",
+            "other",
             assign.location.line,
             assign.location.column
         ))
