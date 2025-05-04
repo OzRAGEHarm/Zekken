@@ -1,3 +1,4 @@
+// use fs (file system) library
 use fs;
 
 // create a file

@@ -36,5 +36,5 @@ if bmi < 25.0 {
 @println => |""|
 @println => |"Person details:"|
 for |key, value| in person {
-  @println => |key, ":", value|
+  @println => |key + ": " + value|
 }

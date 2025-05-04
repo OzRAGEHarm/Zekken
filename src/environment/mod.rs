@@ -3,10 +3,30 @@
 use std::collections::HashMap;
 use std::io::Write;
 use std::fmt::{self, Display, Formatter};
-
+use std::sync::Arc;
 use crate::ast::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Method {
+    Length,
+    ToUpper,
+    ToLower,
+    Trim,
+    Split,
+    Push,
+    Pop,
+    Join,
+    First,
+    Last,
+    Keys,
+    Values,
+    Entries,
+    Round,
+    Floor,
+    Ceil,
+    ToString,
+}
+
 pub enum Value {
   Int(i64),
   Float(f64),
@@ -15,12 +35,51 @@ pub enum Value {
   Array(Vec<Value>),
   Object(HashMap<String, Value>),
   Function(FunctionValue),
-  NativeFunction(fn(Vec<Value>) -> Result<Value, String>),
+  NativeFunction(Arc<dyn Fn(Vec<Value>) -> Result<Value, String> + Send + Sync + 'static>),
   Complex { real: f64, imag: f64 },
   Vector(Vec<f64>),
   Matrix(Vec<Vec<f64>>),
   Void,
 }
+
+impl std::fmt::Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Int(i) => write!(f, "Int({})", i),
+            Value::Float(fl) => write!(f, "Float({})", fl),
+            Value::String(s) => write!(f, "String({:?})", s),
+            Value::Boolean(b) => write!(f, "Boolean({})", b),
+            Value::Array(arr) => write!(f, "Array({:?})", arr),
+            Value::Object(obj) => write!(f, "Object({:?})", obj),
+            Value::Function(_) => write!(f, "Function(...)"),
+            Value::NativeFunction(_) => write!(f, "NativeFunction(...)"),
+            Value::Complex { real, imag } => write!(f, "Complex {{ real: {}, imag: {} }}", real, imag),
+            Value::Vector(v) => write!(f, "Vector({:?})", v),
+            Value::Matrix(m) => write!(f, "Matrix({:?})", m),
+            Value::Void => write!(f, "Void"),
+        }
+    }
+}
+
+impl Clone for Value {
+    fn clone(&self) -> Self {
+        match self {
+            Value::Int(i) => Value::Int(*i),
+            Value::Float(f) => Value::Float(*f),
+            Value::String(s) => Value::String(s.clone()),
+            Value::Boolean(b) => Value::Boolean(*b),
+            Value::Array(arr) => Value::Array(arr.clone()),
+            Value::Object(obj) => Value::Object(obj.clone()),
+            Value::Function(func) => Value::Function(func.clone()),
+            Value::NativeFunction(f) => Value::NativeFunction(f.clone()),
+            Value::Complex { real, imag } => Value::Complex { real: *real, imag: *imag },
+            Value::Vector(v) => Value::Vector(v.clone()),
+            Value::Matrix(m) => Value::Matrix(m.clone()),
+            Value::Void => Value::Void,
+        }
+    }
+}
+
 
 impl Display for Value {
   fn fmt(&self, f: &mut Formatter) -> fmt::Result {
@@ -43,7 +102,10 @@ impl Display for Value {
                   if !first {
                       write!(f, ", ")?;
                   }
-                  write!(f, "{}", value)?;
+                  match value {
+                      Value::String(s) => write!(f, "\"{}\"", s)?,
+                      _ => write!(f, "{}", value)?,
+                  }
                   first = false;
               }
               write!(f, "]")
@@ -51,11 +113,31 @@ impl Display for Value {
           Value::Object(obj) => {
               write!(f, "{{")?;
               let mut first = true;
-              for (key, value) in obj {
+
+              // Get keys order from __keys__ property if present
+              let keys_order = if let Some(Value::Array(keys)) = obj.get("__keys__") {
+                  keys.iter().filter_map(|k| {
+                      if let Value::String(s) = k {
+                          Some(s)
+                      } else {
+                          None
+                      }
+                  }).collect::<Vec<&String>>()
+              } else {
+                  // Fallback to keys in arbitrary order
+                  obj.keys().filter(|k| *k != "__keys__").collect()
+              };
+
+              for key in keys_order {
                   if !first {
                       write!(f, ", ")?;
                   }
-                  write!(f, "{}: {}", key, value)?;
+                  if let Some(value) = obj.get(key) {
+                      match value {
+                          Value::String(s) => write!(f, "\"{}\": \"{}\"", key, s)?,
+                          _ => write!(f, "\"{}\": {}", key, value)?,
+                      }
+                  }
                   first = false;
               }
               write!(f, "}}")
@@ -120,7 +202,7 @@ impl Environment {
 
       env.variables.insert(
         "println".to_string(),
-        Value::NativeFunction(|args: Vec<Value>| -> Result<Value, String> {
+        Value::NativeFunction(Arc::new(|args: Vec<Value>| -> Result<Value, String> {
             let mut stdout = std::io::stdout();
 
             if args.is_empty() {
@@ -137,10 +219,10 @@ impl Environment {
 
             // Return the actual value instead of Void
             Ok(return_value)
-        })
+        }))
       );
 
-      env.declare("input".to_string(), Value::NativeFunction(|args| {
+      env.declare("input".to_string(), Value::NativeFunction(Arc::new(|args| {
           use std::io::{Write, stdin, stdout};
 
           if args.is_empty() {
@@ -161,7 +243,7 @@ impl Environment {
           let input = input.trim().to_string();
 
           Ok(Value::String(input))
-      }), false);
+      })), false);
 
       env
   }
@@ -285,4 +367,147 @@ impl Value {
           _ => None,
       }
   }
+
+  pub fn call_method(&self, method: Method, args: Vec<Value>) -> Result<Value, String> {
+      match self {
+          Value::String(s) => match method {
+              Method::Length => Ok(Value::Int(s.len() as i64)),
+              Method::ToUpper => Ok(Value::String(s.to_uppercase())),
+              Method::ToLower => Ok(Value::String(s.to_lowercase())),
+              Method::Trim => Ok(Value::String(s.trim().to_string())),
+              Method::Split => {
+                  if args.len() != 1 {
+                      return Err("split requires one argument".to_string());
+                  }
+                  let delimiter = match &args[0] {
+                      Value::String(s) => s,
+                      _ => return Err("split argument must be a string".to_string()),
+                  };
+                  let parts: Vec<Value> = s.split(delimiter)
+                      .map(|s| Value::String(s.to_string()))
+                      .collect();
+                  Ok(Value::Array(parts))
+              },
+              _ => Err(format!("Method '{}' not supported for string type", method_name(method))),
+          },
+          Value::Array(arr) => match method {
+              Method::Length => Ok(Value::Int(arr.len() as i64)),
+              Method::Push => {
+                  if args.len() != 1 {
+                      return Err("push requires one argument".to_string());
+                  }
+                  let mut new_arr = arr.clone();
+                  new_arr.push(args[0].clone());
+                  Ok(Value::Array(new_arr))
+              }
+              Method::Pop => {
+                  let mut new_arr = arr.clone();
+                  new_arr.pop().map_or(
+                      Ok(Value::Void),
+                      |v| Ok(v)
+                  )
+              }
+              Method::Join => {
+                  if args.len() != 1 {
+                      return Err("join requires one argument".to_string());
+                  }
+                  let separator = args[0].to_string();
+                  let strings: Result<Vec<String>, String> = arr.iter()
+                      .map(|v| Ok(v.to_string()))
+                      .collect::<Result<Vec<String>, String>>();
+                  strings.map(|strs| Value::String(strs.join(&separator)))
+              }
+              Method::First => arr.first().map_or(
+                  Ok(Value::Void),
+                  |v| Ok(v.clone())
+              ),
+              Method::Last => arr.last().map_or(
+                  Ok(Value::Void),
+                  |v| Ok(v.clone())
+              ),
+              _ => Err(format!("Method '{}' not supported for array type", method_name(method))),
+          },
+          Value::Object(obj) => match method {
+              Method::Keys => {
+                  let keys: Vec<Value> = obj.keys()
+                      .filter(|k| k != &"__keys__")
+                      .map(|k| Value::String(k.clone()))
+                      .collect();
+                  Ok(Value::Array(keys))
+              }
+              Method::Values => {
+                  let values: Vec<Value> = obj.iter()
+                      .filter(|(k, _)| k != &"__keys__")
+                      .map(|(_, v)| v.clone())
+                      .collect();
+                  Ok(Value::Array(values))
+              }
+              Method::Entries => {
+                  let entries: Vec<Value> = obj.iter()
+                      .filter(|(k, _)| k != &"__keys__")
+                      .map(|(k, v)| {
+                          Value::Array(vec![
+                              Value::String(k.clone()),
+                              v.clone()
+                          ])
+                      })
+                      .collect();
+                  Ok(Value::Array(entries))
+              }
+              _ => Err(format!("Method '{}' not supported for object type", method_name(method))),
+          },
+          Value::Int(n) => match method {
+              Method::Round | Method::Floor | Method::Ceil => Ok(Value::Int(*n)),
+              Method::ToString => Ok(Value::String(n.to_string())),
+              _ => Err(format!("Method '{}' not supported for int type", method_name(method))),
+          },
+          Value::Float(n) => match method {
+              Method::Round => Ok(Value::Int(n.round() as i64)),
+              Method::Floor => Ok(Value::Int(n.floor() as i64)),
+              Method::Ceil => Ok(Value::Int(n.ceil() as i64)),
+              Method::ToString => Ok(Value::String(n.to_string())),
+              _ => Err(format!("Method '{}' not supported for float type", method_name(method))),
+          },
+          _ => Err(format!("Type {} does not support methods", self.type_name())),
+      }
+  }
+
+  fn type_name(&self) -> &'static str {
+      match self {
+          Value::Int(_) => "int",
+          Value::Float(_) => "float",
+          Value::String(_) => "string",
+          Value::Boolean(_) => "boolean",
+          Value::Array(_) => "array",
+          Value::Object(_) => "object",
+          Value::Function(_) => "function",
+          Value::NativeFunction(_) => "native function",
+          Value::Complex { .. } => "complex",
+          Value::Vector(_) => "vector",
+          Value::Matrix(_) => "matrix",
+          Value::Void => "void",
+      }
+  }
+}
+
+fn method_name(method: Method) -> &'static str {
+    match method {
+        Method::Length => "length",
+        Method::ToUpper => "toUpper",
+        Method::ToLower => "toLower",
+        Method::Trim => "trim",
+        Method::Split => "split",
+        Method::Push => "push",
+        Method::Pop => "pop",
+        Method::Join => "join",
+        Method::First => "first", 
+        Method::Last => "last",
+        Method::Keys => "keys",
+        Method::Values => "values",
+        Method::Entries => "entries",
+        Method::Round => "round",
+        Method::Floor => "floor",
+        Method::Ceil => "ceil",
+        Method::ToString => "toString",
+    }
 }

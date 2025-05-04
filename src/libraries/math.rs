@@ -21,81 +21,82 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
     math_obj.insert("I".to_string(), Value::Complex { real: 0.0, imag: 1.0 });
 
     // Basic Math Functions
-    math_obj.insert("sqrt".to_string(), Value::NativeFunction(|args| {
+    use std::sync::Arc;
+    math_obj.insert("sqrt".to_string(), Value::NativeFunction(Arc::new(|args: Vec<Value>| {
         if args.len() != 1 {
             return Err("sqrt expects exactly one argument".to_string());
         }
         match &args[0] {
-            Value::Int(x) => Ok(Value::Float((*x as f64).sqrt())),
-            Value::Float(x) => Ok(Value::Float(x.sqrt())),
+            Value::Int(x) => Ok(Value::Float(((*x) as f64).sqrt())),
+            Value::Float(x) => Ok(Value::Float((*x).sqrt())),
             _ => Err("sqrt expects a numeric argument".to_string()),
         }
-    }));
+    })));
 
-    math_obj.insert("pow".to_string(), Value::NativeFunction(|args| {
+    math_obj.insert("pow".to_string(), Value::NativeFunction(Arc::new(|args: Vec<Value>| {
         if args.len() != 2 {
             return Err("pow expects exactly two arguments".to_string());
         }
         let base = match &args[0] {
-            Value::Int(x) => *x as f64,
+            Value::Int(x) => (*x) as f64,
             Value::Float(x) => *x,
             _ => return Err("pow expects numeric arguments".to_string()),
         };
         let exp = match &args[1] {
-            Value::Int(x) => *x as f64,
+            Value::Int(x) => (*x) as f64,
             Value::Float(x) => *x,
             _ => return Err("pow expects numeric arguments".to_string()),
         };
         Ok(Value::Float(base.powf(exp)))
-    }));
+    })));
 
-    math_obj.insert("abs".to_string(), Value::NativeFunction(|args| {
+    math_obj.insert("abs".to_string(), Value::NativeFunction(Arc::new(|args: Vec<Value>| {
         if args.len() != 1 {
             return Err("abs expects exactly one argument".to_string());
         }
         match &args[0] {
-            Value::Int(x) => Ok(Value::Int(x.abs())),
-            Value::Float(x) => Ok(Value::Float(x.abs())),
+            Value::Int(x) => Ok(Value::Int((*x).abs())),
+            Value::Float(x) => Ok(Value::Float((*x).abs())),
             _ => Err("abs expects a numeric argument".to_string()),
         }
-    }));
+    })));
 
     // Trigonometric Functions
-    math_obj.insert("sin".to_string(), Value::NativeFunction(|args| {
+    math_obj.insert("sin".to_string(), Value::NativeFunction(Arc::new(|args: Vec<Value>| {
         if args.len() != 1 {
             return Err("sin expects exactly one argument".to_string());
         }
         match &args[0] {
-            Value::Int(x) => Ok(Value::Float((*x as f64).sin())),
-            Value::Float(x) => Ok(Value::Float(x.sin())),
+            Value::Int(x) => Ok(Value::Float(((*x) as f64).sin())),
+            Value::Float(x) => Ok(Value::Float((*x).sin())),
             _ => Err("sin expects a numeric argument".to_string()),
         }
-    }));
+    })));
 
-    math_obj.insert("cos".to_string(), Value::NativeFunction(|args| {
+    math_obj.insert("cos".to_string(), Value::NativeFunction(Arc::new(|args: Vec<Value>| {
         if args.len() != 1 {
             return Err("cos expects exactly one argument".to_string());
         }
         match &args[0] {
-            Value::Int(x) => Ok(Value::Float((*x as f64).cos())),
-            Value::Float(x) => Ok(Value::Float(x.cos())),
+            Value::Int(x) => Ok(Value::Float(((*x) as f64).cos())),
+            Value::Float(x) => Ok(Value::Float((*x).cos())),
             _ => Err("cos expects a numeric argument".to_string()),
         }
-    }));
+    })));
 
-    math_obj.insert("tan".to_string(), Value::NativeFunction(|args| {
+    math_obj.insert("tan".to_string(), Value::NativeFunction(Arc::new(|args: Vec<Value>| {
         if args.len() != 1 {
             return Err("tan expects exactly one argument".to_string());
         }
         match &args[0] {
-            Value::Int(x) => Ok(Value::Float((*x as f64).tan())),
-            Value::Float(x) => Ok(Value::Float(x.tan())),
+            Value::Int(x) => Ok(Value::Float(((*x) as f64).tan())),
+            Value::Float(x) => Ok(Value::Float((*x).tan())),
             _ => Err("tan expects a numeric argument".to_string()),
         }
-    }));
+    })));
 
     // Vector Operations
-    math_obj.insert("vector".to_string(), Value::NativeFunction(|args| {
+    math_obj.insert("vector".to_string(), Value::NativeFunction(Arc::new(|args| {
         if args.len() != 1 {
             return Err("vector expects exactly one argument".to_string());
         }
@@ -113,9 +114,9 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
             },
             _ => Err("vector expects an array argument".to_string()),
         }
-    }));
+    })));
 
-    math_obj.insert("dot".to_string(), Value::NativeFunction(|args| {
+    math_obj.insert("dot".to_string(), Value::NativeFunction(Arc::new(|args| {
         if args.len() != 2 {
             return Err("dot expects exactly two arguments".to_string());
         }
@@ -157,9 +158,9 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
             sum += a * b;
         }
         Ok(Value::Float(sum))
-    }));
+    })));
 
-    math_obj.insert("matrix".to_string(), Value::NativeFunction(|args| {
+    math_obj.insert("matrix".to_string(), Value::NativeFunction(Arc::new(|args| {
         if args.len() != 1 {
             return Err("matrix expects exactly one argument".to_string());
         }
@@ -182,10 +183,10 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
             }
             _ => Err("matrix expects an array of arrays".to_string()),
         }
-    }));
+    })));
     
     // Matrix multiplication: matmul(a, b)
-    math_obj.insert("matmul".to_string(), Value::NativeFunction(|args| {
+    math_obj.insert("matmul".to_string(), Value::NativeFunction(Arc::new(|args| {
         if args.len() != 2 {
             return Err("matmul expects exactly two arguments".to_string());
         }
@@ -246,7 +247,7 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
             result.push(Value::Array(row));
         }
         Ok(Value::Array(result))
-    }));
+    })));
 
     // Register either full module or specific imports
     if let Some(Value::Array(methods)) = env.lookup("__IMPORT_METHODS__") {

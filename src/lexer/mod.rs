@@ -205,6 +205,11 @@ impl Token {
             column: self.column,
         }
     }
+
+    pub fn with_length(mut self, length: usize) -> Self {
+        self.length = length;
+        self
+    }
 }
 
 fn is_skippable(input: &str) -> bool {
@@ -239,10 +244,10 @@ pub fn tokenize(source: String) -> Vec<Token> {
 
         // Get token
         match tokenize_char(&src, index, line, column) {
-            Some(token) => {
+            Some((token, consumed)) => {
                 column += token.length;
-                tokens.push(token.clone());
-                index += token.length;
+                tokens.push(token);
+                index += consumed;
             }
             None => {
                 index += 1;
@@ -255,7 +260,7 @@ pub fn tokenize(source: String) -> Vec<Token> {
     tokens
 }
 
-fn tokenize_char(src: &Vec<char>, start: usize, line: usize, column: usize) -> Option<Token> {
+fn tokenize_char(src: &Vec<char>, start: usize, line: usize, column: usize) -> Option<(Token, usize)> {
     let len = src.len();
     if start >= len {
         return None;
@@ -263,50 +268,91 @@ fn tokenize_char(src: &Vec<char>, start: usize, line: usize, column: usize) -> O
 
     let cur = src[start];
 
-    // Handle comments
+    // Handle comments first - must check before any operator parsing
     if cur == '/' && start + 1 < len {
         let next_char = src[start + 1];
         if next_char == '/' {
-            return Some(parse_single_line_comment(src, start, line, column));
+            let mut idx = start + 2;
+            let mut content = String::new();
+            while idx < len && src[idx] != '\n' {
+                content.push(src[idx]);
+                idx += 1;
+            }
+            return Some((
+                Token::new(content, TokenType::SingleLineComment, line, column)
+                    .with_length(idx - start),
+                idx - start
+            ));
         } else if next_char == '*' {
-            return Some(parse_multi_line_comment(src, start, line, column));
+            let mut idx = start + 2;
+            let mut content = String::new();
+            while idx < len - 1 {
+                if src[idx] == '*' && src[idx + 1] == '/' {
+                    idx += 2;
+                    break;
+                }
+                content.push(src[idx]);
+                idx += 1;
+            }
+            return Some((
+                Token::new(content, TokenType::MultiLineComment, line, column)
+                    .with_length(idx - start),
+                idx - start
+            ));
         }
     }
 
     // Check for multi-character tokens like '=>' and '->'
     if start + 1 < len {
         let two_chars = format!("{}{}", cur, src[start + 1]);
-        for &(ch, ref token_type) in TOKEN_CHAR.iter() {
-            if ch == two_chars {
-                return Some(Token::new(ch.to_string(), *token_type, line, column));
+        if two_chars == "//" || two_chars == "/*" {
+            // Already handled above
+        } else {
+            for &(ch, ref token_type) in TOKEN_CHAR.iter() {
+                if ch == two_chars {
+                    return Some((Token::new(ch.to_string(), *token_type, line, column), 2));
+                }
             }
         }
     }
 
     // Check for identifiers
     if cur.is_alphabetic() || cur == '_' {
-        return Some(parse_identifier(src, start, line, column));
+        let token = parse_identifier(src, start, line, column);
+        let consumed = token.value.len();
+        return Some((token, consumed));
     }
 
     // Check for operators
     if let Some(token) = parse_operators(src, start, line, column, cur) {
-        return Some(token);
+        // Only return '/' as ArithOp(Div) if not followed by '/' or '*'
+        if cur == '/' && start + 1 < len {
+            let next_char = src[start + 1];
+            if next_char == '/' || next_char == '*' {
+                // Already handled above
+                return None;
+            }
+        }
+        return Some((token, 1));
     }
 
     // Check for numbers
     if cur.is_digit(10) || (cur == '-' && start + 1 < len && src[start + 1].is_digit(10)) {
-        return Some(parse_number(src, start, line, column));
+        let token = parse_number(src, start, line, column);
+        let consumed = token.value.len();
+        return Some((token, consumed));
     }
 
     // Check for strings
     if cur == '"' || cur == '\'' {
-        return Some(parse_string(src, start, line, column));
+        let token = parse_string(src, start, line, column);
+        return Some((token.clone(), token.length));
     }
 
     // Check for single character tokens like colon, comma, semicolon, etc.
     for &(ch, ref token_type) in TOKEN_CHAR.iter() {
         if ch.len() == 1 && ch.chars().next().unwrap() == cur {
-            return Some(Token::new(ch.to_string(), *token_type, line, column));
+            return Some((Token::new(ch.to_string(), *token_type, line, column), 1));
         }
     }
 
@@ -371,48 +417,6 @@ fn parse_string(src: &Vec<char>, start: usize, line: usize, column: usize) -> To
     }
     let length = idx - start;
     Token::new(content, TokenType::String, line, column).with_length(length)
-}
-
-// Add a method to Token to set length
-impl Token {
-    pub fn with_length(mut self, length: usize) -> Self {
-        self.length = length;
-        self
-    }
-}
-
-fn parse_single_line_comment(src: &Vec<char>, start: usize, line: usize, column: usize) -> Token {
-    let mut content = String::new();
-    let mut idx = start + 2; // skip both slashes
-    let len = src.len();
-    while idx < len && src[idx] != '\n' {
-        content.push(src[idx]);
-        idx += 1;
-    }
-    Token::new(content, TokenType::SingleLineComment, line, column)
-}
-
-fn parse_multi_line_comment(src: &Vec<char>, start: usize, mut line: usize, mut column: usize) -> Token {
-    let mut content = String::new();
-    let mut idx = start + 2; // skip '/*'
-    let len = src.len();
-    while idx < len {
-        let c = src[idx];
-        if c == '*' && idx + 1 < len && src[idx + 1] == '/' {
-            idx += 2; // consume closing */
-            break;
-        }
-        if c == '\n' {
-            line += 1;
-            column = 1;
-        } else {
-            column += 1;
-        }
-        content.push(c);
-        idx += 1;
-    }
-    let length = idx - start;
-    Token::new(content, TokenType::MultiLineComment, line, column).with_length(length)
 }
 
 fn parse_identifier(src: &Vec<char>, start: usize, line: usize, column: usize) -> Token {

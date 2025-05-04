@@ -111,3 +111,9 @@
 - Fixed issue where lines and columns wouldn't be correctly counted
 - Fixed a few issues with parsing
 - TODO: Fix 'Reference Error'
+
+### Early Development Build #22 (5/3/25):
+- Fixed the reference error
+- Added built-in data type methods
+- Fixed evaluation errors
+- Fixed lexical errors

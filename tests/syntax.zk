@@ -41,12 +41,12 @@ let result_2: int = sub => |2, 1|;
 @println => |"Add: " + result_1, "Sub: " + result_2|
 
 // If statements
-if x == y {
-  @println => |"X equals Y"|
-} else if x < y {
-  @println => |"X is less than Y"|
-} else if x > y {
-  @println => |"X is greater than Y"|
+if x == 45 {
+  @println => |"X equals 45"|
+} else if x < 45 {
+  @println => |"X is less than 45"|
+} else if x > 45 {
+  @println => |"X is greater than 45"|
 }
 
 // For-loop
@@ -57,12 +57,12 @@ for |key, value| in b {
 // While-loop
 while x > 0 {
   @println => |x|
-  x - 1
+  x -= 1
 }
 
 // Try-Catch statements
 try {
-  x + y
+  x + 12
 } catch |e| {
   @println => |"Error: " + e|
 }

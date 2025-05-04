@@ -662,9 +662,30 @@ impl Parser {
     fn parse_expression(&mut self, min_prec: u8) -> Content {
         let mut left = self.parse_prefix();
         loop {
-            if self.at().kind == TokenType::AssignOp(AssignOp::Assign) {
-                self.consume(); // consume '='
+            let next_token = self.at().clone();
+            
+            // Handle all assignment operators
+            if matches!(next_token.kind, 
+                TokenType::AssignOp(AssignOp::Assign) | 
+                TokenType::AssignOp(AssignOp::AddAssign) |
+                TokenType::AssignOp(AssignOp::SubAssign) |
+                TokenType::AssignOp(AssignOp::MulAssign) |
+                TokenType::AssignOp(AssignOp::DivAssign) |
+                TokenType::AssignOp(AssignOp::ModAssign)) {
+                
+                let operator = match next_token.kind {
+                    TokenType::AssignOp(AssignOp::Assign) => "=",
+                    TokenType::AssignOp(AssignOp::AddAssign) => "+=",
+                    TokenType::AssignOp(AssignOp::SubAssign) => "-=",
+                    TokenType::AssignOp(AssignOp::MulAssign) => "*=",
+                    TokenType::AssignOp(AssignOp::DivAssign) => "/=",
+                    TokenType::AssignOp(AssignOp::ModAssign) => "%=",
+                    _ => unreachable!(),
+                };
+                
+                self.consume(); // consume operator
                 let right = self.parse_expression(0);
+                
                 return Content::Expression(Box::new(Expr::Assign(AssignExpr {
                     left: match left {
                         Content::Expression(expr) => expr,
@@ -674,7 +695,8 @@ impl Parser {
                         Content::Expression(expr) => expr,
                         _ => panic!("Expected expression")
                     },
-                    location: self.at().location(),
+                    operator: operator.to_string(),
+                    location: next_token.location(),
                 })));
             }
 
@@ -691,7 +713,7 @@ impl Parser {
                         name: ident_token.value.clone(),
                         location: ident_token.location(),
                     })),
-                    computed: false,
+                    is_method: false,
                     location: ident_token.location(),
                 });
                 left = Content::Expression(Box::new(member_expr));
@@ -726,6 +748,26 @@ impl Parser {
     }
     
     fn parse_prefix(&mut self) -> Content {
+        // Handle unary minus
+        if self.at().kind == TokenType::ArithOp(ArithOp::Sub) {
+            self.consume(); // consume the minus
+            let expr = self.parse_prefix();
+            match expr {
+                Content::Expression(e) => {
+                    return Content::Expression(Box::new(Expr::Binary(BinaryExpr {
+                        left: Box::new(Expr::FloatLit(FloatLit { 
+                            value: 0.0, 
+                            location: self.at().location() 
+                        })),
+                        operator: "-".to_string(),
+                        right: e,
+                        location: self.at().location(),
+                    })));
+                },
+                _ => panic!("Expected expression after '-'"),
+            }
+        }
+
         // Handle native function calls prefixed with '@'
         if self.at().kind == TokenType::At {
             self.consume(); // consume '@'
@@ -733,20 +775,25 @@ impl Parser {
             let ident = Identifier { name: ident_token.value.clone(), location: ident_token.location() };
             self.expect(TokenType::FatArrow, "Expected '=>' after native function identifier");
             self.expect(TokenType::Pipe, "Expected '|' before native function arguments");
+
             let mut args = Vec::new();
-            while self.at().kind != TokenType::Pipe {
-                let expr = self.parse_expression(0);
-                match expr {
-                    Content::Expression(e) => args.push(e),
-                    _ => panic!("Expected expression for native function argument"),
-                }
-                if self.at().kind == TokenType::Comma {
-                    self.consume();
-                } else {
-                    break;
+            if self.at().kind != TokenType::Pipe {
+                loop {
+                    let expr = self.parse_expression_until(&[TokenType::Comma, TokenType::Pipe]);
+                    match expr {
+                        Content::Expression(e) => args.push(e),
+                        _ => panic!("Expected expression in native function arguments"),
+                    }
+                    if self.at().kind == TokenType::Comma {
+                        self.consume();
+                    } else {
+                        break;
+                    }
                 }
             }
+
             self.expect(TokenType::Pipe, "Expected '|' after native function arguments");
+
             return Content::Expression(Box::new(Expr::Call(CallExpr {
                 callee: Box::new(Expr::Identifier(ident)),
                 args,
@@ -827,7 +874,7 @@ impl Parser {
                         name: ident_token.value.clone(),
                         location: ident_token.location(),
                     })),
-                    computed: false,
+                    is_method: false, // Added missing field
                     location: ident_token.location(),
                 })));
                 continue;
@@ -845,7 +892,7 @@ impl Parser {
                         Content::Expression(e) => e,
                         _ => panic!("Expected expression for index"),
                     },
-                    computed: true,
+                    is_method: true,
                     location: self.at().location(),
                 })));
                 continue;
@@ -932,5 +979,70 @@ impl Parser {
             TokenType::AssignOp(_) => "=".to_string(),
             _ => "".to_string(),
         }
+    }
+
+    // Add this helper function:
+    fn parse_expression_until(&mut self, stop_tokens: &[TokenType]) -> Content {
+        let mut expr = self.parse_prefix();
+        loop {
+            // Stop if the next token is in stop_tokens
+            if stop_tokens.iter().any(|t| self.at().kind == *t) {
+                break;
+            }
+            if self.at().kind == TokenType::AssignOp(AssignOp::Assign) {
+                self.consume();
+                let right = self.parse_expression(0);
+                return Content::Expression(Box::new(Expr::Assign(AssignExpr {
+                    left: match expr {
+                        Content::Expression(e) => e,
+                        _ => panic!("Expected expression"),
+                    },
+                    right: match right {
+                        Content::Expression(e) => e,
+                        _ => panic!("Expected expression"),
+                    },
+                    operator: "=".to_string(),
+                    location: self.at().location(),
+                })));
+            }
+            if self.at().kind == TokenType::Dot {
+                self.consume();
+                let ident_token = self.expect(TokenType::Identifier, "Expected property identifier after '.'");
+                expr = Content::Expression(Box::new(Expr::Member(MemberExpr {
+                    object: match expr {
+                        Content::Expression(e) => e,
+                        _ => panic!("Expected expression before '.'"),
+                    },
+                    property: Box::new(Expr::Identifier(Identifier {
+                        name: ident_token.value.clone(),
+                        location: ident_token.location(),
+                    })),
+                    is_method: false,
+                    location: ident_token.location(),
+                })));
+                continue;
+            }
+            if let Some(op_prec) = self.get_infix_precedence() {
+                let op_token = self.at().clone();
+                self.consume();
+                let next_min_prec = op_prec + 1;
+                let right = self.parse_expression(next_min_prec);
+                expr = Content::Expression(Box::new(Expr::Binary(BinaryExpr {
+                    left: match expr {
+                        Content::Expression(e) => e,
+                        _ => panic!("Expected expression"),
+                    },
+                    operator: self.operator_string_from_token(&op_token),
+                    right: match right {
+                        Content::Expression(e) => e,
+                        _ => panic!("Expected expression"),
+                    },
+                    location: op_token.location(),
+                })));
+                continue;
+            }
+            break;
+        }
+        expr
     }
 }

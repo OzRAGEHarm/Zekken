@@ -1,10 +1,11 @@
 use crate::ast::*;
-use crate::environment::{Environment, Value};
+use crate::environment::{Environment, Value, Method};
 use std::collections::HashMap;
 use crate::eval::statement::evaluate_statement;
 use crate::errors::ZekkenError;
 use regex::Regex;
 use crate::lexer::DataType;
+use std::sync::Arc;
 
 fn check_value_type(value: &Value, expected: &DataType) -> bool {
     match (value, expected) {
@@ -144,6 +145,68 @@ pub fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Resul
             return Ok(Value::Void);
         }
     }
+
+    // New handling for member expressions as method calls
+    if let Expr::Member(ref member_expr) = *call.callee {
+        let object = evaluate_expression(&member_expr.object, env)?;
+        let method_name = match *member_expr.property {
+            Expr::Identifier(ref ident) => ident.name.clone(),
+            _ => return Err(ZekkenError::type_error(
+                "Invalid method name",
+                "identifier",
+                "other",
+                call.location.line,
+                call.location.column,
+            )),
+        };
+
+        // Convert method name to Method enum
+        let method = match method_name.as_str() {
+            "length" => Method::Length,
+            "toUpper" => Method::ToUpper,
+            "toLower" => Method::ToLower,
+            "trim" => Method::Trim,
+            "split" => Method::Split,
+            "push" => Method::Push,
+            "pop" => Method::Pop,
+            "join" => Method::Join,
+            "first" => Method::First,
+            "last" => Method::Last,
+            "keys" => Method::Keys,
+            "values" => Method::Values,
+            "entries" => Method::Entries,
+            "round" => Method::Round,
+            "floor" => Method::Floor,
+            "ceil" => Method::Ceil,
+            "toString" => Method::ToString,
+            _ => return Err(ZekkenError::runtime(
+                &format!("Unknown method '{}'", method_name),
+                call.location.line,
+                call.location.column,
+                None,
+            )),
+        };
+
+        let mut args = Vec::new();
+        for arg in &call.args {
+            args.push(evaluate_expression(arg, env)?);
+        }
+
+        // Special handling for push method to update the variable in environment
+        if method == Method::Push {
+            // Check if the object is an identifier to update the variable
+            if let Expr::Identifier(ref ident) = *member_expr.object {
+                let result = object.call_method(method, args)
+                    .map_err(|s| ZekkenError::runtime(&s, call.location.line, call.location.column, None))?;
+                env.assign(&ident.name, result.clone())
+                    .map_err(|s| ZekkenError::runtime(&s, call.location.line, call.location.column, None))?;
+                return Ok(result);
+            }
+        }
+
+        return object.call_method(method, args)
+            .map_err(|s| ZekkenError::runtime(&s, call.location.line, call.location.column, None));
+    }
     
     let callee = evaluate_expression(&call.callee, env)?;
     match callee {
@@ -152,7 +215,7 @@ pub fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Resul
             for arg in &call.args {
                 args.push(evaluate_expression(arg, env)?);
             }
-            native_func(args).map_err(|s| ZekkenError::runtime(&s, call.location.line, call.location.column, None))
+            (native_func)(args).map_err(|s| ZekkenError::runtime(&s, call.location.line, call.location.column, None))
         },
         Value::Function(func) => {
             if call.args.len() != func.params.len() {
@@ -214,20 +277,65 @@ pub fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Resul
 
 fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
     let object = evaluate_expression(&member.object, env)?;
-    let mut property = if member.computed {
-        evaluate_expression(&member.property, env)?
-    } else {
-        match *member.property {
-            Expr::Identifier(ref ident) => Value::String(ident.name.clone()),
-            Expr::StringLit(ref lit) => Value::String(lit.value.clone()),
-            _ => return Err(ZekkenError::type_error(
-                "Invalid property access",
-                "string",
-                "non-string",
-                member.location.line,
-                member.location.column,
-            )),
+    
+    // Handle method calls with =>
+        if member.is_method {
+            // Convert identifier to Method enum
+            let method = match *member.property {
+                Expr::Identifier(ref ident) => match ident.name.as_str() {
+                    "length" => Method::Length,
+                    "toUpper" => Method::ToUpper,
+                    "toLower" => Method::ToLower,
+                    "trim" => Method::Trim,
+                    "split" => Method::Split,
+                    "push" => Method::Push, 
+                    "pop" => Method::Pop,
+                    "join" => Method::Join,
+                    "first" => Method::First,
+                    "last" => Method::Last,
+                    "keys" => Method::Keys,
+                    "values" => Method::Values,
+                    "entries" => Method::Entries,
+                    "round" => Method::Round,
+                    "floor" => Method::Floor,
+                    "ceil" => Method::Ceil,
+                    "toString" => Method::ToString,
+                    _ => return Err(ZekkenError::runtime(
+                        &format!("Unknown method '{}'", ident.name),
+                        member.location.line,
+                        member.location.column,
+                        None
+                    )),
+                },
+                _ => return Err(ZekkenError::type_error(
+                    "Invalid method name",
+                    "identifier",
+                    "other",
+                    member.location.line,
+                    member.location.column,
+                )),
+            };
+
+            let object_clone = object.clone();
+            let method_clone = method;
+
+            // Return a special function value that wraps both the object and method
+            return Ok(Value::NativeFunction(Arc::new(move |args| {
+                object_clone.call_method(method_clone, args)
+            })))
         }
+
+    // Handle regular property access
+    let mut property = match *member.property {
+        Expr::Identifier(ref ident) => Value::String(ident.name.clone()),
+        Expr::StringLit(ref lit) => Value::String(lit.value.clone()),
+        _ => return Err(ZekkenError::type_error(
+            "Invalid property access",
+            "string",
+            "non-string",
+            member.location.line,
+            member.location.column,
+        )),
     };
 
     if let Value::Array(_) = object {
@@ -290,85 +398,58 @@ fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Res
 }
 
 fn evaluate_assignment(assign: &AssignExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
-    let value = evaluate_expression(&assign.right, env)?;
-
-    match *assign.left {
-        Expr::Identifier(ref ident) => {
-            env.assign(&ident.name, value.clone())
-                .map_err(|e| ZekkenError::reference(
-                    &e,
-                    &ident.name,
-                    assign.location.line,
-                    assign.location.column
-                ))?;
-            Ok(value)
-        },
-        Expr::Member(ref member) => {
-            let mut object = evaluate_expression(&member.object, env)?;
-            let property = if member.computed {
-                evaluate_expression(&member.property, env)?
-            } else {
-                match *member.property {
-                    Expr::Identifier(ref ident) => Value::String(ident.name.clone()),
-                    _ => return Err(ZekkenError::type_error(
-                        "Invalid property access",
-                        "string",
-                        "non-string",
-                        member.location.line,
-                        member.location.column
-                    ))
-                }
-            };
-
-            match (&mut object, property) {
-                (Value::Object(ref mut map), Value::String(key)) => {
-                    map.insert(key, value.clone());
-                    env.assign(&format!("{:?}", member.object), object)
-                        .map_err(|e| ZekkenError::reference(
-                            &e,
-                            "<object>",
-                            assign.location.line,
-                            assign.location.column
-                        ))?;
-                    Ok(value)
-                },
-                (Value::Array(ref mut arr), Value::Int(index)) => {
-                    if index < 0 || index >= arr.len() as i64 {
-                        Err(ZekkenError::runtime(
-                            &format!("Index {} out of bounds", index),
-                            member.location.line,
-                            member.location.column,
-                            Some("array assignment"),
-                        ))
-                    } else {
-                        arr[index as usize] = value.clone();
-                        env.assign(&format!("{:?}", member.object), object)
-                            .map_err(|e| ZekkenError::reference(
-                                &e,
-                                "<array>",
-                                assign.location.line,
-                                assign.location.column
-                            ))?;
-                        Ok(value)
-                    }
-                },
-                _ => Err(ZekkenError::type_error(
-                    "Invalid assignment target",
-                    "object or array",
-                    "other",
-                    assign.location.line,
-                    assign.location.column
-                ))
-            }
-        },
-        _ => Err(ZekkenError::type_error(
+    let left = match *assign.left {
+        Expr::Identifier(ref ident) => ident.name.clone(),
+        _ => return Err(ZekkenError::type_error(
             "Invalid assignment target",
-            "identifier, object, or array",
+            "identifier",
             "other",
             assign.location.line,
             assign.location.column
-        ))
+        )),
+    };
+
+    // Handle compound assignments (+=, -=, *=, /=, %=)
+    if assign.operator != "=" {
+        let left_val = env.lookup(&left).ok_or_else(|| ZekkenError::reference(
+            &format!("Variable '{}' not found", left),
+            &left,
+            assign.location.line,
+            assign.location.column
+        ))?;
+        let right_val = evaluate_expression(&assign.right, env)?;
+
+        let result = match assign.operator.as_str() {
+            "+=" => add_values(&left_val, &right_val),
+            "-=" => subtract_values(&left_val, &right_val),
+            "*=" => multiply_values(&left_val, &right_val),
+            "/=" => divide_values(&left_val, &right_val),
+            "%=" => modulo_values(left_val, right_val),
+            _ => return Err(ZekkenError::runtime(
+                &format!("Unknown operator: {}", assign.operator),
+                assign.location.line,
+                assign.location.column,
+                None
+            )),
+        };
+
+        let result_cloned = result.clone();
+        let result = result.map_err(|e| ZekkenError::runtime(&e, assign.location.line, assign.location.column, None))?;
+        match result_cloned {
+            Ok(value) => {
+                env.assign(&left, value).map_err(|err| ZekkenError::runtime(&err, assign.location.line, assign.location.column, None))?;
+            },
+            Err(err) => return Err(ZekkenError::runtime(&err, assign.location.line, assign.location.column, None)),
+        }
+        return Ok(result);
     }
+
+    // Regular assignment
+    let value = evaluate_expression(&assign.right, env)?;
+    if let Err(err) = env.assign(&left, value.clone()) {
+        return Err(ZekkenError::runtime(&err, assign.location.line, assign.location.column, None));
+    }
+    Ok(value)
 }
 
 fn add_values(left: &Value, right: &Value) -> Result<Value, String> {

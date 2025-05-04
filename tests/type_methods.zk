@@ -1,0 +1,39 @@
+let str: string = "Hello, World!";
+@println => |"String: " + str|
+
+let len: int = str.length => | |; // 13
+@println => |"String Length: " + len|
+
+let upper: string = str.toUpper => | |; // "HELLO, WORLD!"
+@println => |"Uppercase String: " + upper|
+
+let array: arr = [1, 2, 3];
+@println => |"Array (before): " + array|
+array.push => |4| // [1, 2, 3, 4]
+@println => |"Array (after): " + array|
+
+let first: int = array.first => | |; // 1
+@println => |"First Element of Array: " + first|
+
+let last: int = array.last => | |; // 4
+@println => |"Last Element of Array: " + last|
+
+let object: obj = { name: "John", age: 30 };
+@println => |"Object: " + object|
+
+let keys: arr = object.keys => | |; // ["name", "age"]
+@println => |"Object Keys: " + keys|
+
+let values: arr = object.values => | |; // ["John", 30]
+@println => |"Object Values: " + values|
+
+let num: float = 3.7;
+@println => |"Number: " + num|
+
+let rounded: int = num.round => | |; // 4
+@println => |"Number Rounded: " + rounded|
+
+let floor: int = num.floor => | |; // 3
+@println => |"Number Floored: " + floor|
+
+@println => |"\nAll type method tests complete!"|

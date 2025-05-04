@@ -163,6 +163,7 @@ pub struct LambdaDecl {
 pub struct AssignExpr {
     pub left: Box<Expr>,
     pub right: Box<Expr>,
+    pub operator: String,  // Added operator field
     pub location: Location,
 }
 
@@ -170,7 +171,7 @@ pub struct AssignExpr {
 pub struct MemberExpr {
     pub object: Box<Expr>,
     pub property: Box<Expr>,
-    pub computed: bool,
+    pub is_method: bool,  // Add this field
     pub location: Location,
 }
 
@@ -252,4 +253,25 @@ pub struct VectorLit {
 #[derive(Debug, Clone)]
 pub struct MatrixLit {
     pub rows: Vec<Vec<f64>>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Method {
+    Length,
+    ToUpper,
+    ToLower,
+    Trim,
+    Split,
+    Push,
+    Pop, 
+    Join,
+    First,
+    Last,
+    Keys,
+    Values,
+    Entries,
+    Round,
+    Floor,
+    Ceil,
+    ToString,
 }
