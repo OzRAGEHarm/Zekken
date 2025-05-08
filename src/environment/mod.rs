@@ -5,27 +5,7 @@ use std::io::Write;
 use std::fmt::{self, Display, Formatter};
 use std::sync::Arc;
 use crate::ast::*;
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Method {
-    Length,
-    ToUpper,
-    ToLower,
-    Trim,
-    Split,
-    Push,
-    Pop,
-    Join,
-    First,
-    Last,
-    Keys,
-    Values,
-    Entries,
-    Round,
-    Floor,
-    Ceil,
-    ToString,
-}
+use serde_json::Value as JsonValue;
 
 pub enum Value {
   Int(i64),
@@ -192,6 +172,31 @@ pub struct Environment {
   pub constants: HashMap<String, Value>,
 }
 
+pub fn json_to_zekken(val: &JsonValue) -> Value {
+    match val {
+        JsonValue::Null => Value::Void,
+        JsonValue::Bool(b) => Value::Boolean(*b),
+        JsonValue::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                Value::Int(i)
+            } else if let Some(f) = n.as_f64() {
+                Value::Float(f)
+            } else {
+                Value::Void
+            }
+        }
+        JsonValue::String(s) => Value::String(s.clone()),
+        JsonValue::Array(arr) => Value::Array(arr.iter().map(json_to_zekken).collect()),
+        JsonValue::Object(obj) => {
+            let mut map = std::collections::HashMap::new();
+            for (k, v) in obj {
+                map.insert(k.clone(), json_to_zekken(v));
+            }
+            Value::Object(map)
+        }
+    }
+}
+
 impl Environment {
   pub fn new() -> Self {
       let mut env = Environment {
@@ -210,15 +215,12 @@ impl Environment {
                 return Ok(Value::Void);
             }
 
-            // Store the first arg as the return value
             let return_value = args[0].clone();
 
-            // Print the value 
             writeln!(stdout, "{}", return_value).map_err(|e| e.to_string())?;
             stdout.flush().map_err(|e| e.to_string())?;
 
-            // Return the actual value instead of Void
-            Ok(return_value)
+            Ok(Value::Void)
         }))
       );
 
@@ -231,19 +233,29 @@ impl Environment {
 
           let mut stdout = stdout();
 
-          // Print the prompt
           write!(stdout, "{}", args[0]).map_err(|e| e.to_string())?;
           stdout.flush().map_err(|e| e.to_string())?;
 
-          // Read user input
           let mut input = String::new();
           stdin().read_line(&mut input).map_err(|e| e.to_string())?;
 
-          // Trim whitespace and newline
           let input = input.trim().to_string();
 
           Ok(Value::String(input))
       })), false);
+
+      env.declare(
+        "parse_json".to_string(),
+        Value::NativeFunction(Arc::new(|args: Vec<Value>| -> Result<Value, String> {
+            if let [Value::String(ref s)] = args.as_slice() {
+                match serde_json::from_str::<JsonValue>(s) {
+                    Ok(json) => Ok(json_to_zekken(&json)),
+                    Err(e) => Err(format!("JSON parse error: {}", e)),
+                }
+            } else {
+                Err("parse_json expects a single string argument".to_string())
+            }
+        })), true);
 
       env
   }
@@ -351,163 +363,204 @@ impl From<MatrixLit> for Value {
 }
 
 impl Value {
-  pub fn as_float(&self) -> Option<f64> {
-      match self {
-          Value::Int(i) => Some(*i as f64),
-          Value::Float(f) => Some(*f),
-          Value::Complex { real, imag: _ } => Some(*real),
-          _ => None,
-      }
-  }
+    pub fn call_method(&self, method_name: &str, args: Vec<Value>, env: Option<&mut Environment>, variable_name: Option<&str>) -> Result<Value, String> {
+        match self {
+            Value::String(s) => Self::handle_string_method(s, method_name, args),
+            Value::Array(arr) => Self::handle_array_method(arr, method_name, args, env, variable_name),
+            Value::Object(obj) => {
+                if let Some(Value::NativeFunction(func)) = obj.get(method_name) {
+                    return (func)(args);
+                }
+                Self::handle_object_method(obj, method_name, args)
+            }
+            Value::Int(n) => Self::handle_int_method(*n, method_name, args),
+            Value::Float(n) => Self::handle_float_method(*n, method_name, args),
+            _ => Err(format!("Type '{}' does not support methods", self.type_name())),
+        }
+    }
 
-  pub fn as_int(&self) -> Option<i64> {
-      match self {
-          Value::Int(i) => Some(*i),
-          Value::Float(f) => Some(*f as i64),
-          _ => None,
-      }
-  }
+    fn handle_array_method(arr: &Vec<Value>, method_name: &str, mut args: Vec<Value>, env: Option<&mut Environment>, variable_name: Option<&str>) -> Result<Value, String> {
+        match method_name {
+            "length" => Ok(Value::Int(arr.len() as i64)),
+            "first" => {
+                if let Some(first) = arr.first() {
+                    Ok(first.clone())
+                } else {
+                    Err("Array is empty".to_string())
+                }
+            }
+            "last" => {
+                if let Some(last) = arr.last() {
+                    Ok(last.clone())
+                } else {
+                    Err("Array is empty".to_string())
+                }
+            }
+            "push" => {
+                if args.len() != 1 {
+                    return Err("push requires exactly one argument".to_string());
+                }
+                if let Some(env) = env {
+                    if let Some(var_name) = variable_name {
+                        let mut new_arr = arr.clone();
+                        new_arr.push(args.remove(0));
+                        env.assign(var_name, Value::Array(new_arr.clone()))
+                            .map_err(|e| format!("Failed to update array: {}", e))?;
+                        Ok(Value::Array(new_arr))
+                    } else {
+                        Err("push requires a variable name to update the original array".to_string())
+                    }
+                } else {
+                    Err("push requires an environment to update the original array".to_string())
+                }
+            }
+            "pop" => {
+                let mut new_arr = arr.clone();
+                if let Some(popped) = new_arr.pop() {
+                    if let Some(env) = env {
+                        if let Some(var_name) = variable_name {
+                            env.assign(var_name, Value::Array(new_arr.clone()))
+                                .map_err(|e| format!("Failed to update array: {}", e))?;
+                        }
+                    }
+                    Ok(popped)
+                } else {
+                    Err("Array is empty".to_string())
+                }
+            }
+            "join" => {
+                if args.len() != 1 {
+                    return Err("join requires one string argument".to_string());
+                }
+                let delim = match &args[0] {
+                    Value::String(s) => s,
+                    _ => return Err("join argument must be a string".to_string()),
+                };
+                let joined = arr.iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(delim);
+                Ok(Value::String(joined))
+            }
+            _ => Err(format!("Array method '{}' not supported", method_name)),
+        }
+    }
 
-  pub fn call_method(&self, method: Method, args: Vec<Value>) -> Result<Value, String> {
-      match self {
-          Value::String(s) => match method {
-              Method::Length => Ok(Value::Int(s.len() as i64)),
-              Method::ToUpper => Ok(Value::String(s.to_uppercase())),
-              Method::ToLower => Ok(Value::String(s.to_lowercase())),
-              Method::Trim => Ok(Value::String(s.trim().to_string())),
-              Method::Split => {
-                  if args.len() != 1 {
-                      return Err("split requires one argument".to_string());
-                  }
-                  let delimiter = match &args[0] {
-                      Value::String(s) => s,
-                      _ => return Err("split argument must be a string".to_string()),
-                  };
-                  let parts: Vec<Value> = s.split(delimiter)
-                      .map(|s| Value::String(s.to_string()))
-                      .collect();
-                  Ok(Value::Array(parts))
-              },
-              _ => Err(format!("Method '{}' not supported for string type", method_name(method))),
-          },
-          Value::Array(arr) => match method {
-              Method::Length => Ok(Value::Int(arr.len() as i64)),
-              Method::Push => {
-                  if args.len() != 1 {
-                      return Err("push requires one argument".to_string());
-                  }
-                  let mut new_arr = arr.clone();
-                  new_arr.push(args[0].clone());
-                  Ok(Value::Array(new_arr))
-              }
-              Method::Pop => {
-                  let mut new_arr = arr.clone();
-                  new_arr.pop().map_or(
-                      Ok(Value::Void),
-                      |v| Ok(v)
-                  )
-              }
-              Method::Join => {
-                  if args.len() != 1 {
-                      return Err("join requires one argument".to_string());
-                  }
-                  let separator = args[0].to_string();
-                  let strings: Result<Vec<String>, String> = arr.iter()
-                      .map(|v| Ok(v.to_string()))
-                      .collect::<Result<Vec<String>, String>>();
-                  strings.map(|strs| Value::String(strs.join(&separator)))
-              }
-              Method::First => arr.first().map_or(
-                  Ok(Value::Void),
-                  |v| Ok(v.clone())
-              ),
-              Method::Last => arr.last().map_or(
-                  Ok(Value::Void),
-                  |v| Ok(v.clone())
-              ),
-              _ => Err(format!("Method '{}' not supported for array type", method_name(method))),
-          },
-          Value::Object(obj) => match method {
-              Method::Keys => {
-                  let keys: Vec<Value> = obj.keys()
-                      .filter(|k| k != &"__keys__")
-                      .map(|k| Value::String(k.clone()))
-                      .collect();
-                  Ok(Value::Array(keys))
-              }
-              Method::Values => {
-                  let values: Vec<Value> = obj.iter()
-                      .filter(|(k, _)| k != &"__keys__")
-                      .map(|(_, v)| v.clone())
-                      .collect();
-                  Ok(Value::Array(values))
-              }
-              Method::Entries => {
-                  let entries: Vec<Value> = obj.iter()
-                      .filter(|(k, _)| k != &"__keys__")
-                      .map(|(k, v)| {
-                          Value::Array(vec![
-                              Value::String(k.clone()),
-                              v.clone()
-                          ])
-                      })
-                      .collect();
-                  Ok(Value::Array(entries))
-              }
-              _ => Err(format!("Method '{}' not supported for object type", method_name(method))),
-          },
-          Value::Int(n) => match method {
-              Method::Round | Method::Floor | Method::Ceil => Ok(Value::Int(*n)),
-              Method::ToString => Ok(Value::String(n.to_string())),
-              _ => Err(format!("Method '{}' not supported for int type", method_name(method))),
-          },
-          Value::Float(n) => match method {
-              Method::Round => Ok(Value::Int(n.round() as i64)),
-              Method::Floor => Ok(Value::Int(n.floor() as i64)),
-              Method::Ceil => Ok(Value::Int(n.ceil() as i64)),
-              Method::ToString => Ok(Value::String(n.to_string())),
-              _ => Err(format!("Method '{}' not supported for float type", method_name(method))),
-          },
-          _ => Err(format!("Type {} does not support methods", self.type_name())),
-      }
-  }
+    fn handle_string_method(s: &String, method_name: &str, args: Vec<Value>) -> Result<Value, String> {
+        match method_name {
+            "length" => Ok(Value::Int(s.len() as i64)),
+            "toUpper" => Ok(Value::String(s.to_uppercase())),
+            "toLower" => Ok(Value::String(s.to_lowercase())),
+            "trim" => Ok(Value::String(s.trim().to_string())),
+            "split" => {
+                if args.len() != 1 {
+                    return Err("split requires one argument".to_string());
+                }
+                let delimiter = match &args[0] {
+                    Value::String(delim) => delim,
+                    _ => return Err("split argument must be a string".to_string()),
+                };
+                Ok(Value::Array(s.split(delimiter).map(|part| Value::String(part.to_string())).collect()))
+            }
+            _ => Err(format!("String method '{}' not supported", method_name)),
+        }
+    }
 
-  fn type_name(&self) -> &'static str {
-      match self {
-          Value::Int(_) => "int",
-          Value::Float(_) => "float",
-          Value::String(_) => "string",
-          Value::Boolean(_) => "boolean",
-          Value::Array(_) => "array",
-          Value::Object(_) => "object",
-          Value::Function(_) => "function",
-          Value::NativeFunction(_) => "native function",
-          Value::Complex { .. } => "complex",
-          Value::Vector(_) => "vector",
-          Value::Matrix(_) => "matrix",
-          Value::Void => "void",
-      }
-  }
-}
+    fn handle_object_method(obj: &HashMap<String, Value>, method_name: &str, _args: Vec<Value>) -> Result<Value, String> {
+        match method_name {
+            "keys" => {
+                if let Some(Value::Array(keys)) = obj.get("__keys__") {
+                    let ordered_keys: Vec<Value> = keys
+                        .iter()
+                        .filter_map(|key| match key {
+                            Value::String(s) => Some(Value::String(s.clone())),
+                            _ => None,
+                        })
+                        .collect();
+                    Ok(Value::Array(ordered_keys))
+                } else {
+                    let keys: Vec<Value> = obj
+                        .keys()
+                        .filter(|key| *key != "__keys__")
+                        .cloned()
+                        .map(Value::String)
+                        .collect();
+                    Ok(Value::Array(keys))
+                }
+            }
+            "values" => {
+                if let Some(Value::Array(keys)) = obj.get("__keys__") {
+                    let mut ordered_values = Vec::new();
+                    for key in keys {
+                        if let Value::String(key_name) = key {
+                            if let Some(value) = obj.get(key_name) {
+                                ordered_values.push(value.clone());
+                            }
+                        }
+                    }
+                    Ok(Value::Array(ordered_values))
+                } else {
+                    let values: Vec<Value> = obj
+                        .iter()
+                        .filter(|(key, _)| *key != "__keys__")
+                        .map(|(_, value)| value.clone())
+                        .collect();
+                    Ok(Value::Array(values))
+                }
+            }
+            "entries" => {
+                let mut entries = Vec::new();
+                let keys: Vec<String> = if let Some(Value::Array(keys)) = obj.get("__keys__") {
+                    keys.iter().filter_map(|k| {
+                        if let Value::String(s) = k {
+                            Some(s.clone())
+                        } else {
+                            None
+                        }
+                    }).collect()
+                } else {
+                    obj.keys().filter(|k| *k != "__keys__").cloned().collect()
+                };
+                for key in keys {
+                    if let Some(value) = obj.get(&key) {
+                        entries.push(Value::Array(vec![Value::String(key.clone()), value.clone()]));
+                    }
+                }
+                Ok(Value::Array(entries))
+            }
+            _ => Err(format!("Object method '{}' not supported", method_name)),
+        }
+    }
+    
+    fn handle_int_method(n: i64, method_name: &str, _args: Vec<Value>) -> Result<Value, String> {
+        match method_name {
+            _ => Err(format!("Integer method '{}' not supported", method_name)),
+        }
+    }
 
-fn method_name(method: Method) -> &'static str {
-    match method {
-        Method::Length => "length",
-        Method::ToUpper => "toUpper",
-        Method::ToLower => "toLower",
-        Method::Trim => "trim",
-        Method::Split => "split",
-        Method::Push => "push",
-        Method::Pop => "pop",
-        Method::Join => "join",
-        Method::First => "first", 
-        Method::Last => "last",
-        Method::Keys => "keys",
-        Method::Values => "values",
-        Method::Entries => "entries",
-        Method::Round => "round",
-        Method::Floor => "floor",
-        Method::Ceil => "ceil",
-        Method::ToString => "toString",
+    fn handle_float_method(n: f64, method_name: &str, _args: Vec<Value>) -> Result<Value, String> {
+        match method_name {
+            "round" => Ok(Value::Int(n.round() as i64)),
+            "floor" => Ok(Value::Int(n.floor() as i64)),
+            "ceil" => Ok(Value::Int(n.ceil() as i64)),
+            _ => Err(format!("Float method '{}' not supported", method_name)),
+        }
+    }
+
+    fn type_name(&self) -> &'static str {
+        match self {
+            Value::Int(_) => "int",
+            Value::Float(_) => "float",
+            Value::String(_) => "string",
+            Value::Boolean(_) => "boolean",
+            Value::Array(_) => "array",
+            Value::Object(_) => "object",
+            Value::NativeFunction(_) => "native function",
+            Value::Function(_) => "function",
+            Value::Complex { .. } => "complex",
+            Value::Vector(_) => "vector",
+            Value::Matrix(_) => "matrix",
+            Value::Void => "void",
+        }
     }
 }

@@ -1,12 +1,13 @@
 use crate::ast::*;
-use crate::environment::{Environment, Value, Method};
+use crate::environment::{Environment, Value};
 use std::collections::HashMap;
 use crate::eval::statement::evaluate_statement;
 use crate::errors::ZekkenError;
-use regex::Regex;
-use crate::lexer::DataType;
-use std::sync::Arc;
+//use regex::Regex;
+//use crate::lexer::DataType;
+//use std::sync::Arc;
 
+/*
 fn check_value_type(value: &Value, expected: &DataType) -> bool {
     match (value, expected) {
         (Value::Int(_), DataType::Int) => true,
@@ -19,6 +20,7 @@ fn check_value_type(value: &Value, expected: &DataType) -> bool {
         _ => false,
     }
 }
+*/
 
 pub fn evaluate_expression(expr: &Expr, env: &mut Environment) -> Result<Value, ZekkenError> {
     match expr {
@@ -116,6 +118,7 @@ fn evaluate_binary_expression(expr: &BinaryExpr, env: &mut Environment) -> Resul
     }
 }
 
+/*
 fn interpolate_string(template: &str, env: &Environment) -> String {
     let re = Regex::new(r"\{(\w+)\}").unwrap();
     re.replace_all(template, |caps: &regex::Captures| {
@@ -126,27 +129,9 @@ fn interpolate_string(template: &str, env: &Environment) -> String {
         }
     }).to_string()
 }
+*/
 
-pub fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
-    if let Expr::Identifier(ref ident) = *call.callee {
-        if ident.name == "println" {
-            let mut output = String::new();
-            for arg in &call.args {
-                let evaluated = evaluate_expression(arg, env)?;
-                match evaluated {
-                    Value::String(ref s) if s.contains('{') => {
-                        output.push_str(&interpolate_string(s, env));
-                    },
-                    other => output.push_str(&format!("{}", other)),
-                }
-                output.push(' ');
-            }
-            println!("{}", output.trim_end());
-            return Ok(Value::Void);
-        }
-    }
-
-    // New handling for member expressions as method calls
+fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
     if let Expr::Member(ref member_expr) = *call.callee {
         let object = evaluate_expression(&member_expr.object, env)?;
         let method_name = match *member_expr.property {
@@ -160,54 +145,23 @@ pub fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Resul
             )),
         };
 
-        // Convert method name to Method enum
-        let method = match method_name.as_str() {
-            "length" => Method::Length,
-            "toUpper" => Method::ToUpper,
-            "toLower" => Method::ToLower,
-            "trim" => Method::Trim,
-            "split" => Method::Split,
-            "push" => Method::Push,
-            "pop" => Method::Pop,
-            "join" => Method::Join,
-            "first" => Method::First,
-            "last" => Method::Last,
-            "keys" => Method::Keys,
-            "values" => Method::Values,
-            "entries" => Method::Entries,
-            "round" => Method::Round,
-            "floor" => Method::Floor,
-            "ceil" => Method::Ceil,
-            "toString" => Method::ToString,
-            _ => return Err(ZekkenError::runtime(
-                &format!("Unknown method '{}'", method_name),
-                call.location.line,
-                call.location.column,
-                None,
-            )),
-        };
-
         let mut args = Vec::new();
         for arg in &call.args {
             args.push(evaluate_expression(arg, env)?);
         }
 
-        // Special handling for push method to update the variable in environment
-        if method == Method::Push {
-            // Check if the object is an identifier to update the variable
-            if let Expr::Identifier(ref ident) = *member_expr.object {
-                let result = object.call_method(method, args)
-                    .map_err(|s| ZekkenError::runtime(&s, call.location.line, call.location.column, None))?;
-                env.assign(&ident.name, result.clone())
-                    .map_err(|s| ZekkenError::runtime(&s, call.location.line, call.location.column, None))?;
-                return Ok(result);
-            }
-        }
+        // Determine the variable name, if applicable
+        let variable_name = if let Expr::Identifier(ref ident) = *member_expr.object {
+            Some(ident.name.as_str())
+        } else {
+            None
+        };
 
-        return object.call_method(method, args)
+        // Call the method with the environment and variable name
+        return object.call_method(&method_name, args, Some(env), variable_name)
             .map_err(|s| ZekkenError::runtime(&s, call.location.line, call.location.column, None));
     }
-    
+
     let callee = evaluate_expression(&call.callee, env)?;
     match callee {
         Value::NativeFunction(native_func) => {
@@ -230,19 +184,6 @@ pub fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Resul
             let mut args = Vec::new();
             for arg in &call.args {
                 args.push(evaluate_expression(arg, env)?);
-            }
-
-            for (param, arg) in func.params.iter().zip(args.iter()) {
-                if !check_value_type(arg, &param.type_) {
-                    return Err(ZekkenError::type_error(
-                        &format!("Parameter '{}' expects {:?} but got {:?}", 
-                            param.ident, param.type_, arg),
-                        &format!("{:?}", param.type_),
-                        &format!("{:?}", arg),
-                        call.location.line,
-                        call.location.column
-                    ));
-                }
             }
 
             let mut function_env = Environment::new_with_parent(env.clone());
@@ -277,58 +218,9 @@ pub fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Resul
 
 fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
     let object = evaluate_expression(&member.object, env)?;
-    
-    // Handle method calls with =>
-        if member.is_method {
-            // Convert identifier to Method enum
-            let method = match *member.property {
-                Expr::Identifier(ref ident) => match ident.name.as_str() {
-                    "length" => Method::Length,
-                    "toUpper" => Method::ToUpper,
-                    "toLower" => Method::ToLower,
-                    "trim" => Method::Trim,
-                    "split" => Method::Split,
-                    "push" => Method::Push, 
-                    "pop" => Method::Pop,
-                    "join" => Method::Join,
-                    "first" => Method::First,
-                    "last" => Method::Last,
-                    "keys" => Method::Keys,
-                    "values" => Method::Values,
-                    "entries" => Method::Entries,
-                    "round" => Method::Round,
-                    "floor" => Method::Floor,
-                    "ceil" => Method::Ceil,
-                    "toString" => Method::ToString,
-                    _ => return Err(ZekkenError::runtime(
-                        &format!("Unknown method '{}'", ident.name),
-                        member.location.line,
-                        member.location.column,
-                        None
-                    )),
-                },
-                _ => return Err(ZekkenError::type_error(
-                    "Invalid method name",
-                    "identifier",
-                    "other",
-                    member.location.line,
-                    member.location.column,
-                )),
-            };
-
-            let object_clone = object.clone();
-            let method_clone = method;
-
-            // Return a special function value that wraps both the object and method
-            return Ok(Value::NativeFunction(Arc::new(move |args| {
-                object_clone.call_method(method_clone, args)
-            })))
-        }
-
-    // Handle regular property access
-    let mut property = match *member.property {
-        Expr::Identifier(ref ident) => Value::String(ident.name.clone()),
-        Expr::StringLit(ref lit) => Value::String(lit.value.clone()),
+    let property = match *member.property {
+        Expr::Identifier(ref ident) => ident.name.clone(),
+        Expr::StringLit(ref lit) => lit.value.clone(),
         _ => return Err(ZekkenError::type_error(
             "Invalid property access",
             "string",
@@ -338,58 +230,22 @@ fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Res
         )),
     };
 
-    if let Value::Array(_) = object {
-        if let Value::String(ref s) = property {
-            if let Ok(idx) = s.parse::<i64>() {
-                property = Value::Int(idx);
+    match object {
+        Value::Object(ref map) => {
+            if let Some(value) = map.get(&property) {
+                Ok(value.clone())
+            } else {
+                Err(ZekkenError::reference(
+                    &format!("Property '{}' not found", property),
+                    &property,
+                    member.location.line,
+                    member.location.column,
+                ))
             }
         }
-    }
-
-    match (object, property) {
-        (Value::Array(arr), Value::Int(index)) => {
-            if index < 0 || index >= arr.len() as i64 {
-                return Err(ZekkenError::runtime(
-                    &format!("Array index out of bounds: {}", index),
-                    member.location.line,
-                    member.location.column,
-                    Some("array indexing"),
-                ));
-            }
-            Ok(arr[index as usize].clone())
-        },
-        (Value::Object(map), Value::Int(index)) => {
-            let keys: Vec<_> = map.keys().collect();
-            if index < 0 || index >= keys.len() as i64 {
-                return Err(ZekkenError::runtime(
-                    &format!("Object index out of bounds: {}", index),
-                    member.location.line,
-                    member.location.column,
-                    Some("object indexing"),
-                ));
-            }
-            map.get(keys[index as usize])
-               .cloned()
-               .ok_or_else(|| ZekkenError::reference(
-                   &format!("Property at index {} not found", index),
-                   "<object>",
-                   member.location.line,
-                   member.location.column
-               ))
-        },
-        (Value::Object(map), Value::String(key)) => {
-            map.get(&key)
-               .cloned()
-               .ok_or_else(|| ZekkenError::reference(
-                   &format!("Property '{}' not found", key),
-                   &key,
-                   member.location.line,
-                   member.location.column
-               ))
-        },
         _ => Err(ZekkenError::type_error(
             "Invalid member access",
-            "object or array",
+            "object",
             "other",
             member.location.line,
             member.location.column,

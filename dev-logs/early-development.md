@@ -117,3 +117,9 @@
 - Added built-in data type methods
 - Fixed evaluation errors
 - Fixed lexical errors
+
+### Early Development Build #23 (5/7/25):
+- Fixed member method calls
+- Added built-in data type member methods
+- Fixed library methods when using full library
+- Added `parse_json` native function to parse json file data

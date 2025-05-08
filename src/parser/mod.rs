@@ -662,10 +662,27 @@ impl Parser {
     fn parse_expression(&mut self, min_prec: u8) -> Content {
         let mut left = self.parse_prefix();
         loop {
-            let next_token = self.at().clone();
-            
+            if self.at().kind == TokenType::Dot {
+                self.consume(); // consume the dot
+                let ident_token = self.expect(TokenType::Identifier, "Expected property identifier after '.'");
+                let is_method = self.at().kind == TokenType::FatArrow; // Check if followed by =>
+                let member_expr = Expr::Member(MemberExpr {
+                    object: match left {
+                        Content::Expression(expr) => expr,
+                        _ => panic!("Expected expression")
+                    },
+                    property: Box::new(Expr::Identifier(Identifier {
+                        name: ident_token.value.clone(),
+                        location: ident_token.location(),
+                    })),
+                    is_method,
+                    location: ident_token.location(),
+                });
+                left = Content::Expression(Box::new(member_expr));
+                continue;
+            }
             // Handle all assignment operators
-            if matches!(next_token.kind, 
+            if matches!(self.at().kind, 
                 TokenType::AssignOp(AssignOp::Assign) | 
                 TokenType::AssignOp(AssignOp::AddAssign) |
                 TokenType::AssignOp(AssignOp::SubAssign) |
@@ -673,7 +690,7 @@ impl Parser {
                 TokenType::AssignOp(AssignOp::DivAssign) |
                 TokenType::AssignOp(AssignOp::ModAssign)) {
                 
-                let operator = match next_token.kind {
+                let operator = match self.at().kind {
                     TokenType::AssignOp(AssignOp::Assign) => "=",
                     TokenType::AssignOp(AssignOp::AddAssign) => "+=",
                     TokenType::AssignOp(AssignOp::SubAssign) => "-=",
@@ -696,29 +713,10 @@ impl Parser {
                         _ => panic!("Expected expression")
                     },
                     operator: operator.to_string(),
-                    location: next_token.location(),
+                    location: self.at().location(),
                 })));
             }
 
-            // Handle member access (dot operator)
-            if self.at().kind == TokenType::Dot {
-                self.consume(); // consume the dot
-                let ident_token = self.expect(TokenType::Identifier, "Expected property identifier after '.'");
-                let member_expr = Expr::Member(MemberExpr {
-                    object: match left {
-                        Content::Expression(expr) => expr,
-                        _ => panic!("Expected expression")
-                    },
-                    property: Box::new(Expr::Identifier(Identifier {
-                        name: ident_token.value.clone(),
-                        location: ident_token.location(),
-                    })),
-                    is_method: false,
-                    location: ident_token.location(),
-                });
-                left = Content::Expression(Box::new(member_expr));
-                continue;
-            }
             // Process binary/infix operators
             if let Some(op_prec) = self.get_infix_precedence() {
                 if op_prec < min_prec {
@@ -865,6 +863,7 @@ impl Parser {
             if self.at().kind == TokenType::Dot {
                 self.consume(); // consume the dot
                 let ident_token = self.expect(TokenType::Identifier, "Expected property identifier after '.'");
+                let is_method = self.at().kind == TokenType::FatArrow; // Check if followed by =>
                 expr = Content::Expression(Box::new(Expr::Member(MemberExpr {
                     object: match expr {
                         Content::Expression(e) => e,
@@ -874,7 +873,7 @@ impl Parser {
                         name: ident_token.value.clone(),
                         location: ident_token.location(),
                     })),
-                    is_method: false, // Added missing field
+                    is_method,
                     location: ident_token.location(),
                 })));
                 continue;
@@ -1017,7 +1016,7 @@ impl Parser {
                         name: ident_token.value.clone(),
                         location: ident_token.location(),
                     })),
-                    is_method: false,
+                    is_method: true,
                     location: ident_token.location(),
                 })));
                 continue;

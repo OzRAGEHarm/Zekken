@@ -11,12 +11,14 @@ Zekken is a general-purpose language created purely with the Rust programming la
 - **Ease of Learning**: With a clean and intuitive syntax, Zekken allows beginners to quickly grasp programming concepts while enabling experienced developers to write clear, maintainable code.
 - **Safety**: Utilizing Rust's strong memory safety features, Zekken minimizes common programming errors, ensuring robust and reliable applications.
 
-## Development Logs / Changelog
-This section contains all update information for the Zekken programming language. Stay informed about the latest changes, improvements, and fixes.
+## Development Logs ⚙
+Stay informed about the latest changes, improvements, and fixes in Zekken. Below is a summary of the development progress:
 
-- [Early Development (Feb 2025 - Now)](./dev-logs/early-development.md)
-- [Beta/Experimental Release (Coming Soon)](./dev-logs/beta-release.md)
-- [Full Release (Coming Soon)](./dev-logs/full-release.md)
+### Early Development Log (Feb 2025 - Now)
+- **[View Full Development Log](./dev-logs/early-development.md)**
 
-## Documentation
+## Documentation 📖
 There isn't much documentation that I can resourcefully give as the language is still in early developement stages and hasn't fully matured and/or been tested 100%.
+
+## License 🏛
+This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.

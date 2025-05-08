@@ -1,47 +1,47 @@
 use math;
 
 // Test constants
-@println => |"PI:" + math.PI| // 3.141592653589793
-@println => |"E:" + math.E| // 2.718281828459045
-@println => |"I:" + math.I| // 0 + 1i
+@println => |"PI: " + math.PI| // 3.141592653589793
+@println => |"E: " + math.E| // 2.718281828459045
+@println => |"I: " + math.I| // 0 + 1i
 
 // Test basic math functions
 let sqrt_val: float = math.sqrt => |16.0|; // 4.0
-@println => |"sqrt(16):" + sqrt_val|
+@println => |"sqrt(16): " + sqrt_val|
 
 let pow_val: float = math.pow => |2.0, 8.0|; // 256.0
-@println => |"pow(2, 8):" + pow_val|
+@println => |"pow(2, 8): " + pow_val|
 
 let abs_val: float = math.abs => |-42.0|; // 42.0
-@println => |"abs(-42):" + abs_val|
+@println => |"abs(-42): " + abs_val|
 
 // Test trigonometric functions
 let sin_val: float = math.sin => |math.PI / 2.0|; // 1.0
-@println => |"sin(pi/2):" + sin_val|
+@println => |"sin(pi/2): " + sin_val|
 
 let cos_val: float = math.cos => |0.0|; // 1.0
-@println => |"cos(0):" + cos_val|
+@println => |"cos(0): " + cos_val|
 
 let tan_val: float = math.tan => |0.0|; // 0.0
-@println => |"tan(0):" + tan_val|
+@println => |"tan(0): " + tan_val|
 
 // Test vector operations
 let v1: arr = math.vector => |[1, 2, 3]|;
 let v2: arr = math.vector => |[4, 5, 6]|;
-@println => |"v1:" + v1|
-@println => |"v2:" + v2|
+@println => |"v1: " + v1|
+@println => |"v2: " + v2|
 
 let dot_val: float = math.dot => |v1, v2|; // 1*4 + 2*5 + 3*6 = 32 all floats
-@println => |"dot(v1, v2):" + dot_val|
+@println => |"dot(v1, v2): " + dot_val|
 
 // Test matrix operations
 let m1: arr = math.matrix => |[[1, 2], [3, 4]]|;
 let m2: arr = math.matrix => |[[5, 6], [7, 8]]|;
-@println => |"m1:" + m1|
-@println => |"m2:" + m2|
+@println => |"m1: " + m1|
+@println => |"m2: " + m2|
 
 let m3: arr = math.matmul => |m1, m2|; // [[19, 22], [43, 50]]
-@println => |"m1 * m2:" + m3|
+@println => |"m1 * m2: " + m3|
 
 
 @println => |"All tests for the math library complete!"|

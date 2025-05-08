@@ -171,7 +171,7 @@ pub struct AssignExpr {
 pub struct MemberExpr {
     pub object: Box<Expr>,
     pub property: Box<Expr>,
-    pub is_method: bool,  // Add this field
+    pub is_method: bool,
     pub location: Location,
 }
 

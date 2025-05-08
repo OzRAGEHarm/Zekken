@@ -1,22 +1,44 @@
+@println => |"String Methods:\n"|
+
 let str: string = "Hello, World!";
-@println => |"String: " + str|
+@println => |"String: '" + str + "'"|
 
 let len: int = str.length => | |; // 13
 @println => |"String Length: " + len|
 
 let upper: string = str.toUpper => | |; // "HELLO, WORLD!"
-@println => |"Uppercase String: " + upper|
+@println => |"Uppercase String: '" + upper + "'"|
+
+let lower: string = str.toLower => | |; // "hello, world!"
+@println => |"Lowercase String: '" + lower + "'"|
+
+let trimmed: string = str.trim => | |; // "Hello, World!"
+@println => |"Trimmed String: '" + trimmed + "'"|
+
+let split: arr = str.split => |","|; // ["Hello", " World!"]
+@println => |"Split String: " + split|
+
+@println => |"\nArray Methods:\n"|
 
 let array: arr = [1, 2, 3];
 @println => |"Array (before): " + array|
 array.push => |4| // [1, 2, 3, 4]
-@println => |"Array (after): " + array|
+@println => |"Array (after push): " + array|
+
+let popped: int = array.pop => | |; // 4
+@println => |"Popped Element: " + popped|
+@println => |"Array (after pop): " + array| // [1, 2, 3]
+
+let joined: string = array.join => |"-"|; // "1-2-3"
+@println => |"Joined Array: " + joined|
 
 let first: int = array.first => | |; // 1
 @println => |"First Element of Array: " + first|
 
-let last: int = array.last => | |; // 4
+let last: int = array.last => | |; // 3
 @println => |"Last Element of Array: " + last|
+
+@println => |"\nObject Methods:\n"|
 
 let object: obj = { name: "John", age: 30 };
 @println => |"Object: " + object|
@@ -27,13 +49,22 @@ let keys: arr = object.keys => | |; // ["name", "age"]
 let values: arr = object.values => | |; // ["John", 30]
 @println => |"Object Values: " + values|
 
+// If entries method is supported:
+let entries: arr = object.entries => | |; // [["name", "John"], ["age", 30]]
+@println => |"Object Entries: " + entries|
+
+@println => |"\nInt/Float Methods:\n"|
+
 let num: float = 3.7;
 @println => |"Number: " + num|
 
 let rounded: int = num.round => | |; // 4
 @println => |"Number Rounded: " + rounded|
 
-let floor: int = num.floor => | |; // 3
-@println => |"Number Floored: " + floor|
+let floored: int = num.floor => | |; // 3
+@println => |"Number Floored: " + floored|
+
+let ceil: int = num.ceil => | |; // 4
+@println => |"Number Ceil: " + ceil|
 
 @println => |"\nAll type method tests complete!"|
