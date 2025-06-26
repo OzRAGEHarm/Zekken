@@ -123,3 +123,8 @@
 - Added built-in data type member methods
 - Fixed library methods when using full library
 - Added `parse_json` native function to parse json file data
+
+### Early Development Build #24 (6/25/25):
+- Fixed a bug with the `parse_json` native function where it would **ALWAYS** order json data alphabetically
+- Fixed a bug where strings would print with quotations around them instead of just the text inside the quotations
+- Added `json_data.zk` to `tests` directory for testing the `parse_json` native function

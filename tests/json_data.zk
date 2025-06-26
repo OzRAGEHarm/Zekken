@@ -1,0 +1,15 @@
+// Use file system library
+use fs;
+
+// Read JSON file as a string
+let content: string = fs.read_file => |"data.json"|;
+
+// Parse JSON string into an object
+let data: obj = @parse_json => |content|;
+
+// Print entire object
+@println => | data |
+
+// Print specific fields from the object
+@println => | "Person 1 name: " + data.person1.name | // output: John Doe
+@println => | "Person 2 age: " + data.person2.age | // output: 25

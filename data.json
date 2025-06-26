@@ -1,4 +1,12 @@
 {
-  "name": "test",
-  "description": "this is a test for reading json files in zekken!"
+  "person1": {
+    "name": "John Doe",
+    "age": 30,
+    "city": "New York"
+  },
+  "person2": {
+    "name": "Jane Smith",
+    "age": 25,
+    "city": "Los Angeles"
+  }
 }

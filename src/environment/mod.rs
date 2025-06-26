@@ -62,100 +62,107 @@ impl Clone for Value {
 
 
 impl Display for Value {
-  fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-      match self {
-          Value::Int(i) => write!(f, "{}", i),
-          Value::Float(fl) => {
-              let s = format!("{}", fl);
-              if !s.contains('.') {
-                  write!(f, "{}.0", fl)
-              } else {
-                  write!(f, "{}", fl)
-              }
-          },
-          Value::String(s) => write!(f, "{}", s),
-          Value::Boolean(b) => write!(f, "{}", b),
-          Value::Array(arr) => {
-              write!(f, "[")?;
-              let mut first = true;
-              for value in arr {
-                  if !first {
-                      write!(f, ", ")?;
-                  }
-                  match value {
-                      Value::String(s) => write!(f, "\"{}\"", s)?,
-                      _ => write!(f, "{}", value)?,
-                  }
-                  first = false;
-              }
-              write!(f, "]")
-          },
-          Value::Object(obj) => {
-              write!(f, "{{")?;
-              let mut first = true;
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        self.fmt_with_indent(f, 0, false)
+    }
+}
 
-              // Get keys order from __keys__ property if present
-              let keys_order = if let Some(Value::Array(keys)) = obj.get("__keys__") {
-                  keys.iter().filter_map(|k| {
-                      if let Value::String(s) = k {
-                          Some(s)
-                      } else {
-                          None
-                      }
-                  }).collect::<Vec<&String>>()
-              } else {
-                  // Fallback to keys in arbitrary order
-                  obj.keys().filter(|k| *k != "__keys__").collect()
-              };
+impl Value {
+    fn fmt_with_indent(&self, f: &mut Formatter, indent: usize, in_container: bool) -> fmt::Result {
+        let indent_str = |n| "  ".repeat(n);
+        match self {
+            Value::Array(arr) => {
+                if arr.is_empty() {
+                    write!(f, "[]")
+                } else {
+                    writeln!(f, "[")?;
+                    for (i, value) in arr.iter().enumerate() {
+                        write!(f, "{}", indent_str(indent + 1))?;
+                        value.fmt_with_indent(f, indent + 1, true)?;
+                        if i < arr.len() - 1 {
+                            writeln!(f, ",")?;
+                        } else {
+                            writeln!(f)?;
+                        }
+                    }
+                    write!(f, "{}]", indent_str(indent))
+                }
+            },
+            Value::Object(obj) => {
+                let keys = obj.get("__keys__").and_then(|v| {
+                    if let Value::Array(keys) = v {
+                        Some(keys.clone())
+                    } else {
+                        None
+                    }
+                }).unwrap_or_else(Vec::new);
 
-              for key in keys_order {
-                  if !first {
-                      write!(f, ", ")?;
-                  }
-                  if let Some(value) = obj.get(key) {
-                      match value {
-                          Value::String(s) => write!(f, "\"{}\": \"{}\"", key, s)?,
-                          _ => write!(f, "\"{}\": {}", key, value)?,
-                      }
-                  }
-                  first = false;
-              }
-              write!(f, "}}")
-          },
-          Value::Function(_) => write!(f, "<function>"),
-          Value::NativeFunction(_) => write!(f, "<native function>"),
-          Value::Complex { real, imag } => {
-            if *imag >= 0.0 {
-                write!(f, "{} + {}i", real, imag)
-            } else {
-                write!(f, "{} - {}i", real, imag.abs())
+                if keys.is_empty() {
+                    write!(f, "{{}}")
+                } else {
+                    writeln!(f, "{{")?;
+                    let mut first = true;
+                    for key_val in keys {
+                        if let Value::String(key) = key_val {
+                            if key == "__keys__" { continue; }
+                            if let Some(value) = obj.get(&key) {
+                                if !first {
+                                    writeln!(f, ",")?;
+                                }
+                                write!(f, "{}\"{}\": ", indent_str(indent + 1), key)?;
+                                value.fmt_with_indent(f, indent + 1, true)?;
+                                first = false;
+                            }
+                        }
+                    }
+                    writeln!(f)?;
+                    write!(f, "{}}}", indent_str(indent))
+                }
+            },
+            Value::String(s) => {
+                if in_container {
+                    write!(f, "\"{}\"", s)
+                } else {
+                    write!(f, "{}", s)
+                }
+            },
+            Value::Int(i) => write!(f, "{}", i),
+            Value::Float(fl) => write!(f, "{}", fl),
+            Value::Boolean(b) => write!(f, "{}", b),
+            Value::Function(_) => write!(f, "<function>"),
+            Value::NativeFunction(_) => write!(f, "<native function>"),
+            Value::Complex { real, imag } => {
+                if *imag >= 0.0 {
+                    write!(f, "{} + {}i", real, imag)
+                } else {
+                    write!(f, "{} - {}i", real, imag.abs())
+                }
             }
-          },
-          Value::Vector(v) => {
-              write!(f, "[")?;
-              for (i, val) in v.iter().enumerate() {
-                  if i > 0 { write!(f, ", ")? }
-                  write!(f, "{}", val)?;
-              }
-              write!(f, "]")
-          },
-          Value::Matrix(m) => {
-              writeln!(f, "[")?;
-              for (i, row) in m.iter().enumerate() {
-                  if i > 0 { write!(f, " ")? }
-                  write!(f, " [")?;
-                  for (j, val) in row.iter().enumerate() {
-                      if j > 0 { write!(f, ", ")? }
-                      write!(f, "{:>8.3}", val)?;
-                  }
-                  write!(f, "]")?;
-                  if i < m.len() - 1 { writeln!(f)? }
-              }
-              write!(f, "\n]")
-          },
-          Value::Void => write!(f, "void"),
-      }
-  }
+            Value::Vector(v) => {
+                write!(f, "[")?;
+                for (i, val) in v.iter().enumerate() {
+                    if i > 0 { write!(f, ", ")? }
+                    write!(f, "{}", val)?;
+                }
+                write!(f, "]")
+            }
+            Value::Matrix(m) => {
+                writeln!(f, "[")?;
+                for (i, row) in m.iter().enumerate() {
+                    if i > 0 { write!(f, " ")? }
+                    write!(f, "[")?;
+                    for (j, val) in row.iter().enumerate() {
+                        if j > 0 { write!(f, ", ")? }
+                        write!(f, "{:>8.3}", val)?;
+                    }
+                    write!(f, "]")?;
+                    if i < m.len() - 1 { writeln!(f)? }
+                }
+                write!(f, "\n{}]", indent_str(indent))
+            }
+            Value::Void => write!(f, "void"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -189,9 +196,12 @@ pub fn json_to_zekken(val: &JsonValue) -> Value {
         JsonValue::Array(arr) => Value::Array(arr.iter().map(json_to_zekken).collect()),
         JsonValue::Object(obj) => {
             let mut map = std::collections::HashMap::new();
-            for (k, v) in obj {
+            let mut keys = Vec::new();
+            for (k, v) in obj.iter() {
+                keys.push(Value::String(k.clone()));
                 map.insert(k.clone(), json_to_zekken(v));
             }
+            map.insert("__keys__".to_string(), Value::Array(keys));
             Value::Object(map)
         }
     }
@@ -224,7 +234,9 @@ impl Environment {
         }))
       );
 
-      env.declare("input".to_string(), Value::NativeFunction(Arc::new(|args| {
+      env.declare(
+        "input".to_string(), 
+        Value::NativeFunction(Arc::new(|args| {
           use std::io::{Write, stdin, stdout};
 
           if args.is_empty() {
@@ -466,67 +478,98 @@ impl Value {
         }
     }
 
-    fn handle_object_method(obj: &HashMap<String, Value>, method_name: &str, _args: Vec<Value>) -> Result<Value, String> {
+    fn handle_object_method(obj: &HashMap<String, Value>, method_name: &str, args: Vec<Value>) -> Result<Value, String> {
         match method_name {
             "keys" => {
-                if let Some(Value::Array(keys)) = obj.get("__keys__") {
-                    let ordered_keys: Vec<Value> = keys
-                        .iter()
-                        .filter_map(|key| match key {
-                            Value::String(s) => Some(Value::String(s.clone())),
-                            _ => None,
-                        })
-                        .collect();
-                    Ok(Value::Array(ordered_keys))
+                let keys_value = obj.get("__keys__").cloned();
+                let keys = if let Some(Value::Array(keys)) = keys_value {
+                    keys
                 } else {
-                    let keys: Vec<Value> = obj
-                        .keys()
-                        .filter(|key| *key != "__keys__")
-                        .cloned()
-                        .map(Value::String)
-                        .collect();
-                    Ok(Value::Array(keys))
-                }
-            }
-            "values" => {
-                if let Some(Value::Array(keys)) = obj.get("__keys__") {
-                    let mut ordered_values = Vec::new();
-                    for key in keys {
-                        if let Value::String(key_name) = key {
-                            if let Some(value) = obj.get(key_name) {
-                                ordered_values.push(value.clone());
+                    Vec::new()
+                };
+                
+                let ordered_keys: Vec<Value> = keys.into_iter()
+                    .filter_map(|key| {
+                        if let Value::String(s) = key {
+                            if s != "__keys__" {
+                                Some(Value::String(s))
+                            } else {
+                                None
                             }
-                        }
-                    }
-                    Ok(Value::Array(ordered_values))
-                } else {
-                    let values: Vec<Value> = obj
-                        .iter()
-                        .filter(|(key, _)| *key != "__keys__")
-                        .map(|(_, value)| value.clone())
-                        .collect();
-                    Ok(Value::Array(values))
-                }
-            }
-            "entries" => {
-                let mut entries = Vec::new();
-                let keys: Vec<String> = if let Some(Value::Array(keys)) = obj.get("__keys__") {
-                    keys.iter().filter_map(|k| {
-                        if let Value::String(s) = k {
-                            Some(s.clone())
                         } else {
                             None
                         }
-                    }).collect()
+                    })
+                    .collect();
+                Ok(Value::Array(ordered_keys))
+            },
+            "values" => {
+                let keys_value = obj.get("__keys__").cloned();
+                let keys = if let Some(Value::Array(keys)) = keys_value {
+                    keys
                 } else {
-                    obj.keys().filter(|k| *k != "__keys__").cloned().collect()
+                    Vec::new()
                 };
-                for key in keys {
-                    if let Some(value) = obj.get(&key) {
-                        entries.push(Value::Array(vec![Value::String(key.clone()), value.clone()]));
-                    }
-                }
+
+                let ordered_values: Vec<Value> = keys.into_iter()
+                    .filter_map(|key| {
+                        if let Value::String(s) = key {
+                            if s != "__keys__" {
+                                obj.get(&s).cloned()
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                Ok(Value::Array(ordered_values))
+            },
+            "entries" => {
+                let keys_value = obj.get("__keys__").cloned();
+                let keys = if let Some(Value::Array(keys)) = keys_value {
+                    keys
+                } else {
+                    Vec::new()
+                };
+
+                let entries: Vec<Value> = keys.into_iter()
+                    .filter_map(|key| {
+                        if let Value::String(s) = key {
+                            if s != "__keys__" {
+                                obj.get(&s).map(|value| {
+                                    Value::Array(vec![Value::String(s), value.clone()])
+                                })
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
                 Ok(Value::Array(entries))
+            },
+            "hasKey" => {
+                if args.len() != 1 {
+                    return Err("hasKey requires one string argument".to_string());
+                }
+                if let Value::String(key) = &args[0] {
+                    Ok(Value::Boolean(obj.contains_key(key)))
+                } else {
+                    Err("hasKey argument must be a string".to_string())
+                }
+            }
+            "get" => {
+                if args.len() != 2 {
+                    return Err("get requires two arguments: key and default value".to_string());
+                }
+                if let Value::String(key) = &args[0] {
+                    Ok(obj.get(key).cloned().unwrap_or_else(|| args[1].clone()))
+                } else {
+                    Err("get first argument must be a string".to_string())
+                }
             }
             _ => Err(format!("Object method '{}' not supported", method_name)),
         }
@@ -534,6 +577,8 @@ impl Value {
     
     fn handle_int_method(n: i64, method_name: &str, _args: Vec<Value>) -> Result<Value, String> {
         match method_name {
+            "isEven" => Ok(Value::Boolean(n % 2 == 0)),
+            "isOdd" => Ok(Value::Boolean(n % 2 != 0)),
             _ => Err(format!("Integer method '{}' not supported", method_name)),
         }
     }
@@ -543,6 +588,8 @@ impl Value {
             "round" => Ok(Value::Int(n.round() as i64)),
             "floor" => Ok(Value::Int(n.floor() as i64)),
             "ceil" => Ok(Value::Int(n.ceil() as i64)),
+            "isEven" => Ok(Value::Boolean(n % 2.0 == 0.0)),
+            "isOdd" => Ok(Value::Boolean(n % 2.0 != 0.0)),
             _ => Err(format!("Float method '{}' not supported", method_name)),
         }
     }

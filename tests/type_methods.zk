@@ -67,4 +67,7 @@ let floored: int = num.floor => | |; // 3
 let ceil: int = num.ceil => | |; // 4
 @println => |"Number Ceil: " + ceil|
 
+let even: bool = num.isEven => | |; // false
+@println => |"Is Number Even: " + even|
+
 @println => |"\nAll type method tests complete!"|

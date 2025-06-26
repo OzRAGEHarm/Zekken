@@ -1,7 +1,0 @@
-use fs;
-
-let content: string = fs.read_file => |"data.json"|;
-let data: obj = @parse_json => |content|;
-
-@println => |data.name|
-@println => |data.description|

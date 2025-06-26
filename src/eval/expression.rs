@@ -218,34 +218,112 @@ fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Result<Va
 
 fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
     let object = evaluate_expression(&member.object, env)?;
-    let property = match *member.property {
-        Expr::Identifier(ref ident) => ident.name.clone(),
-        Expr::StringLit(ref lit) => lit.value.clone(),
-        _ => return Err(ZekkenError::type_error(
-            "Invalid property access",
-            "string",
-            "non-string",
-            member.location.line,
-            member.location.column,
-        )),
-    };
 
-    match object {
-        Value::Object(ref map) => {
-            if let Some(value) = map.get(&property) {
-                Ok(value.clone())
-            } else {
-                Err(ZekkenError::reference(
-                    &format!("Property '{}' not found", property),
-                    &property,
+    match &*member.property {
+        Expr::Identifier(ref ident) => {
+            let property = ident.name.clone();
+            match object {
+                Value::Object(ref map) => {
+                    if let Some(value) = map.get(&property) {
+                        Ok(value.clone())
+                    } else {
+                        Err(ZekkenError::reference(
+                            &format!("Property '{}' not found", property),
+                            &property,
+                            member.location.line,
+                            member.location.column,
+                        ))
+                    }
+                }
+                _ => Err(ZekkenError::type_error(
+                    "Invalid member access",
+                    "object",
+                    "other",
                     member.location.line,
                     member.location.column,
-                ))
+                )),
+            }
+        }
+        Expr::StringLit(ref lit) => {
+            let property = lit.value.clone();
+            match object {
+                Value::Object(ref map) => {
+                    if let Some(value) = map.get(&property) {
+                        Ok(value.clone())
+                    } else {
+                        Err(ZekkenError::reference(
+                            &format!("Property '{}' not found", property),
+                            &property,
+                            member.location.line,
+                            member.location.column,
+                        ))
+                    }
+                }
+                _ => Err(ZekkenError::type_error(
+                    "Invalid member access",
+                    "object",
+                    "other",
+                    member.location.line,
+                    member.location.column,
+                )),
+            }
+        }
+        Expr::IntLit(ref lit) => {
+            let idx = lit.value as usize;
+            match object {
+                Value::Array(ref arr) => {
+                    arr.get(idx)
+                        .cloned()
+                        .ok_or_else(|| ZekkenError::runtime(
+                            &format!("Array index {} out of bounds", idx),
+                            member.location.line,
+                            member.location.column,
+                            None,
+                        ))
+                }
+                Value::Object(ref map) => {
+                    // Support numeric indexing for objects with __keys__
+                    if let Some(Value::Array(keys)) = map.get("__keys__") {
+                        if let Some(Value::String(key)) = keys.get(idx) {
+                            if let Some(value) = map.get(key) {
+                                Ok(value.clone())
+                            } else {
+                                Err(ZekkenError::reference(
+                                    &format!("Property '{}' not found", key),
+                                    key,
+                                    member.location.line,
+                                    member.location.column,
+                                ))
+                            }
+                        } else {
+                            Err(ZekkenError::runtime(
+                                &format!("Object index {} out of bounds", idx),
+                                member.location.line,
+                                member.location.column,
+                                None,
+                            ))
+                        }
+                    } else {
+                        Err(ZekkenError::runtime(
+                            "Object does not support numeric indexing",
+                            member.location.line,
+                            member.location.column,
+                            None,
+                        ))
+                    }
+                }
+                _ => Err(ZekkenError::type_error(
+                    "Invalid member access",
+                    "object/array",
+                    "other",
+                    member.location.line,
+                    member.location.column,
+                )),
             }
         }
         _ => Err(ZekkenError::type_error(
-            "Invalid member access",
-            "object",
+            "Invalid property access",
+            "string/int/identifier",
             "other",
             member.location.line,
             member.location.column,
