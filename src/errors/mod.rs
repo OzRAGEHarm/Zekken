@@ -1,6 +1,8 @@
 use std::fmt;
 use std::error::Error;
 use std::env;
+use std::collections::HashSet;
+use std::sync::Mutex;
 
 #[derive(Debug, Clone)]
 pub struct ErrorContext {
@@ -18,13 +20,19 @@ impl ErrorContext {
     }
     pub fn from_env(line: usize, column: usize) -> Self {
         let filename = env::var("ZEKKEN_CURRENT_FILE").unwrap_or_else(|_| "<unknown>".to_string());
-        let source = env::var("ZEKKEN_SOURCE_LINES").unwrap_or_else(|_| "<source unavailable>".to_string());
-        let line_content = source.lines().nth(line.saturating_sub(1)).unwrap_or("<line not found>").to_string();
+        let line_content = if filename != "<unknown>" {
+            std::fs::read_to_string(&filename)
+                .ok()
+                .and_then(|src| src.lines().nth(line.saturating_sub(1)).map(|l| l.trim_end().to_string()))
+                .unwrap_or("<line not found>".to_string())
+        } else {
+            "<line not found>".to_string()
+        };
         Self::new(filename, line, column, line_content)
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ErrorKind {
     Syntax,
     Runtime,
@@ -80,9 +88,9 @@ impl ZekkenError {
             extra: Some(extra),
         }
     }
-    pub fn reference(msg: &str, name: &str, line: usize, column: usize) -> Self {
+    pub fn reference(msg: &str, kind: &str, line: usize, column: usize) -> Self {
         let ctx = ErrorContext::from_env(line, column);
-        let extra = format!("\x1b[1;90m  variable: \x1b[1;31m{}\x1b[0m\n", name);
+        let extra = format!("\x1b[1;90m  kind: \x1b[1;31m{}\x1b[0m\n", kind);
         Self {
             kind: ErrorKind::Reference,
             message: msg.to_string(),
@@ -123,3 +131,39 @@ impl fmt::Display for ZekkenError {
 }
 
 impl Error for ZekkenError {}
+
+// Add a global error collector using a Mutex-protected Vec
+
+lazy_static::lazy_static! {
+    // Store errors as (kind, line, column, message) to deduplicate
+    static ref ERROR_SET: Mutex<HashSet<(String, usize, usize, String)>> = Mutex::new(HashSet::new());
+    pub static ref ERROR_LIST: Mutex<Vec<ZekkenError>> = Mutex::new(Vec::new());
+}
+
+pub fn push_error(error: ZekkenError) {
+    let key = (
+        format!("{:?}", error.kind),
+        error.context.line,
+        error.context.column,
+        error.message.clone(),
+    );
+    let mut set = ERROR_SET.lock().unwrap();
+    if set.insert(key) {
+        ERROR_LIST.lock().unwrap().push(error);
+    }
+}
+
+// Print and clear all collected errors, returns true if any errors were printed
+pub fn print_and_clear_errors() -> bool {
+    let mut errors = ERROR_LIST.lock().unwrap();
+    if !errors.is_empty() {
+        for error in errors.iter() {
+            eprintln!("{}", error);
+        }
+        errors.clear();
+        ERROR_SET.lock().unwrap().clear();
+        true
+    } else {
+        false
+    }
+}

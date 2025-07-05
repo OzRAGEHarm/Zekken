@@ -1,7 +1,7 @@
-use std::env;
+use clap::{Parser, Subcommand};
 use std::fs;
+use std::io::{self, Write};
 use std::process;
-use std::io::Write;
 
 mod ast;
 mod lexer;
@@ -11,62 +11,134 @@ mod eval;
 mod errors;
 mod libraries;
 
-use parser::Parser;
+use parser::Parser as ZkParser;
 use eval::statement::evaluate_statement;
 use environment::{Environment, Value};
 use ast::Stmt;
+use errors::{push_error, print_and_clear_errors};
+
+/// Zekken Language CLI
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Initialize a new Zekken project
+    Init {
+        /// Use default values
+        #[arg(short, long)]
+        default: bool,
+    },
+
+    /// Run a Zekken script file
+    Run {
+        /// The script file to run
+        file: String,
+    },
+}
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        eprintln!("Usage: {} <filename>", args[0]);
-        process::exit(1);
-    }
+    let cli = Cli::parse();
 
-    let filename = &args[1];
-    std::env::set_var("ZEKKEN_CURRENT_FILE", filename);
-    let source_code = fs::read_to_string(filename).unwrap_or_else(|err| {
-        eprintln!("Error reading file {}: {}", filename, err);
-        process::exit(1)
-    });
+    match &cli.command {
+        Commands::Init { default } => {
+            let (name, version, entry_point, author) = if *default {
+                ("zekken_project".to_string(), "0.0.1".to_string(), "main.zk".to_string(), "".to_string())
+            } else {
+                let mut input = String::new();
+                print!("Project name: ");
+                io::stdout().flush().unwrap();
+                io::stdin().read_line(&mut input).unwrap();
+                let name = input.trim().to_string();
+                input.clear();
 
-    let mut parser = Parser::new();
-    let ast = parser.produce_ast(source_code);
+                print!("Version (default 0.0.1): ");
+                io::stdout().flush().unwrap();
+                io::stdin().read_line(&mut input).unwrap();
+                let version = if input.trim().is_empty() { "0.0.1".to_string() } else { input.trim().to_string() };
+                input.clear();
 
-    /*
-    println!("{:#?}", ast);
+                print!("Entry Point (default main.zk): ");
+                io::stdout().flush().unwrap();
+                io::stdin().read_line(&mut input).unwrap();
+                let entry_point = if input.trim().is_empty() { "main.zk".to_string() } else { input.trim().to_string() };
+                input.clear();
 
-    let source = env::var("ZEKKEN_SOURCE_LINES").unwrap_or_else(|_| "<unknown>".to_string());
-    let tokens = env::var("ZEKKEN_TOKENS").unwrap_or_else(|_| "<unknown>".to_string());
+                print!("Author: ");
+                io::stdout().flush().unwrap();
+                io::stdin().read_line(&mut input).unwrap();
+                let author = input.trim().to_string();
 
-    println!("Source code: \n{}", source);
-    println!("Tokens: {}", tokens);
-    */
-    
-    let mut env = Environment::new();
+                (name, version, entry_point, author)
+            };
 
-    let file_path = std::path::Path::new(filename);
-    let current_dir = file_path.parent()
-        .unwrap_or_else(|| std::path::Path::new(""))
-        .to_string_lossy()
-        .to_string();
+            let manifest = format!(
+                "{{\n  \"name\": \"{}\",\n  \"version\": \"{}\",\n  \"entry_point\": \"{}\",\n  \"author\": \"{}\",\n  \"dependencies\": {{}}\n}}",
+                name, version, entry_point, author
+            );
+            fs::write("zekken.json", manifest).expect("Failed to write zekken.json");
+            println!("Initialized new Zekken project.");
+        }
+        Commands::Run { file } => {
+            std::env::set_var("ZEKKEN_CURRENT_FILE", file);
+            let source_code = fs::read_to_string(file).unwrap_or_else(|err| {
+                eprintln!("Error reading file {}: {}", file, err);
+                process::exit(1)
+            });
 
-    env.declare("ZEKKEN_CURRENT_DIR".to_string(), Value::String(current_dir), false);
+            let mut parser = ZkParser::new();
+            let ast = parser.produce_ast(source_code);
 
-    match evaluate_statement(&Stmt::Program(ast), &mut env) {
-        Ok(result) => {
-            std::io::stdout().flush().unwrap();
-            match result {
+            // Push all syntax errors to the global error list
+            for error in &parser.errors {
+                push_error(error.clone());
+            }
+
+            let mut env = Environment::new();
+
+            // If there were any syntax errors, set a flag in the environment to disable printing
+            if !parser.errors.is_empty() {
+                env.declare("__DISABLE_PRINT__".to_string(), Value::Boolean(true), true);
+                std::env::set_var("ZEKKEN_DISABLE_PRINT", "1");
+            }
+
+            let file_path = std::path::Path::new(file);
+            let current_dir = file_path.parent()
+                .unwrap_or_else(|| std::path::Path::new(""))
+                .to_string_lossy()
+                .to_string();
+
+            env.declare("ZEKKEN_CURRENT_DIR".to_string(), Value::String(current_dir), false);
+
+            // Evaluate and push all runtime/type/reference errors to the global error list
+            let result = match evaluate_statement(&Stmt::Program(ast), &mut env) {
+                Ok(val) => Some(val),
+                Err(e) => {
+                    // Don't push the dummy internal error for multiple errors
+                    if e.kind != crate::errors::ErrorKind::Internal || e.message != "Multiple runtime errors occurred" {
+                        push_error(e);
+                    }
+                    None
+                }
+            };
+
+            // Print all errors (syntax, runtime, etc.) and exit if any
+            if print_and_clear_errors() {
+                std::process::exit(1);
+            }
+
+            // Only print result if there were no errors at all
+            io::stdout().flush().unwrap();
+            match result.flatten() {
                 Some(Value::Void) => (),
                 Some(value) => println!("{}", value),
                 None => ()
             }
-            process::exit(0)
-        },
-        Err(error) => {
-            eprintln!("{}", error);
-            eprintln!();
-            process::exit(1);
+            process::exit(0);
         }
     }
 }

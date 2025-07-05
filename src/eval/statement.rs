@@ -2,7 +2,7 @@ use crate::ast::*;
 use crate::environment::{Environment, Value, FunctionValue};
 use crate::parser::Parser;
 use super::expression::evaluate_expression;
-use crate::errors::ZekkenError;
+use crate::errors::{ZekkenError, push_error};
 use crate::libraries::load_library;
 use crate::lexer::DataType;
 use std::collections::HashMap;
@@ -30,9 +30,9 @@ fn value_type_name(val: &Value) -> &'static str {
         Value::Boolean(_) => "bool",
         Value::Array(_) => "array",
         Value::Object(_) => "object",
-        Value::Function(_) => "function",
-        Value::NativeFunction(_) => "native function",
-        Value::Void => "void",
+        Value::Function(_) => "",
+        Value::NativeFunction(_) => "",
+        Value::Void => "",
         _ => "unknown",
     }
 }
@@ -68,7 +68,7 @@ fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<V
                 _ => return Err(ZekkenError::syntax(
                     "Invalid import statement",
                     0,
-                     0,
+                    0,
                     None,
                     None,
                 ))
@@ -76,15 +76,27 @@ fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<V
         }
     }
 
-    // Process main content
+    // Process main content, stop at first error
     let mut last_value = None;
     for content in &program.content {
         match &**content {
             Content::Statement(stmt) => {
-                last_value = evaluate_statement(stmt, env)?;
-            },
+                match evaluate_statement(stmt, env) {
+                    Ok(val) => last_value = val,
+                    Err(e) => {
+                        push_error(e.clone());
+                        return Err(e); // Stop evaluation on first error
+                    }
+                }
+            }
             Content::Expression(expr) => {
-                last_value = Some(evaluate_expression(expr, env)?);
+                match evaluate_expression(expr, env) {
+                    Ok(val) => last_value = Some(val),
+                    Err(e) => {
+                        push_error(e.clone());
+                        return Err(e); // Stop evaluation on first error
+                    }
+                }
             }
         }
     }

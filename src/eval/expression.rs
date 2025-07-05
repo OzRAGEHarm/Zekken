@@ -2,11 +2,7 @@ use crate::ast::*;
 use crate::environment::{Environment, Value};
 use std::collections::HashMap;
 use crate::eval::statement::evaluate_statement;
-use crate::errors::ZekkenError;
-//use regex::Regex;
-//use crate::lexer::DataType;
-//use std::sync::Arc;
-
+use crate::errors::{ZekkenError};
 /*
 fn check_value_type(value: &Value, expected: &DataType) -> bool {
     match (value, expected) {
@@ -44,16 +40,15 @@ pub fn evaluate_expression(expr: &Expr, env: &mut Environment) -> Result<Value, 
             Ok(Value::Object(map))
         },
         Expr::Identifier(ident) => {
-            match env.lookup(&ident.name) {
-                Some(value) => Ok(value),
-                None => Err(ZekkenError::reference(
-                    &format!("Variable '{}' not found", ident.name),
-                    &ident.name,
-                    ident.location.line,
-                    ident.location.column
-                ))
-            }
-        },
+            let (val, kind) = env.lookup_with_kind(&ident.name);
+            let kind_str = kind.unwrap_or("variable");
+            val.ok_or_else(|| ZekkenError::reference(
+                &format!("{} '{}' not found", kind_str[0..1].to_uppercase() + &kind_str[1..], &ident.name),
+                kind_str,
+                ident.location.line,
+                ident.location.column,
+            ))
+        }
         Expr::Binary(binary) => evaluate_binary_expression(binary, env),
         Expr::Call(call) => evaluate_call_expression(call, env),
         Expr::Member(member) => evaluate_member_expression(member, env),
@@ -162,7 +157,27 @@ fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Result<Va
             .map_err(|s| ZekkenError::runtime(&s, call.location.line, call.location.column, None));
     }
 
-    let callee = evaluate_expression(&call.callee, env)?;
+    // When resolving the callee (e.g., function name), use lookup_with_kind
+    let (callee_val, callee_kind) = match &*call.callee {
+        Expr::Identifier(ident) => env.lookup_with_kind(&ident.name),
+        _ => (None, None),
+    };
+    let kind_str = callee_kind.unwrap_or("function");
+    let callee = match callee_val {
+        Some(val) => val,
+        None => {
+            return Err(ZekkenError::reference(
+                &format!("{} '{}' not found", kind_str[0..1].to_uppercase() + &kind_str[1..], match &*call.callee {
+                    Expr::Identifier(ident) => &ident.name,
+                    _ => "<unknown>",
+                }),
+                kind_str,
+                call.location.line,
+                call.location.column,
+            ));
+        }
+    };
+
     match callee {
         Value::NativeFunction(native_func) => {
             let mut args = Vec::new();

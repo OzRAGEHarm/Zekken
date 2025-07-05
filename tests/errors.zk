@@ -1,0 +1,11 @@
+// Syntax Errors:
+
+let x: int = 45 // Missing semicolon
+@println => |"X is: " + x|; // Semicolon should not be here
+let y = "Hello World!"; // Missing type annotation
+
+// Reference Errors:
+
+// Add function does not exist and therefore triggers a reference error
+let sum: int = add => |2, 5|;
+@println => |"Sum is: " + sum|

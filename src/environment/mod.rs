@@ -218,6 +218,16 @@ impl Environment {
       env.variables.insert(
         "println".to_string(),
         Value::NativeFunction(Arc::new(|args: Vec<Value>| -> Result<Value, String> {
+            // Check for ZEKKEN_DISABLE_PRINT environment variable
+            let disable_print = match std::env::var("ZEKKEN_DISABLE_PRINT") {
+                Ok(val) => val == "1" || val.eq_ignore_ascii_case("true"),
+                Err(_) => false,
+            };
+
+            if disable_print {
+                return Ok(Value::Void);
+            }
+
             let mut stdout = std::io::stdout();
 
             if args.is_empty() {
@@ -312,6 +322,29 @@ impl Environment {
           .or_else(|| self.constants.get(name))
           .cloned()
           .or_else(|| self.parent.as_ref().and_then(|p| p.lookup(name)))
+  }
+
+  /// Lookup a name and return (Option<Value>, Option<&'static str> kind)
+  pub fn lookup_with_kind(&self, name: &str) -> (Option<Value>, Option<&'static str>) {
+      if let Some(val) = self.variables.get(name) {
+          let kind = match val {
+              Value::Function(_) => "function",
+              Value::NativeFunction(_) => "native function",
+              _ => "variable",
+          };
+          (Some(val.clone()), Some(kind))
+      } else if let Some(val) = self.constants.get(name) {
+          let kind = match val {
+              Value::Function(_) => "function",
+              Value::NativeFunction(_) => "native function",
+              _ => "constant",
+          };
+          (Some(val.clone()), Some(kind))
+      } else if let Some(ref parent) = self.parent {
+          parent.lookup_with_kind(name)
+      } else {
+          (None, None)
+      }
   }
 }
 

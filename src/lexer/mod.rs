@@ -236,23 +236,31 @@ pub fn tokenize(source: String) -> Vec<Token> {
         }
 
         // Handle whitespace (except newlines)
-        if c.is_whitespace() {
+        if c.is_whitespace() && c != '\n' {
             index += 1;
             column += 1;
             continue;
         }
 
         // Get token
-        match tokenize_char(&src, index, line, column) {
-            Some((token, consumed)) => {
-                column += token.length;
-                tokens.push(token);
-                index += consumed;
+        if let Some((token, consumed)) = tokenize_char(&src, index, line, column) {
+            // Update line/column for multi-line tokens
+            //let mut lines = token.value.lines();
+            //let first_line = lines.next();
+            let num_newlines = token.value.matches('\n').count();
+            if num_newlines > 0 {
+                line += num_newlines;
+                // Set column to the length of the last line + 1
+                let last_line_len = token.value.rsplit('\n').next().unwrap_or("").len();
+                column = last_line_len + 1;
+            } else {
+                column += consumed;
             }
-            None => {
-                index += 1;
-                column += 1;
-            }
+            tokens.push(token);
+            index += consumed;
+        } else {
+            index += 1;
+            column += 1;
         }
     }
 

@@ -128,3 +128,10 @@
 - Fixed a bug with the `parse_json` native function where it would **ALWAYS** order json data alphabetically
 - Fixed a bug where strings would print with quotations around them instead of just the text inside the quotations
 - Added `json_data.zk` to `tests` directory for testing the `parse_json` native function
+
+### Early Development Build #25 (7/5/2025):
+- Improved Error Handling and printing, if there are multiple errors in a row, it will now print all of them at once
+- Fixed a bug with counting lines and columns, the `Lexer` wouldn't count specific lines and therefore would incorrectly give line numbers when printing an error
+- Fixed a bug with Error Handling where when an error occured on a line, the error handler could not find that specific line and would always print `<line not found>`
+- Moved `syntax.zk` to `examples` directory
+- Added `errors.zk` to `tests` directory for testing multiple errors
