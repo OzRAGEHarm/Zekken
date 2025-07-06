@@ -181,6 +181,14 @@ impl Parser {
 
     fn parse_normal_var_decl(&mut self, constant: bool, ident: String, start_location: Location) -> Content {
         if self.expect(TokenType::Colon, "Expected ':' after variable identifier").is_none() {
+            // Consume tokens until semicolon or end to avoid cascading errors
+            while self.at().kind != TokenType::Semicolon && self.at().kind != TokenType::EOF {
+                self.consume();
+            }
+            // Also consume the semicolon if present
+            if self.at().kind == TokenType::Semicolon {
+                self.consume();
+            }
             return Content::Statement(Box::new(Stmt::VarDecl(VarDecl {
                 constant,
                 ident,
@@ -203,6 +211,13 @@ impl Parser {
                     "Expected type (int, float, string, bool, obj, arr, fn) after ':'"
                 );
                 if token.is_none() {
+                    // Same: consume until semicolon to avoid cascades
+                    while self.at().kind != TokenType::Semicolon && self.at().kind != TokenType::EOF {
+                        self.consume();
+                    }
+                    if self.at().kind == TokenType::Semicolon {
+                        self.consume();
+                    }
                     return Content::Statement(Box::new(Stmt::VarDecl(VarDecl {
                         constant,
                         ident,
@@ -219,6 +234,12 @@ impl Parser {
         };
 
         if self.expect(TokenType::AssignOp(crate::lexer::AssignOp::Assign), "Expected '=' after type declaration").is_none() {
+            while self.at().kind != TokenType::Semicolon && self.at().kind != TokenType::EOF {
+                self.consume();
+            }
+            if self.at().kind == TokenType::Semicolon {
+                self.consume();
+            }
             return Content::Statement(Box::new(Stmt::VarDecl(VarDecl {
                 constant,
                 ident,

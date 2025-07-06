@@ -2,6 +2,7 @@
 
 pub mod math;
 pub mod fs;
+pub mod os;
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -21,6 +22,7 @@ fn init_libraries() -> HashMap<&'static str, LibraryFunction> {
     // Register standard libraries
     map.insert("math", math::register);
     map.insert("fs", fs::register);
+    map.insert("os", os::register);
     
     map
 }

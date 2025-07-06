@@ -32,7 +32,7 @@ fn value_type_name(val: &Value) -> &'static str {
         Value::Object(_) => "object",
         Value::Function(_) => "",
         Value::NativeFunction(_) => "",
-        Value::Void => "",
+        Value::Void => "void",
         _ => "unknown",
     }
 }
@@ -76,8 +76,9 @@ fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<V
         }
     }
 
-    // Process main content, stop at first error
+    // Process main content, collect all errors
     let mut last_value = None;
+    let mut had_error = false;
     for content in &program.content {
         match &**content {
             Content::Statement(stmt) => {
@@ -85,7 +86,8 @@ fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<V
                     Ok(val) => last_value = val,
                     Err(e) => {
                         push_error(e.clone());
-                        return Err(e); // Stop evaluation on first error
+                        had_error = true;
+                        // continue to next statement instead of returning
                     }
                 }
             }
@@ -94,11 +96,17 @@ fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<V
                     Ok(val) => last_value = Some(val),
                     Err(e) => {
                         push_error(e.clone());
-                        return Err(e); // Stop evaluation on first error
+                        had_error = true;
+                        // continue to next expression instead of returning
                     }
                 }
             }
         }
+    }
+
+    if had_error {
+        // Return a dummy error so main.rs knows not to print a result
+        return Err(ZekkenError::internal("Multiple runtime errors occurred"));
     }
 
     Ok(last_value)

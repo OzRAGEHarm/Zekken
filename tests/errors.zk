@@ -2,10 +2,19 @@
 
 let x: int = 45 // Missing semicolon
 @println => |"X is: " + x|; // Semicolon should not be here
-let y = "Hello World!"; // Missing type annotation
+let y: = "Hello World!"; // Missing type annotation
 
 // Reference Errors:
 
 // Add function does not exist and therefore triggers a reference error
 let sum: int = add => |2, 5|;
-@println => |"Sum is: " + sum|
+
+// Type Errors:
+
+let z: string = 10; // Assigning an int to a string variable
+
+// Runtime Errors:
+use fs;
+
+// Attempting to read a file that does not exist
+let content: string = fs.read_file => |"test.txt"|;

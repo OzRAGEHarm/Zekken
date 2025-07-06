@@ -135,3 +135,8 @@
 - Fixed a bug with Error Handling where when an error occured on a line, the error handler could not find that specific line and would always print `<line not found>`
 - Moved `syntax.zk` to `examples` directory
 - Added `errors.zk` to `tests` directory for testing multiple errors
+
+### Early Development Build #26 (7/6/25):
+- Added `os` native library to interact with the operating system
+- Added `os.zk` test file to `tests` directory
+- Improved Error Handling a bit more

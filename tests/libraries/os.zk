@@ -1,0 +1,24 @@
+use os;
+
+// Test current working directory
+let cwd: string = os.cwd => | |;
+@println => |"Current directory: " + cwd|
+
+// Test listing files in current directory
+let files: arr = os.ls => |"."|;
+@println => |"Files: " + files|
+
+// Test platform/OS
+let plat: string = os.platform => | |;
+@println => |"Platform: " + plat|
+
+// Test environment variable set/get/remove
+os.set_env => |"ZK_TEST_VAR", "hello"| // Set env var
+let env_val: string = os.env => |"ZK_TEST_VAR"|; // Get env var
+@println => |"ZK_TEST_VAR: " + env_val|
+os.remove_env => |"ZK_TEST_VAR"| // Remove env var
+let env_val2: string = os.env => |"ZK_TEST_VAR"|; // Should be empty string if not set
+@println => |"ZK_TEST_VAR after remove: " + env_val2|
+
+// Test exit (commented out to not stop test runner)
+// let _dummy3: string = os.exit => |0|
