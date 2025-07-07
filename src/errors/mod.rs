@@ -75,12 +75,27 @@ impl ZekkenError {
         } else {
             ""
         };
+
+        
+        // Use colorize function for expected/found
         if let Some(_e) = expected {
-            extra.push_str(&format!("\x1b[1;90m  expected: \x1b[1;32m{}\x1b[0m\n", pretty_expected));
+            extra.push_str(&format!(
+                "{} {}{}\n",
+                colorize("  expected:", "\x1b[1;90m"),
+                colorize(pretty_expected, "\x1b[1;32m"),
+                colorize("", "\x1b[0m")
+            ));
         }
         if let Some(f) = found {
-            extra.push_str(&format!("\x1b[1;90m  found:    \x1b[1;31m{}\x1b[0m\n", f));
+            extra.push_str(&format!(
+                "{} {}{}\n",
+                colorize("  found:   ", "\x1b[1;90m"), 
+                colorize(f, "\x1b[1;31m"), 
+                colorize("", "\x1b[0m")
+            ));
         }
+        
+
         Self {
             kind: ErrorKind::Syntax,
             message: msg.to_string(),
@@ -99,10 +114,19 @@ impl ZekkenError {
     }
     pub fn type_error(msg: &str, expected: &str, found: &str, line: usize, column: usize) -> Self {
         let ctx = ErrorContext::from_env(line, column);
+        
+        
         let extra = format!(
-            "\x1b[1;90m  expected: \x1b[1;32m{}\x1b[0m\n\x1b[1;90m  found:    \x1b[1;31m{}\x1b[0m\n",
-            expected, found
+            "{} {}{}\n{} {}{}\n",
+            colorize("  expected:", "\x1b[1;90m"),
+            colorize(expected, "\x1b[1;32m"),
+            colorize("", "\x1b[0m"),        
+            colorize("  found:   ", "\x1b[1;90m"),
+            colorize(found, "\x1b[1;31m"),   
+            colorize("", "\x1b[0m")    
         );
+        
+
         Self {
             kind: ErrorKind::Type,
             message: msg.to_string(),
@@ -112,7 +136,14 @@ impl ZekkenError {
     }
     pub fn reference(msg: &str, kind: &str, line: usize, column: usize) -> Self {
         let ctx = ErrorContext::from_env(line, column);
-        let extra = format!("\x1b[1;90m  kind: \x1b[1;31m{}\x1b[0m\n", kind);
+        
+        let extra = format!(
+            "{} {}{}\n",
+            colorize("  kind:", "\x1b[1;90m"),
+            colorize(kind, "\x1b[1;31m"),
+            colorize("", "\x1b[0m")
+        );
+        
         Self {
             kind: ErrorKind::Reference,
             message: msg.to_string(),
@@ -130,6 +161,25 @@ impl ZekkenError {
     }
 }
 
+lazy_static::lazy_static! {
+    // Store errors as (kind, line, column, message) to deduplicate
+    static ref ERROR_SET: Mutex<HashSet<(String, usize, usize, String)>> = Mutex::new(HashSet::new());
+    pub static ref ERROR_LIST: Mutex<Vec<ZekkenError>> = Mutex::new(Vec::new());
+    static ref NO_COLOR: Mutex<bool> = Mutex::new(
+        std::env::var("NO_COLOR").is_ok() ||
+        std::env::var("TERM").map(|term| term == "dumb").unwrap_or(false)
+    );
+}
+
+// Helper function to conditionally apply color
+fn colorize(text: &str, color_code: &str) -> String {
+    if *NO_COLOR.lock().unwrap() {
+        text.to_string()
+    } else {
+        format!("{}{}\x1b[0m", color_code, text)
+    }
+}
+
 impl fmt::Display for ZekkenError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (kind, color) = match self.kind {
@@ -139,14 +189,21 @@ impl fmt::Display for ZekkenError {
             ErrorKind::Reference => ("Reference Error", "\x1b[1;34m"),
             ErrorKind::Internal => ("Internal Error", "\x1b[1;41m"),
         };
+
+        let kind_str = colorize(kind, color);
+        let location = format!("{} -> [Ln: {}, Col: {}]",
+            self.context.filename, self.context.line, self.context.column);
+        let line_num = format!("{:>4}", self.context.line);
+        
         write!(
             f,
-            "\n{color}{kind}\x1b[0m: {}\n\x1b[1;90m     |\x1b[0m \x1b[1;37m{} -> [Ln: {}, Col: {}]\x1b[0m\n\x1b[1;90m     |\x1b[0m\n\x1b[1;90m{:>4} |\x1b[0m {}\n\x1b[1;90m     |\x1b[0m \x1b[1;32m{}\x1b[0m\n{}",
+            "\n{}: {}\n     | {}\n     |\n{} | {}\n     | {}\n{}",
+            kind_str,
             self.message,
-            self.context.filename, self.context.line, self.context.column,
-            self.context.line,
+            colorize(&location, "\x1b[1;37m"),
+            colorize(&line_num, "\x1b[1;90m"),
             self.context.line_content,
-            self.context.pointer,
+            colorize(&self.context.pointer, "\x1b[1;32m"),
             self.extra.clone().unwrap_or_default()
         )
     }
@@ -155,12 +212,6 @@ impl fmt::Display for ZekkenError {
 impl Error for ZekkenError {}
 
 // Add a global error collector using a Mutex-protected Vec
-
-lazy_static::lazy_static! {
-    // Store errors as (kind, line, column, message) to deduplicate
-    static ref ERROR_SET: Mutex<HashSet<(String, usize, usize, String)>> = Mutex::new(HashSet::new());
-    pub static ref ERROR_LIST: Mutex<Vec<ZekkenError>> = Mutex::new(Vec::new());
-}
 
 pub fn push_error(error: ZekkenError) {
     let key = (
@@ -191,6 +242,9 @@ pub fn print_and_clear_errors() -> bool {
 }
 
 fn highlight_zekken_line(line: &str) -> String {
+    if *NO_COLOR.lock().unwrap() {
+        return line.to_string();
+    }
     use regex::Regex;
     struct Span {
         start: usize,
