@@ -3,6 +3,8 @@
 let x: int = 45 // Missing semicolon
 @println => |"X is: " + x|; // Semicolon should not be here
 let y: = "Hello World!"; // Missing type annotation
+let z: = 12; // Missing type annotation
+let a: string = ; // Missing value after assignment
 
 // Reference Errors:
 
@@ -11,7 +13,7 @@ let sum: int = add => |2, 5|;
 
 // Type Errors:
 
-let z: string = 10; // Assigning an int to a string variable
+let b: string = 10; // Assigning an int to a string variable
 
 // Runtime Errors:
 use fs;

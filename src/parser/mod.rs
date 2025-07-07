@@ -180,23 +180,67 @@ impl Parser {
     }
 
     fn parse_normal_var_decl(&mut self, constant: bool, ident: String, start_location: Location) -> Content {
+        // First check if we have a type annotation
         if self.expect(TokenType::Colon, "Expected ':' after variable identifier").is_none() {
-            // Consume tokens until semicolon or end to avoid cascading errors
+            // If no colon, consume until semicolon and error out
             while self.at().kind != TokenType::Semicolon && self.at().kind != TokenType::EOF {
                 self.consume();
             }
-            // Also consume the semicolon if present
             if self.at().kind == TokenType::Semicolon {
                 self.consume();
             }
             return Content::Statement(Box::new(Stmt::VarDecl(VarDecl {
                 constant,
                 ident,
-                type_: crate::lexer::DataType::Any,
+                type_: DataType::Any,
                 value: None,
                 location: start_location,
             })));
         }
+
+        // At this point we've consumed the colon, check for equals sign (missing type case)
+        if self.at().kind == TokenType::AssignOp(AssignOp::Assign) {
+            let equals_loc = self.at().location();
+            self.consume(); // consume equals
+            
+            // Parse the value to infer its type
+            let value = Some(self.parse_expr());
+            
+            // Infer the type from the value
+            let inferred_type = match &value {
+                Some(Content::Expression(expr)) => match &**expr {
+                    Expr::StringLit(_) => ("String", DataType::String),
+                    Expr::IntLit(_) => ("Int", DataType::Int),
+                    Expr::FloatLit(_) => ("Float", DataType::Float),
+                    Expr::BoolLit(_) => ("Bool", DataType::Bool),
+                    Expr::ObjectLit(_) => ("Object", DataType::Object),
+                    Expr::ArrayLit(_) => ("Array", DataType::Array),
+                    _ => ("a type (int, float, string, bool, obj, arr, fn)", DataType::Any),
+                },
+                _ => ("a type (int, float, string, bool, obj, arr, fn)", DataType::Any),
+            };
+
+            // Push error with the inferred type
+            self.errors.push(ZekkenError::syntax(
+                &format!("Expected {} Type after ':'", inferred_type.0),
+                start_location.line,
+                equals_loc.column,
+                Some(&format!("{} Type", inferred_type.0)),
+                Some("AssignOp(Assign) (=)"),
+            ));
+
+            self.expect(TokenType::Semicolon, "Expected ';' after variable declaration");
+
+            return Content::Statement(Box::new(Stmt::VarDecl(VarDecl {
+                constant,
+                ident,
+                type_: inferred_type.1,
+                value,
+                location: start_location,
+            })));
+        }
+
+        // Otherwise, try to parse the type annotation
         let type_token = match self.at().kind {
             TokenType::DataType(t) => {
                 self.consume();
@@ -221,14 +265,14 @@ impl Parser {
                     return Content::Statement(Box::new(Stmt::VarDecl(VarDecl {
                         constant,
                         ident,
-                        type_: crate::lexer::DataType::Any,
+                        type_: DataType::Any,
                         value: None,
                         location: start_location,
                     })));
                 }
                 match token.unwrap().kind {
                     TokenType::DataType(t) => t,
-                    _ => crate::lexer::DataType::Any,
+                    _ => DataType::Any,
                 }
             }
         };
@@ -240,6 +284,25 @@ impl Parser {
             if self.at().kind == TokenType::Semicolon {
                 self.consume();
             }
+            return Content::Statement(Box::new(Stmt::VarDecl(VarDecl {
+                constant,
+                ident,
+                type_: type_token,
+                value: None,
+                location: start_location,
+            })));
+        }
+
+        // Check for missing value after '='
+        if self.at().kind == TokenType::Semicolon {
+            self.errors.push(ZekkenError::syntax(
+                "Expected value after '='",
+                start_location.line,
+                self.at().column,
+                Some("a value"),
+                Some("empty assignment"),
+            ));
+            self.consume(); // Consume semicolon
             return Content::Statement(Box::new(Stmt::VarDecl(VarDecl {
                 constant,
                 ident,

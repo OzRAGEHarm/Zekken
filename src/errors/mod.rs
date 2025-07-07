@@ -28,7 +28,8 @@ impl ErrorContext {
         } else {
             "<line not found>".to_string()
         };
-        Self::new(filename, line, column, line_content)
+        let highlighted = highlight_zekken_line(&line_content);
+        Self::new(filename, line, column, highlighted)
     }
 }
 
@@ -53,8 +54,29 @@ impl ZekkenError {
     pub fn syntax(msg: &str, line: usize, column: usize, expected: Option<&str>, found: Option<&str>) -> Self {
         let ctx = ErrorContext::from_env(line, column);
         let mut extra = String::new();
-        if let Some(e) = expected {
-            extra.push_str(&format!("\x1b[1;90m  expected: \x1b[1;32m{}\x1b[0m\n", e));
+        // If expected is a type token, try to pretty it up
+        let pretty_expected = if let Some(e) = expected {
+            // If the string already looks like a full type list or hint, don't pretty-print
+            if e.contains("a type (int, float, string, bool, obj, arr, fn)") {
+                e
+            } else {
+                match e {
+                    "DataType(Any)" => "a type (int, float, string, bool, obj, arr, fn)",
+                    "DataType(Int)" => "Int Type (int)",
+                    "DataType(Float)" => "Float Type (float)",
+                    "DataType(String)" => "String Type (string)",
+                    "DataType(Bool)" => "Bool Type (bool)",
+                    "DataType(Object)" => "Object Type (obj)",
+                    "DataType(Array)" => "Array Type (arr)",
+                    "DataType(Fn)" => "Function Type (fn)",
+                    _ => e,
+                }
+            }
+        } else {
+            ""
+        };
+        if let Some(_e) = expected {
+            extra.push_str(&format!("\x1b[1;90m  expected: \x1b[1;32m{}\x1b[0m\n", pretty_expected));
         }
         if let Some(f) = found {
             extra.push_str(&format!("\x1b[1;90m  found:    \x1b[1;31m{}\x1b[0m\n", f));
@@ -166,4 +188,149 @@ pub fn print_and_clear_errors() -> bool {
     } else {
         false
     }
+}
+
+fn highlight_zekken_line(line: &str) -> String {
+    use regex::Regex;
+    struct Span {
+        start: usize,
+        end: usize,
+        color: &'static str,
+        bold: bool,
+        italic: bool,
+    }
+
+    // Color mapping (ANSI 24-bit for best match)
+    const COMMENT: &str = "\x1b[38;2;106;153;85m";
+    const BUILTIN_FN: &str = "\x1b[38;2;86;156;214m";
+    const FN_DECL: &str = "\x1b[38;2;220;220;170m";
+    const FN_CALL: &str = "\x1b[38;2;220;220;170m";
+    const KEYWORD_OTHER: &str = "\x1b[38;2;86;156;214m";
+    const KEYWORD_CONTROL: &str = "\x1b[38;2;198;120;221m";
+    const OPERATOR: &str = "\x1b[38;2;212;212;212m";
+    const VARIABLE: &str = "\x1b[38;2;156;220;254m";
+    const TYPE: &str = "\x1b[38;2;78;201;176m";
+    const INT: &str = "\x1b[38;2;181;206;168m";
+    const FLOAT: &str = "\x1b[38;2;181;206;168m";
+    const BOOL: &str = "\x1b[38;2;86;156;214m";
+    const ESCAPE: &str = "\x1b[38;2;215;186;125m\x1b[1m";
+    const STRING: &str = "\x1b[38;2;206;145;120m";
+
+    let patterns: &[(&str, &str, bool, bool)] = &[
+        // Comments (line and block)
+        (r"//.*", COMMENT, false, true),
+        (r"/\*.*?\*/", COMMENT, false, true),
+        // Strings (double and single)
+        (r#""([^"\\]|\\.)*""#, STRING, false, false),
+        (r#"'([^'\\]|\\.)*'"#, STRING, false, false),
+        // String escapes (inside strings)
+        (r#"\\[abfnrtv0'"\\]"#, ESCAPE, true, false),
+        // Keywords (control)
+        (r"\b(if|else|for|while|try|catch|return)\b", KEYWORD_CONTROL, false, false),
+        // Keywords (other)
+        (r"\b(use|include|export|func|let|const|from|in)\b", KEYWORD_OTHER, false, false),
+        // Types
+        (r"\b(int|float|bool|string|arr|obj|fn)\b", TYPE, false, false),
+        // Boolean
+        (r"\b(true|false)\b", BOOL, false, false),
+        // Numbers (float and int)
+        (r"\b\d+\.\d+\b", FLOAT, false, false),
+        (r"\b\d+\b", INT, false, false),
+        // Function declaration (func name)
+        (r"\bfunc\s+([a-zA-Z_][a-zA-Z0-9_]*)", FN_DECL, false, false),
+        // Operators
+        (r"=>|->|[+\-*/%=]", OPERATOR, false, false),
+        // Variables (fallback)
+        (r"\b[a-zA-Z_][a-zA-Z0-9_]*\b", VARIABLE, false, false),
+    ];
+
+    let mut spans: Vec<Span> = Vec::new();
+
+    // Highlight @ symbol and builtin function name separately
+    {
+        let re = Regex::new(r"@([a-zA-Z_][a-zA-Z0-9_]*)").unwrap();
+        for m in re.captures_iter(line) {
+            if let Some(mat) = m.get(0) {
+                let at_pos = mat.start();
+                let name_pos = at_pos + 1;
+                let name_end = mat.end();
+                spans.push(Span {
+                    start: name_pos,
+                    end: name_end,
+                    color: BUILTIN_FN,
+                    bold: false,
+                    italic: false,
+                });
+            }
+        }
+    }
+
+    for (pat, color, bold, italic) in patterns {
+        let re = Regex::new(pat).unwrap();
+        for m in re.find_iter(line) {
+            spans.push(Span { start: m.start(), end: m.end(), color, bold: *bold, italic: *italic });
+        }
+    }
+
+    // Highlight function calls: identifier immediately before '=>'
+    // Only highlight as FN_CALL if not a builtin (not preceded by @)
+    {
+        let mut idx = 0;
+        while let Some(pos) = line[idx..].find("=>") {
+            let abs_pos = idx + pos;
+            let before = &line[..abs_pos];
+            // Find the identifier before =>
+            if let Some(id_match) = Regex::new(r"[a-zA-Z_][a-zA-Z0-9_]*\s*$").unwrap().find(before) {
+                // Check if this identifier is preceded by '@'
+                let id_start = id_match.start();
+                let is_builtin = id_start > 0 && &before[id_start - 1..id_start] == "@";
+                if !is_builtin {
+                    spans.push(Span {
+                        start: id_match.start(),
+                        end: id_match.end(),
+                        color: FN_CALL,
+                        bold: false,
+                        italic: false,
+                    });
+                }
+            }
+            idx = abs_pos + 2;
+        }
+    }
+
+    // Sort by start, then by longest match (descending)
+    spans.sort_by(|a, b| a.start.cmp(&b.start).then(b.end.cmp(&a.end)));
+
+    // Remove overlapping spans (keep outermost)
+    let mut filtered: Vec<Span> = Vec::new();
+    let mut last_end = 0;
+    for s in spans {
+        if s.start >= last_end {
+            last_end = s.end;
+            filtered.push(s);
+        }
+    }
+
+    // Build highlighted line
+    let mut result = String::new();
+    let mut idx = 0;
+    for s in filtered {
+        if idx < s.start {
+            result.push_str(&line[idx..s.start]);
+        }
+        result.push_str(s.color);
+        if s.bold {
+            result.push_str("\x1b[1m");
+        }
+        if s.italic {
+            result.push_str("\x1b[3m");
+        }
+        result.push_str(&line[s.start..s.end]);
+        result.push_str("\x1b[0m");
+        idx = s.end;
+    }
+    if idx < line.len() {
+        result.push_str(&line[idx..]);
+    }
+    result
 }
