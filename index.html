@@ -28,7 +28,9 @@
       try {
         const result = run(code);
         // Show raw result for debugging
-        output.textContent = result === undefined ? "(undefined)" : (result === "" ? "(empty string)" : result);
+        output.textContent = "typeof result: " + typeof result + "\n" +
+                             "JSON.stringify: " + JSON.stringify(result) + "\n" +
+                             "Raw: [" + result + "]";
       } catch (e) {
         output.textContent = "Error: " + (e && e.message ? e.message : e);
       }
