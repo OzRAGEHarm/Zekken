@@ -18,12 +18,18 @@
       run = run_zekken;
     });
     document.getElementById('runBtn').onclick = () => {
+      const output = document.getElementById('output');
       if (!ready || !run) {
-        document.getElementById('output').textContent = "WASM not loaded yet!";
+        output.textContent = "WASM not loaded yet!";
         return;
       }
       const code = document.getElementById('code').value;
-      document.getElementById('output').textContent = run(code);
+      try {
+        const result = run(code);
+        output.textContent = result && result.trim() !== "" ? result : "(no output)";
+      } catch (e) {
+        output.textContent = "Error: " + (e && e.message ? e.message : e);
+      }
     };
   </script>
 </body>
