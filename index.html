@@ -12,21 +12,19 @@
   <script type="module">
     import init, { run_zekken } from "./pkg/zekken.js";
     let ready = false;
-    let run = null;
     let lastError = null;
     init("./pkg/zekken_bg.wasm").then(() => {
       ready = true;
-      run = run_zekken;
     });
     document.getElementById('runBtn').onclick = () => {
       const output = document.getElementById('output');
-      if (!ready || !run) {
+      if (!ready) {
         output.textContent = "WASM not loaded yet!";
         return;
       }
       const code = document.getElementById('code').value;
       try {
-        const result = run(code);
+        const result = run_zekken(code);
         // Show raw result for debugging
         output.textContent = "typeof result: " + typeof result + "\n" +
                              "JSON.stringify: " + JSON.stringify(result) + "\n" +
