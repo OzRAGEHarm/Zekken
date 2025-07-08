@@ -1,0 +1,15 @@
+{
+  "name": "zekken",
+  "type": "module",
+  "version": "0.0.1",
+  "files": [
+    "zekken_bg.wasm",
+    "zekken.js",
+    "zekken.d.ts"
+  ],
+  "main": "zekken.js",
+  "types": "zekken.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
