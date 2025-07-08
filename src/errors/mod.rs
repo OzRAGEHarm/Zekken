@@ -1,5 +1,7 @@
+#[allow(dead_code)]
 use std::fmt;
 use std::error::Error;
+#[warn(unused_imports)]
 use std::env;
 use std::collections::HashSet;
 use std::sync::Mutex;
@@ -275,6 +277,7 @@ pub fn print_and_clear_errors() -> bool {
     }
 }
 
+#[allow(dead_code)]
 fn highlight_zekken_line(line: &str) -> String {
     if *NO_COLOR.lock().unwrap() {
         return line.to_string();
