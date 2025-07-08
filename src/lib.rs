@@ -10,6 +10,10 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 pub fn run_zekken(input: &str) -> String {
+    // Set panic hook for better error messages in WASM
+    #[cfg(target_arch = "wasm32")]
+    console_error_panic_hook::set_once();
+
     let mut parser = parser::Parser::new();
     let ast = parser.produce_ast(input.to_string());
     let mut env = environment::Environment::new();

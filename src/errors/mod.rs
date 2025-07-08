@@ -19,17 +19,25 @@ impl ErrorContext {
         Self { filename, line, column, line_content, pointer }
     }
     pub fn from_env(line: usize, column: usize) -> Self {
-        let filename = env::var("ZEKKEN_CURRENT_FILE").unwrap_or_else(|_| "<unknown>".to_string());
-        let line_content = if filename != "<unknown>" {
-            std::fs::read_to_string(&filename)
-                .ok()
-                .and_then(|src| src.lines().nth(line.saturating_sub(1)).map(|l| l.trim_end().to_string()))
-                .unwrap_or("<line not found>".to_string())
-        } else {
-            "<line not found>".to_string()
-        };
-        let highlighted = highlight_zekken_line(&line_content);
-        Self::new(filename, line, column, highlighted)
+        // WASM: avoid std::env and std::fs
+        #[cfg(target_arch = "wasm32")]
+        {
+            Self::new("<web>".to_string(), line, column, "".to_string())
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let filename = env::var("ZEKKEN_CURRENT_FILE").unwrap_or_else(|_| "<unknown>".to_string());
+            let line_content = if filename != "<unknown>" {
+                std::fs::read_to_string(&filename)
+                    .ok()
+                    .and_then(|src| src.lines().nth(line.saturating_sub(1)).map(|l| l.trim_end().to_string()))
+                    .unwrap_or("<line not found>".to_string())
+            } else {
+                "<line not found>".to_string()
+            };
+            let highlighted = highlight_zekken_line(&line_content);
+            Self::new(filename, line, column, highlighted)
+        }
     }
 }
 
