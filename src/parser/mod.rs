@@ -23,15 +23,21 @@ impl Parser {
 
     pub fn produce_ast(&mut self, source_code: String) -> Program {
         let source_lines: Vec<String> = source_code.lines().map(String::from).collect();
-        std::env::set_var("ZEKKEN_SOURCE_LINES", source_lines.join("\n"));
-        
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            std::env::set_var("ZEKKEN_SOURCE_LINES", source_lines.join("\n"));
+        }
+
         let tokens = tokenize(source_code);
         let tokens_str = tokens
             .iter()
             .map(|t| format!("{:?}", t))
             .collect::<Vec<String>>()
             .join("\n");
-        std::env::set_var("ZEKKEN_TOKENS", tokens_str);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            std::env::set_var("ZEKKEN_TOKENS", tokens_str);
+        }
 
         self.source_lines = source_lines;
         self.tokens = tokens;
