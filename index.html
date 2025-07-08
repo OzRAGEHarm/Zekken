@@ -13,6 +13,7 @@
     import init, { run_zekken } from "./pkg/zekken.js";
     let ready = false;
     let run = null;
+    let lastError = null;
     init("./pkg/zekken_bg.wasm").then(() => {
       ready = true;
       run = run_zekken;
@@ -26,7 +27,8 @@
       const code = document.getElementById('code').value;
       try {
         const result = run(code);
-        output.textContent = result && result.trim() !== "" ? result : "(no output)";
+        // Show raw result for debugging
+        output.textContent = result === undefined ? "(undefined)" : (result === "" ? "(empty string)" : result);
       } catch (e) {
         output.textContent = "Error: " + (e && e.message ? e.message : e);
       }
