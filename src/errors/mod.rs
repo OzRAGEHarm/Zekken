@@ -159,6 +159,26 @@ impl ZekkenError {
             extra: None,
         }
     }
+
+    /// Render a REPL-friendly error string (single-line, no file/line context)
+    pub fn to_repl_string(&self) -> String {
+        let kind = match self.kind {
+            ErrorKind::Syntax => "Syntax Error",
+            ErrorKind::Runtime => "Runtime Error",
+            ErrorKind::Type => "Type Error",
+            ErrorKind::Reference => "Reference Error",
+            ErrorKind::Internal => "Internal Error",
+        };
+        let mut msg = format!("{}: {}", kind, self.message);
+        if let Some(extra) = &self.extra {
+            // Remove ANSI color codes for REPL and trim lines
+            let plain = regex::Regex::new(r"\x1b\[[0-9;]*m").unwrap().replace_all(extra, "");
+            for line in plain.lines() {
+                msg.push_str(&format!("\n  {}", line.trim()));
+            }
+        }
+        msg
+    }
 }
 
 lazy_static::lazy_static! {
@@ -169,6 +189,7 @@ lazy_static::lazy_static! {
         std::env::var("NO_COLOR").is_ok() ||
         std::env::var("TERM").map(|term| term == "dumb").unwrap_or(false)
     );
+    pub static ref REPL_MODE: Mutex<bool> = Mutex::new(false);
 }
 
 // Helper function to conditionally apply color
@@ -182,30 +203,34 @@ fn colorize(text: &str, color_code: &str) -> String {
 
 impl fmt::Display for ZekkenError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (kind, color) = match self.kind {
-            ErrorKind::Syntax => ("Syntax Error", "\x1b[1;31m"),
-            ErrorKind::Runtime => ("Runtime Error", "\x1b[1;35m"),
-            ErrorKind::Type => ("Type Error", "\x1b[1;33m"),
-            ErrorKind::Reference => ("Reference Error", "\x1b[1;34m"),
-            ErrorKind::Internal => ("Internal Error", "\x1b[1;41m"),
-        };
+        if *REPL_MODE.lock().unwrap() {
+            write!(f, "{}", self.to_repl_string())
+        } else {
+            let (kind, color) = match self.kind {
+                ErrorKind::Syntax => ("Syntax Error", "\x1b[1;31m"),
+                ErrorKind::Runtime => ("Runtime Error", "\x1b[1;35m"),
+                ErrorKind::Type => ("Type Error", "\x1b[1;33m"),
+                ErrorKind::Reference => ("Reference Error", "\x1b[1;34m"),
+                ErrorKind::Internal => ("Internal Error", "\x1b[1;41m"),
+            };
 
-        let kind_str = colorize(kind, color);
-        let location = format!("{} -> [Ln: {}, Col: {}]",
-            self.context.filename, self.context.line, self.context.column);
-        let line_num = format!("{:>4}", self.context.line);
-        
-        write!(
-            f,
-            "\n{}: {}\n     | {}\n     |\n{} | {}\n     | {}\n{}",
-            kind_str,
-            self.message,
-            colorize(&location, "\x1b[1;37m"),
-            colorize(&line_num, "\x1b[1;90m"),
-            self.context.line_content,
-            colorize(&self.context.pointer, "\x1b[1;32m"),
-            self.extra.clone().unwrap_or_default()
-        )
+            let kind_str = colorize(kind, color);
+            let location = format!("{} -> [Ln: {}, Col: {}]", 
+                self.context.filename, self.context.line, self.context.column);
+            let line_num = format!("{:>4}", self.context.line);
+            
+            write!(
+                f,
+                "\n{}: {}\n     | {}\n     |\n{} | {}\n     | {}\n{}",
+                kind_str,
+                self.message,
+                colorize(&location, "\x1b[1;37m"),
+                colorize(&line_num, "\x1b[1;90m"),
+                self.context.line_content,
+                colorize(&self.context.pointer, "\x1b[1;32m"),
+                self.extra.clone().unwrap_or_default()
+            )
+        }
     }
 }
 
@@ -227,6 +252,7 @@ pub fn push_error(error: ZekkenError) {
 }
 
 // Print and clear all collected errors, returns true if any errors were printed
+#[allow(dead_code)]
 pub fn print_and_clear_errors() -> bool {
     let mut errors = ERROR_LIST.lock().unwrap();
     if !errors.is_empty() {

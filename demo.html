@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Zekken WASM Demo</title>
+</head>
+<body>
+  <h2>Zekken Language Demo</h2>
+  <textarea id="code" rows="8" cols="60">// Write Zekken code here</textarea><br>
+  <button onclick="runZekken()">Run</button>
+  <pre id="output"></pre>
+  <script type="module">
+    import init, { run_zekken } from "./pkg/zekken.js";
+    init().then(() => {
+      window.runZekken = () => {
+        const code = document.getElementById("code").value;
+        document.getElementById("output").textContent = run_zekken(code);
+      };
+    });
+  </script>
+</body>
+</html>

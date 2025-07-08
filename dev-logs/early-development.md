@@ -146,3 +146,7 @@
 - The line that is shown when an error occurs is syntax highlighted for better readability
 - Syntax Errors expecting a type annotation after the `:` will tell you what type you need to insert, i.e **(tests/errors.zk)** `let z: = 12;` is of `int` type
 - Added support for terminals that don't have color support for error logging
+
+### Early Development Build #28 (7/7/25):
+- Added `REPL` **(Read-Eval-Print Loop)** for CLI usage
+- Added a web demo using WASM

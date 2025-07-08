@@ -39,6 +39,9 @@ enum Commands {
         /// The script file to run
         file: String,
     },
+
+    /// Start a Zekken REPL
+    Repl,
 }
 
 fn main() {
@@ -139,6 +142,42 @@ fn main() {
                 None => ()
             }
             process::exit(0);
+        }
+        Commands::Repl => {
+            // Enable REPL-friendly error formatting
+            *errors::REPL_MODE.lock().unwrap() = true;
+            println!("Zekken REPL (type 'exit' or Ctrl+C to quit)");
+            let mut env = Environment::new();
+            loop {
+                print!("> ");
+                io::stdout().flush().unwrap();
+                let mut input = String::new();
+                if io::stdin().read_line(&mut input).is_err() {
+                    break;
+                }
+                let line = input.trim();
+                if line == "exit" || line == "quit" {
+                    break;
+                }
+                if line.is_empty() {
+                    continue;
+                }
+                let mut parser = ZkParser::new();
+                let ast = parser.produce_ast(line.to_string());
+                for error in &parser.errors {
+                    println!("{}", error); // Will use REPL-friendly format
+                }
+                if !parser.errors.is_empty() {
+                    continue;
+                }
+                match evaluate_statement(&Stmt::Program(ast), &mut env) {
+                    Ok(Some(Value::Void)) | Ok(None) => {}
+                    Ok(Some(val)) => println!("{}", val),
+                    Err(e) => println!("{}", e), // Will use REPL-friendly format
+                }
+            }
+            // Disable REPL mode after exiting
+            *errors::REPL_MODE.lock().unwrap() = false;
         }
     }
 }
