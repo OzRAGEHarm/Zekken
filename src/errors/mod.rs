@@ -18,11 +18,34 @@ impl ErrorContext {
         let pointer = " ".repeat(column.saturating_sub(1)) + "^";
         Self { filename, line, column, line_content, pointer }
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+static mut WASM_SOURCE_LINES: Option<(Vec<String>, String)> = None;
+
+#[cfg(target_arch = "wasm32")]
+pub fn set_wasm_source_lines(source: &str, filename: &str) {
+    unsafe {
+        WASM_SOURCE_LINES = Some((source.lines().map(|l| l.to_string()).collect(), filename.to_string()));
+    }
+}
+
+impl ErrorContext {
     pub fn from_env(line: usize, column: usize) -> Self {
-        // WASM: avoid std::env and std::fs
         #[cfg(target_arch = "wasm32")]
         {
-            Self::new("<web>".to_string(), line, column, "".to_string())
+            let (lines, filename) = unsafe {
+                WASM_SOURCE_LINES
+                    .as_ref()
+                    .map(|(l, f)| (l.clone(), f.clone()))
+                    .unwrap_or((vec![], "main.zk".to_string()))
+            };
+            let line_content = if line > 0 && line <= lines.len() {
+                lines[line - 1].clone()
+            } else {
+                "".to_string()
+            };
+            Self::new(filename, line, column, line_content)
         }
         #[cfg(not(target_arch = "wasm32"))]
         {

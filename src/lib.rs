@@ -21,6 +21,12 @@ pub fn run_zekken(input: &str) -> String {
     #[cfg(target_arch = "wasm32")]
     console_error_panic_hook::set_once();
 
+    // Store source lines globally for error context in WASM
+    #[cfg(target_arch = "wasm32")]
+    {
+        crate::errors::set_wasm_source_lines(input, "main.zk");
+    }
+
     let mut parser = parser::Parser::new();
     let ast = parser.produce_ast(input.to_string());
     let mut env = environment::Environment::new();
