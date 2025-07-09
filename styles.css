@@ -75,7 +75,51 @@ button:hover {
 /* Error/success states */
 .error { color: #ff5555; font-weight: bold; }
 .success { color: #50fa7b; font-weight: bold; }
+/* CodeMirror customization */
+.CodeMirror {
+  height: 180px !important;
+  font-family: 'Fira Mono', 'Consolas', 'Menlo', monospace;
+  font-size: 1.1em;
+  border: 1px solid #333;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  background: #181c24 !important;
+}
+
+.CodeMirror-scroll {
+  min-height: 180px;
+}
+
+.CodeMirror-lines {
+  padding: 12px 0;
+}
+
+.CodeMirror pre.CodeMirror-line,
+.CodeMirror pre.CodeMirror-line-like {
+  padding: 0 12px;
+}
+
+.CodeMirror:focus-within {
+  border-color: #ba1923;
+}
+
+.CodeMirror-selected { background: #ba192333 !important; }
+.CodeMirror-cursor { border-left-color: #ba1923 !important; }
+
+/* Zekken Syntax Colors */
+.cm-s-dracula .cm-comment { color: #6A9955 !important; font-style: italic !important; }
+.cm-s-dracula .cm-keyword { color: #569CD6 !important; }
+.cm-s-dracula .cm-keyword-control { color: #C678DD !important; }
+.cm-s-dracula .cm-builtin { color: #569CD6 !important; }
+.cm-s-dracula .cm-function { color: #DCDCAA !important; }
+.cm-s-dracula .cm-variable { color: #9CDCFE !important; }
+.cm-s-dracula .cm-type { color: #4EC9B0 !important; }
+.cm-s-dracula .cm-number { color: #B5CEA8 !important; }
+.cm-s-dracula .cm-string { color: #CE9178 !important; }
+.cm-s-dracula .cm-boolean { color: #569CD6 !important; }
+.cm-s-dracula .cm-operator { color: #D4D4D4 !important; }
+
 @media (max-width: 800px) {
   .container { max-width: 98vw; padding: 10px; }
-  #code, #output { font-size: 1em; }
+  .CodeMirror { font-size: 1em; }
 }

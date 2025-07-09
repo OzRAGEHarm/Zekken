@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/dracula.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+  <script src="js/zekken-mode.js"></script>
 </head>
 <body>
   <div class="container">
@@ -16,7 +17,7 @@
 @println => |"Hello, Web!"|</textarea>
     <div class="button-row">
       <button id="runBtn">Run</button>
-      <button id="resetBtn">Reset</button>
+      <button id="resetBtn">Reset</button> 
     </div>
     <pre id="output">(output will appear here)</pre>
   </div>
@@ -27,14 +28,19 @@
     let ready = false;
     init("./pkg/zekken_bg.wasm").then(() => ready = true);
 
-    // Initialize CodeMirror
+    // Initialize CodeMirror with custom config
     const editor = CodeMirror.fromTextArea(document.getElementById('code'), {
-      mode: 'javascript', // Close enough for now
+      mode: "text/x-zekken",
       theme: 'dracula',
       lineNumbers: true,
       tabSize: 2,
+      indentUnit: 2,
       autofocus: true,
-      viewportMargin: Infinity
+      viewportMargin: Infinity,
+      lineWrapping: true,
+      extraKeys: {
+        "Tab": (cm) => cm.replaceSelection("  "), // 2 spaces
+      }
     });
 
     // Match container width
