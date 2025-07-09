@@ -9,170 +9,95 @@
 <body>
   <div class="container">
     <h2>Zekken Programming Language Demo</h2>
-    <textarea id="code" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off">// Write Zekken code here
-@println => |"Hello, Web!"|;
-</textarea>
+    <textarea id="code" spellcheck="false">// Write Zekken code here
+@println => |"Hello, Web!"|</textarea>
     <div class="button-row">
       <button id="runBtn">Run</button>
-      <button id="resetBtn" type="button">Reset</button>
+      <button id="resetBtn">Reset</button>
     </div>
     <pre id="output">(output will appear here)</pre>
   </div>
+
   <script type="module">
     import init, { run_zekken } from "./pkg/zekken.js";
+    
     let ready = false;
-    init("./pkg/zekken_bg.wasm").then(() => {
-      ready = true;
-    });
+    init("./pkg/zekken_bg.wasm").then(() => ready = true);
 
-    // --- Live syntax highlighting in textarea using input event and setSelectionRange ---
-    // This approach colors the text as you type using a contenteditable div overlay.
-    // The textarea is hidden, and a div is shown with colored HTML, but input is synced.
+    const code = document.getElementById('code');
+    const output = document.getElementById('output');
 
-    // Replace textarea with a contenteditable div for highlighting
-    const textarea = document.getElementById('code');
-    const parent = textarea.parentNode;
-    const highlightDiv = document.createElement('div');
-    highlightDiv.id = "highlighted";
-    highlightDiv.className = "highlighted";
-    highlightDiv.contentEditable = "true";
-    highlightDiv.spellcheck = false;
-    highlightDiv.autocorrect = "off";
-    highlightDiv.autocapitalize = "off";
-    highlightDiv.style.whiteSpace = "pre-wrap";
-    highlightDiv.style.outline = "none";
-    highlightDiv.style.width = "100%";
-    highlightDiv.style.minHeight = "180px";
-    highlightDiv.style.fontFamily = "inherit";
-    highlightDiv.style.fontSize = "1.1em";
-    highlightDiv.style.background = "#181c24";
-    highlightDiv.style.color = "#e0e0e0";
-    highlightDiv.style.padding = "12px";
-    highlightDiv.style.borderRadius = "8px";
-    highlightDiv.style.border = "1px solid #333";
-    highlightDiv.style.boxShadow = "0 2px 8px #0004";
-    highlightDiv.style.marginBottom = "16px";
-    highlightDiv.style.resize = "vertical";
-    highlightDiv.style.overflow = "auto";
-    // Insert before textarea, then remove textarea
-    parent.insertBefore(highlightDiv, textarea);
-    parent.removeChild(textarea);
-
-    // Syntax highlight function
-    function highlightZekken(code) {
-      code = code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      code = code
-        .replace(/(\/\/.*)/g, '<span class="hl-comment">$1</span>')
-        .replace(/("(?:[^"\\]|\\.)*")/g, '<span class="hl-string">$1</span>')
-        .replace(/'(?:[^'\\]|\\.)*'/g, m => `<span class="hl-string">${m}</span>`)
-        .replace(/\b(let|const|func|return|if|else|for|while|try|catch|use|include|export|from|in)\b/g, '<span class="hl-keyword">$1</span>')
-        .replace(/\b(int|float|bool|string|arr|obj|fn)\b/g, '<span class="hl-type">$1</span>')
-        .replace(/\b(true|false)\b/g, '<span class="hl-type">$1</span>')
-        .replace(/\b\d+\.\d+\b/g, '<span class="hl-number">$&</span>')
-        .replace(/\b\d+\b/g, '<span class="hl-number">$&</span>')
-        .replace(/([+\-*/%=<>!]+)/g, '<span class="hl-operator">$1</span>');
-      return code;
-    }
-
-    // Set initial code
-    const initialCode = `// Write Zekken code here
-@println => |"Hello, Web!"|;
-`;
-    highlightDiv.innerHTML = highlightZekken(initialCode);
-
-    // Keep a plain text version in a variable for running
-    let plainText = initialCode;
-
-    // Handle input and highlight
-    function syncHighlightDiv() {
-      // Get plain text from div (strip HTML)
-      let text = highlightDiv.innerText.replace(/\r/g, "");
-      plainText = text;
-      // Save caret position
-      const selection = window.getSelection();
-      const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-      const startOffset = range ? range.startOffset : 0;
-      const startContainer = range ? range.startContainer : null;
-
-      // Highlight and restore caret
-      highlightDiv.innerHTML = highlightZekken(text);
-
-      // Restore caret (best effort)
-      if (range && startContainer) {
-        function setCaret(el, offset) {
-          let node = el.firstChild;
-          let stack = [];
-          while (node) {
-            if (node.nodeType === 3) { // text node
-              if (offset <= node.length) {
-                let r = document.createRange();
-                r.setStart(node, offset);
-                r.collapse(true);
-                let sel = window.getSelection();
-                sel.removeAllRanges();
-                sel.addRange(r);
-                return true;
-              } else {
-                offset -= node.length;
-              }
-            } else if (node.nodeType === 1 && node.childNodes.length) {
-              stack.push({node, offset});
-              node = node.firstChild;
-              continue;
-            }
-            if (node.nextSibling) {
-              node = node.nextSibling;
-            } else {
-              while (stack.length && !node.nextSibling) {
-                let popped = stack.pop();
-                node = popped.node;
-                offset = popped.offset;
-              }
-              node = node.nextSibling;
-            }
-          }
-          return false;
-        }
-        setCaret(highlightDiv, startOffset);
-      }
-    }
-
-    highlightDiv.addEventListener('input', syncHighlightDiv);
-    highlightDiv.addEventListener('scroll', () => {
-      highlightDiv.scrollTop = highlightDiv.scrollTop;
-    });
-    window.addEventListener('resize', syncHighlightDiv);
-
-    // --- Output logic with ANSI color to HTML ---
-    function ansiToHtml(text) {
+    // Syntax highlighting function
+    function highlight(text) {
       return text
-        .replace(/\x1b\[1;31m/g, '<span style="color:#ff5555;font-weight:bold">')
-        .replace(/\x1b\[1;32m/g, '<span style="color:#50fa7b;font-weight:bold">')
-        .replace(/\x1b\[1;33m/g, '<span style="color:#f1fa8c;font-weight:bold">')
-        .replace(/\x1b\[1;34m/g, '<span style="color:#8be9fd;font-weight:bold">')
-        .replace(/\x1b\[1;35m/g, '<span style="color:#bd93f9;font-weight:bold">')
-        .replace(/\x1b\[1;37m/g, '<span style="color:#e0e0e0;font-weight:bold">')
-        .replace(/\x1b\[1;41m/g, '<span style="background:#ff5555;color:#fff;font-weight:bold">')
-        .replace(/\x1b\[38;2;106;153;85m/g, '<span style="color:#6a9955">')
-        .replace(/\x1b\[38;2;86;156;214m/g, '<span style="color:#569cd6">')
-        .replace(/\x1b\[38;2;220;220;170m/g, '<span style="color:#dcdcaa">')
-        .replace(/\x1b\[38;2;198;120;221m/g, '<span style="color:#c678dd">')
-        .replace(/\x1b\[38;2;212;212;212m/g, '<span style="color:#d4d4d4">')
-        .replace(/\x1b\[38;2;156;220;254m/g, '<span style="color:#9cdcfe">')
-        .replace(/\x1b\[38;2;78;201;176m/g, '<span style="color:#4ec9b0">')
-        .replace(/\x1b\[38;2;181;206;168m/g, '<span style="color:#b5cea8">')
-        .replace(/\x1b\[38;2;215;186;125m\x1b\[1m/g, '<span style="color:#d7ba7d;font-weight:bold">')
-        .replace(/\x1b\[38;2;206;145;120m/g, '<span style="color:#ce9178">')
-        .replace(/\x1b\[0m/g, '</span>');
+        // Comments
+        .replace(/(\/\/.*$)/gm, '<span style="color:#6A9955;font-style:italic">$1</span>')
+        // Built-in functions (@println etc)
+        .replace(/(@[a-zA-Z_][a-zA-Z0-9_]*)/g, '<span style="color:#569CD6">$1</span>')
+        // Keywords
+        .replace(/\b(if|else|for|while|try|catch|return)\b/g, '<span style="color:#C678DD">$1</span>')
+        .replace(/\b(use|include|export|func|let|const|from|in)\b/g, '<span style="color:#569CD6">$1</span>')
+        // Types
+        .replace(/\b(int|float|bool|string|arr|obj|fn)\b/g, '<span style="color:#4EC9B0">$1</span>')
+        // Numbers
+        .replace(/\b(\d+\.?\d*)\b/g, '<span style="color:#B5CEA8">$1</span>')
+        // Strings
+        .replace(/("(?:[^"\\]|\\.)*")/g, '<span style="color:#CE9178">$1</span>')
+        .replace(/('(?:[^'\\]|\\.)*')/g, '<span style="color:#CE9178">$1</span>')
+        // Operators
+        .replace(/([+\-*/%=<>!|]+)/g, '<span style="color:#D4D4D4">$1</span>')
+        // Booleans
+        .replace(/\b(true|false)\b/g, '<span style="color:#569CD6">$1</span>')
+        // Variables (must come last to not override keywords)
+        .replace(/\b([a-zA-Z_][a-zA-Z0-9_]*)\b/g, '<span style="color:#9CDCFE">$1</span>');
     }
+
+    // Create a hidden div for syntax highlighting
+    const highlighter = document.createElement('pre');
+    highlighter.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 12px;
+      background: transparent;
+      color: transparent;
+      pointer-events: none;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      overflow: hidden;
+      font-family: inherit;
+      font-size: inherit;
+      z-index: 1;
+    `;
+    
+    // Wrap code textarea in relative div
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'position: relative;';
+    code.parentNode.insertBefore(wrapper, code);
+    wrapper.appendChild(code);
+    wrapper.appendChild(highlighter);
+
+    // Update highlighting on input
+    function updateHighlight() {
+      highlighter.innerHTML = highlight(code.value);
+      highlighter.scrollTop = code.scrollTop;
+      highlighter.scrollLeft = code.scrollLeft;
+    }
+
+    code.addEventListener('input', updateHighlight);
+    code.addEventListener('scroll', () => {
+      highlighter.scrollTop = code.scrollTop;
+      highlighter.scrollLeft = code.scrollLeft;
+    });
+
+    // Initial highlight
+    updateHighlight();
 
     function showOutput(text, isError = false) {
-      const output = document.getElementById('output');
-      if (isError || /\x1b\[[0-9;]*m/.test(text)) {
-        output.innerHTML = ansiToHtml(text);
-      } else {
-        output.textContent = text;
-      }
+      output.innerHTML = text;
       output.className = isError ? "error" : "";
     }
 
@@ -182,21 +107,23 @@
         return;
       }
       try {
-        const result = run_zekken(plainText);
-        const isError = result && (result.includes("Error:") || result.includes("Syntax Error") || result.includes("Runtime Error") || result.includes("Type Error"));
-        showOutput(result && result.trim() !== "" ? result : "(no output)", isError);
+        const result = run_zekken(code.value);
+        const isError = result && (
+          result.includes("Error:") || 
+          result.includes("Syntax Error") || 
+          result.includes("Runtime Error") || 
+          result.includes("Type Error")
+        );
+        showOutput(result || "(no output)", isError);
       } catch (e) {
-        showOutput("Error: " + (e && e.message ? e.message : e), true);
+        showOutput("Error: " + e.message || e, true);
       }
     };
 
     document.getElementById('resetBtn').onclick = () => {
-      plainText = initialCode;
-      highlightDiv.innerHTML = highlightZekken(initialCode);
+      code.value = "// Write Zekken code here\n@println => |\"Hello, Web!\"|";
       showOutput("(output will appear here)");
     };
-    // Initial highlight
-    syncHighlightDiv();
   </script>
 </body>
 </html>
