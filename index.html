@@ -9,10 +9,10 @@
 <body>
   <div class="container">
     <h2>Zekken Programming Language Demo</h2>
-    <div class="editor-wrapper">
-      <pre class="highlighted" id="highlighted" aria-hidden="true"></pre>
+    <div class="editor-wrapper" style="position:relative; width:100%; margin-bottom:16px;">
+      <pre class="highlighted" id="highlighted" aria-hidden="true" style="margin:0; width:100%; min-height:180px; box-sizing:border-box; pointer-events:none;"></pre>
       <textarea id="code" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"
-        style="background: transparent; color: transparent; caret-color: #ffb86c; position: absolute; top: 0; left: 0; width: 100%; height: 100%; resize: none; z-index: 2; border: none; outline: none; padding: 12px; font-family: inherit; font-size: 1.1em;">
+        style="background:transparent; color:#e0e0e0; caret-color:#ffb86c; position:absolute; top:0; left:0; width:100%; min-height:180px; height:100%; resize:vertical; z-index:2; border:none; outline:none; padding:12px; font-family:inherit; font-size:1.1em; box-sizing:border-box; overflow:auto;">
 // Write Zekken code here
 @println => |"Hello, Web!"|
 </textarea>
@@ -63,31 +63,6 @@
       highlighted.scrollTop = textarea.scrollTop;
     });
     window.addEventListener('resize', syncHighlight);
-    // Overlay textarea on top of pre
-    textarea.style.background = "transparent";
-    textarea.style.color = "transparent";
-    textarea.style.caretColor = "#ffb86c";
-    textarea.style.position = "absolute";
-    textarea.style.top = "0";
-    textarea.style.left = "0";
-    textarea.style.width = "100%";
-    textarea.style.height = "100%";
-    textarea.style.resize = "none";
-    textarea.style.zIndex = "2";
-    textarea.style.border = "none";
-    textarea.style.outline = "none";
-    textarea.style.padding = "12px";
-    textarea.style.fontFamily = "inherit";
-    textarea.style.fontSize = "1.1em";
-    // Set wrapper height to match lines
-    function adjustHeight() {
-      textarea.style.height = "auto";
-      textarea.style.height = textarea.scrollHeight + "px";
-      highlighted.style.height = textarea.style.height;
-    }
-    textarea.addEventListener('input', adjustHeight);
-    window.addEventListener('resize', adjustHeight);
-    adjustHeight();
     syncHighlight();
 
     // --- Output logic with ANSI color to HTML ---
@@ -147,11 +122,9 @@
 `;
       syncHighlight();
       showOutput("(output will appear here)");
-      adjustHeight();
     };
     // Initial highlight
     syncHighlight();
-    adjustHeight();
   </script>
 </body>
 </html>
