@@ -5,7 +5,7 @@
   <title>Zekken WASM Demo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- CodeMirror 6 basic setup via CDN (esm.sh) -->
-  <link rel="stylesheet" href="https://esm.sh/@codemirror/theme-one-dark@6.2.0/theme-one-dark.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@codemirror/theme-one-dark@6.2.0/theme-one-dark.min.css">
   <style>
     body {
       background: #181c24;
@@ -107,13 +107,11 @@
   <script src="https://cdn.jsdelivr.net/npm/ansi_up@5.2.1/ansi_up.min.js"></script>
   <!-- CodeMirror 6 basic setup via esm.sh -->
   <script type="module">
-    import { EditorView, basicSetup } from "https://esm.sh/@codemirror/basic-setup@0.20.2";
-    import { EditorState } from "https://esm.sh/@codemirror/state@0.19.1";
-    import { oneDark } from "https://esm.sh/@codemirror/theme-one-dark@6.2.0";
-    // Minimal Zekken syntax highlighting (keywords, comments, strings, numbers)
-    import { HighlightStyle, tags } from "https://esm.sh/@codemirror/highlight@0.19.0";
-    import { StreamLanguage } from "https://esm.sh/@codemirror/stream-parser@0.19.2";
-    import { defineZekken } from "https://esm.sh/mini-codemirror-zekken@0.0.1?external=@codemirror/state,@codemirror/highlight";
+    import { EditorView, basicSetup } from "https://cdn.jsdelivr.net/npm/@codemirror/basic-setup@0.20.2/+esm";
+    import { EditorState } from "https://cdn.jsdelivr.net/npm/@codemirror/state@0.19.1/+esm";
+    import { oneDark } from "https://cdn.jsdelivr.net/npm/@codemirror/theme-one-dark@6.2.0/+esm";
+    import { HighlightStyle, tags } from "https://cdn.jsdelivr.net/npm/@codemirror/highlight@0.19.0/+esm";
+    import { StreamLanguage } from "https://cdn.jsdelivr.net/npm/@codemirror/stream-parser@0.19.2/+esm";
 
     // If you don't have a Zekken mode, fallback to JS mode or plaintext
     let zekkenLang = StreamLanguage.define({
