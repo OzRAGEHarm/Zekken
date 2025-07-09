@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Zekken WASM Demo</title>
+  <title>Zekken Programming Language Demo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="container">
-    <h2>Zekken Language Web Demo</h2>
+    <h2>Zekken Programming Language Demo</h2>
     <div class="editor-wrapper">
       <pre class="highlighted" id="highlighted"></pre>
       <textarea id="code" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off">// Write Zekken code here
@@ -112,7 +112,7 @@
 
     document.getElementById('resetBtn').onclick = () => {
       textarea.value = `// Write Zekken code here
-@println => |"Hello, Web!"|;
+@println => |"Hello, Web!"|
 `;
       syncHighlight();
       showOutput("(output will appear here)");
