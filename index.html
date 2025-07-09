@@ -4,8 +4,6 @@
   <meta charset="UTF-8">
   <title>Zekken WASM Demo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- CodeMirror 6 basic setup via CDN (esm.sh) -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@codemirror/theme-one-dark@6.2.0/theme-one-dark.min.css">
   <style>
     body {
       background: #181c24;
@@ -36,14 +34,24 @@
       color: #ffb86c;
       letter-spacing: 1px;
     }
-    #editor {
+    #code {
+      width: 100%;
       height: 180px;
       border-radius: 8px;
       margin-bottom: 16px;
       font-size: 1.1em;
       background: #181c24;
+      color: #e0e0e0;
       border: 1px solid #333;
       box-shadow: 0 2px 8px #0004;
+      font-family: inherit;
+      padding: 12px;
+      resize: vertical;
+      outline: none;
+      transition: border 0.2s;
+    }
+    #code:focus {
+      border: 1.5px solid #ffb86c;
     }
     .button-row {
       display: flex;
@@ -83,12 +91,24 @@
       box-shadow: 0 2px 8px #0004;
       transition: background 0.2s;
     }
-    .CodeMirror {
-      font-size: 1.1em;
+    .error {
+      color: #ff5555;
+      font-weight: bold;
     }
+    .success {
+      color: #50fa7b;
+      font-weight: bold;
+    }
+    .keyword { color: #ffb86c; font-weight: bold; }
+    .comment { color: #6272a4; font-style: italic; }
+    .string { color: #f1fa8c; }
+    .number { color: #bd93f9; }
+    .type { color: #50fa7b; }
+    .operator { color: #ff79c6; }
+    .variable { color: #f8f8f2; }
     @media (max-width: 800px) {
       .container { max-width: 98vw; padding: 10px; }
-      #editor { font-size: 1em; }
+      #code { font-size: 1em; }
       #output { font-size: 1em; }
     }
   </style>
@@ -96,105 +116,46 @@
 <body>
   <div class="container">
     <h2>Zekken Language Web Demo</h2>
-    <div id="editor"></div>
+    <textarea id="code" spellcheck="false">// Write Zekken code here
+@println => |"Hello, Web!"|;
+</textarea>
     <div class="button-row">
       <button id="runBtn">Run</button>
       <button id="resetBtn" type="button">Reset</button>
     </div>
     <pre id="output">(output will appear here)</pre>
   </div>
-  <!-- ansi_up for ANSI color to HTML conversion -->
-  <script src="https://cdn.jsdelivr.net/npm/ansi_up@5.2.1/ansi_up.min.js"></script>
-  <!-- CodeMirror 6 basic setup via esm.sh -->
   <script type="module">
-    import { EditorView, basicSetup } from "https://cdn.jsdelivr.net/npm/@codemirror/basic-setup@0.20.2/+esm";
-    import { EditorState } from "https://cdn.jsdelivr.net/npm/@codemirror/state@0.19.1/+esm";
-    import { oneDark } from "https://cdn.jsdelivr.net/npm/@codemirror/theme-one-dark@6.2.0/+esm";
-    import { HighlightStyle, tags } from "https://cdn.jsdelivr.net/npm/@codemirror/highlight@0.19.0/+esm";
-    import { StreamLanguage } from "https://cdn.jsdelivr.net/npm/@codemirror/stream-parser@0.19.2/+esm";
-
-    // If you don't have a Zekken mode, fallback to JS mode or plaintext
-    let zekkenLang = StreamLanguage.define({
-      start: [
-        {regex: /\/\/.*/, token: "comment"},
-        {regex: /"(?:[^"\\]|\\.)*"?/, token: "string"},
-        {regex: /'(?:[^'\\]|\\.)*'?/, token: "string"},
-        {regex: /\b(let|const|func|return|if|else|for|while|try|catch|use|include|export|from|in)\b/, token: "keyword"},
-        {regex: /\b(true|false)\b/, token: "atom"},
-        {regex: /\b(int|float|bool|string|arr|obj|fn)\b/, token: "type"},
-        {regex: /[+\-*/%=<>!]+/, token: "operator"},
-        {regex: /\d+\.\d+|\d+/, token: "number"},
-        {regex: /@[a-zA-Z_][a-zA-Z0-9_]*/, token: "variable-2"},
-        {regex: /[a-zA-Z_][a-zA-Z0-9_]*/, token: "variable"},
-        {regex: /[\(\)\[\]\{\};,]/, token: null}
-      ]
-    });
-
-    const zekkenHighlight = HighlightStyle.define([
-      {tag: tags.keyword, color: "#ffb86c", fontWeight: "bold"},
-      {tag: tags.atom, color: "#8be9fd"},
-      {tag: tags.string, color: "#f1fa8c"},
-      {tag: tags.number, color: "#bd93f9"},
-      {tag: tags.comment, color: "#6272a4", fontStyle: "italic"},
-      {tag: tags.typeName, color: "#50fa7b"},
-      {tag: tags.variableName, color: "#f8f8f2"},
-      {tag: tags.operator, color: "#ff79c6"},
-    ]);
-
-    // Initial code
-    const initialCode = `// Write Zekken code here
-@println => |"Hello, Web!"|;
-`;
-
-    // Setup CodeMirror
-    let editorView = new EditorView({
-      state: EditorState.create({
-        doc: initialCode,
-        extensions: [
-          basicSetup,
-          zekkenLang,
-          oneDark,
-          zekkenHighlight
-        ]
-      }),
-      parent: document.getElementById("editor")
-    });
-
-    // WASM loader and run logic
     import init, { run_zekken } from "./pkg/zekken.js";
     let ready = false;
-    let ansi_up = window.AnsiUp ? new window.AnsiUp() : null;
     init("./pkg/zekken_bg.wasm").then(() => {
       ready = true;
     });
 
-    function showOutput(text) {
+    function showOutput(text, isError = false) {
       const output = document.getElementById('output');
-      if (ansi_up) {
-        output.innerHTML = ansi_up.ansi_to_html(text);
-      } else {
-        output.textContent = text;
-      }
+      output.textContent = text;
+      output.className = isError ? "error" : "";
     }
 
     document.getElementById('runBtn').onclick = () => {
-      const code = editorView.state.doc.toString();
+      const code = document.getElementById('code').value;
       if (!ready) {
-        showOutput("WASM not loaded yet!");
+        showOutput("WASM not loaded yet!", true);
         return;
       }
       try {
         const result = run_zekken(code);
-        showOutput(result && result.trim() !== "" ? result : "(no output)");
+        showOutput(result && result.trim() !== "" ? result : "(no output)", false);
       } catch (e) {
-        showOutput("Error: " + (e && e.message ? e.message : e));
+        showOutput("Error: " + (e && e.message ? e.message : e), true);
       }
     };
 
     document.getElementById('resetBtn').onclick = () => {
-      editorView.dispatch({
-        changes: {from: 0, to: editorView.state.doc.length, insert: initialCode}
-      });
+      document.getElementById('code').value = `// Write Zekken code here
+@println => |"Hello, Web!"|;
+`;
       showOutput("(output will appear here)");
     };
   </script>
