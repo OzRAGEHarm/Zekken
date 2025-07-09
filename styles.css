@@ -24,7 +24,7 @@ h2 {
   text-align: center;
   font-weight: 700;
   margin-bottom: 24px;
-  color: #ffb86c;
+  color: #af0000;
   letter-spacing: 1px;
 }
 #code {
@@ -44,7 +44,7 @@ h2 {
   transition: border 0.2s;
 }
 #code:focus {
-  border: 1.5px solid #ffb86c;
+  border: 1.5px solid #af0000;
 }
 .button-row {
   display: flex;
@@ -53,7 +53,7 @@ h2 {
   justify-content: flex-end;
 }
 button {
-  background: #ffb86c;
+  background: #af0000;
   color: #23283b;
   border: none;
   border-radius: 6px;
@@ -129,7 +129,7 @@ textarea#code {
   z-index: 2;
   background: transparent;
   color: #e0e0e0;
-  caret-color: #ffb86c;
+  caret-color: #af0000;
 }
 /* Syntax highlight classes */
 .hl-keyword { color: #ffb86c; font-weight: bold; }
