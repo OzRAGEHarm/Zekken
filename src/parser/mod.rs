@@ -30,10 +30,10 @@ impl Parser {
 
         let tokens = tokenize(source_code);
         let tokens_str = tokens
-            .iter()
-            .map(|t| format!("{:?}", t))
-            .collect::<Vec<String>>()
-            .join("\n");
+        .iter()
+        .map(|t| format!("{:?}", t))
+        .collect::<Vec<String>>()
+        .join("\n");
         #[cfg(not(target_arch = "wasm32"))]
         {
             std::env::set_var("ZEKKEN_TOKENS", tokens_str);

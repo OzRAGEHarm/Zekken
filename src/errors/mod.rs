@@ -1,8 +1,6 @@
 #[allow(dead_code)]
 use std::fmt;
 use std::error::Error;
-#[warn(unused_imports)]
-use std::env;
 use std::collections::HashSet;
 use std::sync::Mutex;
 
@@ -28,7 +26,7 @@ impl ErrorContext {
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let filename = env::var("ZEKKEN_CURRENT_FILE").unwrap_or_else(|_| "<unknown>".to_string());
+            let filename = std::env::var("ZEKKEN_CURRENT_FILE").unwrap_or_else(|_| "<unknown>".to_string());
             let line_content = if filename != "<unknown>" {
                 std::fs::read_to_string(&filename)
                     .ok()

@@ -8,6 +8,14 @@ mod libraries;
 
 use wasm_bindgen::prelude::*;
 
+#[cfg(target_arch = "wasm32")]
+use std::sync::Mutex;
+
+#[cfg(target_arch = "wasm32")]
+lazy_static::lazy_static! {
+    static ref WASM_OUTPUT: Mutex<String> = Mutex::new(String::new());
+}
+
 #[wasm_bindgen]
 pub fn run_zekken(input: &str) -> String {
     #[cfg(target_arch = "wasm32")]
@@ -16,6 +24,31 @@ pub fn run_zekken(input: &str) -> String {
     let mut parser = parser::Parser::new();
     let ast = parser.produce_ast(input.to_string());
     let mut env = environment::Environment::new();
+
+    // Clear WASM output buffer and patch println in WASM
+    #[cfg(target_arch = "wasm32")]
+    {
+        WASM_OUTPUT.lock().unwrap().clear();
+        {
+            use environment::Value;
+            use std::sync::Arc;
+            env.variables.insert(
+                "println".to_string(),
+                Value::NativeFunction(Arc::new(|args: Vec<Value>| -> Result<Value, String> {
+                    let mut buf = WASM_OUTPUT.lock().unwrap();
+                    for (i, val) in args.iter().enumerate() {
+                        if i > 0 {
+                            buf.push_str(" ");
+                        }
+                        buf.push_str(&val.to_string());
+                    }
+                    buf.push('\n');
+                    Ok(Value::Void)
+                })),
+            );
+        }
+    }
+
     let mut output = String::new();
 
     for error in &parser.errors {
@@ -31,5 +64,12 @@ pub fn run_zekken(input: &str) -> String {
         Err(e) => output.push_str(&format!("{}\n", e.to_repl_string())),
         _ => {}
     }
+
+    // Append WASM output buffer if in WASM
+    #[cfg(target_arch = "wasm32")]
+    {
+        output.push_str(&WASM_OUTPUT.lock().unwrap());
+    }
+
     output
 }
