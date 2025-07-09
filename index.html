@@ -9,13 +9,10 @@
 <body>
   <div class="container">
     <h2>Zekken Programming Language Demo</h2>
-    <div class="editor-wrapper" style="position:relative; width:100%; margin-bottom:16px;">
-      <pre class="highlighted" id="highlighted" aria-hidden="true" style="margin:0; width:100%; min-height:180px; box-sizing:border-box; pointer-events:none;"></pre>
+    <div class="editor-wrapper" style="position:relative; width:100%; margin-bottom:16px; min-height:180px;">
+      <pre class="highlighted" id="highlighted" aria-hidden="true" style="margin:0; width:100%; min-height:180px; box-sizing:border-box; pointer-events:none; position:absolute; top:0; left:0; z-index:1;"></pre>
       <textarea id="code" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"
-        style="background:transparent; color:#e0e0e0; caret-color:#ffb86c; position:absolute; top:0; left:0; width:100%; min-height:180px; height:100%; resize:vertical; z-index:2; border:none; outline:none; padding:12px; font-family:inherit; font-size:1.1em; box-sizing:border-box; overflow:auto;">
-// Write Zekken code here
-@println => |"Hello, Web!"|
-</textarea>
+        style="background:transparent; color:transparent; caret-color:#ffb86c; position:absolute; top:0; left:0; width:100%; min-height:180px; height:100%; resize:vertical; z-index:2; border:none; outline:none; padding:12px; font-family:inherit; font-size:1.1em; box-sizing:border-box; overflow:auto;"></textarea>
     </div>
     <div class="button-row">
       <button id="runBtn">Run</button>
@@ -48,11 +45,16 @@
       return code;
     }
 
+    // Initial code
+    const initialCode = `// Write Zekken code here
+@println => |"Hello, Web!"|;
+`;
+
     // Sync textarea and highlighted pre
     const textarea = document.getElementById('code');
     const highlighted = document.getElementById('highlighted');
+    textarea.value = initialCode;
     function syncHighlight() {
-      // Set value for highlight
       let code = textarea.value;
       highlighted.innerHTML = highlightZekken(code) + '<br>';
       // Sync scroll
@@ -117,9 +119,7 @@
     };
 
     document.getElementById('resetBtn').onclick = () => {
-      textarea.value = `// Write Zekken code here
-@println => |"Hello, Web!"|
-`;
+      textarea.value = initialCode;
       syncHighlight();
       showOutput("(output will appear here)");
     };
