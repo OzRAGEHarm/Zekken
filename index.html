@@ -26,9 +26,7 @@
       try {
         const result = run_zekken(code);
         // Show raw result for debugging
-        output.textContent = "typeof result: " + typeof result + "\n" +
-                             "JSON.stringify: " + JSON.stringify(result) + "\n" +
-                             "Raw: [" + result + "]";
+        output.textContent = result;
       } catch (e) {
         output.textContent = "Error: " + (e && e.message ? e.message : e);
       }
