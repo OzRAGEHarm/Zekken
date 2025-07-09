@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/dracula.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
   <script src="js/zekken-mode.js"></script>
+  <script src="js/ansi-to-html.js" type="module"></script>
 </head>
 <body>
   <div class="container">
@@ -24,6 +25,7 @@
 
   <script type="module">
     import init, { run_zekken } from "./pkg/zekken.js";
+    import { ansiToHtml } from "./js/ansi-to-html.js";
     
     let ready = false;
     init("./pkg/zekken_bg.wasm").then(() => ready = true);
@@ -49,8 +51,8 @@
     const output = document.getElementById('output');
     
     function showOutput(text, isError = false) {
-      output.innerHTML = text;
-      output.className = isError ? "error" : "";
+      output.innerHTML = isError ? ansiToHtml(text) : text;
+      output.className = isError ? "error-output" : "";
     }
 
     document.getElementById('runBtn').onclick = () => {

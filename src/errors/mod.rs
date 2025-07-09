@@ -41,7 +41,8 @@ impl ErrorContext {
                     .unwrap_or((vec![], "main.zk".to_string()))
             };
             let line_content = if line > 0 && line <= lines.len() {
-                lines[line - 1].clone()
+                let content = lines[line - 1].clone();
+                highlight_zekken_line(&content)
             } else {
                 "".to_string()
             };
@@ -239,7 +240,7 @@ impl fmt::Display for ZekkenError {
         } else {
             let (kind, color) = match self.kind {
                 ErrorKind::Syntax => ("Syntax Error", "\x1b[1;31m"),
-                ErrorKind::Runtime => ("Runtime Error", "\x1b[1;35m"),
+                ErrorKind::Runtime => ("Runtime Error", "\x1b[1;35m"), 
                 ErrorKind::Type => ("Type Error", "\x1b[1;33m"),
                 ErrorKind::Reference => ("Reference Error", "\x1b[1;34m"),
                 ErrorKind::Internal => ("Internal Error", "\x1b[1;41m"),
@@ -249,16 +250,17 @@ impl fmt::Display for ZekkenError {
             let location = format!("{} -> [Ln: {}, Col: {}]", 
                 self.context.filename, self.context.line, self.context.column);
             let line_num = format!("{:>4}", self.context.line);
-            
+
+            // Update format to match CLI exactly
             write!(
                 f,
-                "\n{}: {}\n     | {}\n     |\n{} | {}\n     | {}\n{}",
+                "{}: {}\n     | {}\n     |\n{} | {}\n     | {}\n{}",
                 kind_str,
                 self.message,
                 colorize(&location, "\x1b[1;37m"),
                 colorize(&line_num, "\x1b[1;90m"),
                 self.context.line_content,
-                colorize(&self.context.pointer, "\x1b[1;32m"),
+                colorize(&self.context.pointer, "\x1b[1;31m"),  // Changed to red pointer
                 self.extra.clone().unwrap_or_default()
             )
         }

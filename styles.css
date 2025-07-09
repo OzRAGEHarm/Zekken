@@ -119,6 +119,26 @@ button:hover {
 .cm-s-dracula .cm-boolean { color: #569CD6 !important; }
 .cm-s-dracula .cm-operator { color: #D4D4D4 !important; }
 
+/* Error output styles */
+.error-output {
+  font-family: 'Fira Mono', 'Consolas', 'Menlo', monospace;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  background: #181c24;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #ff5555;
+}
+
+.error-output span {
+  font-family: inherit;
+}
+
+/* Default color for non-colored text */
+.error-output:not(span) {
+  color: #e0e0e0;
+}
+
 @media (max-width: 800px) {
   .container { max-width: 98vw; padding: 10px; }
   .CodeMirror { font-size: 1em; }
