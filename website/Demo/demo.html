@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Zekken Demo | Zekken Programming Language</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/png" href="../../images/zekken_icon.png">
+  <link rel="stylesheet" href="../Home/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/dracula.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+  <script src="js/zekken_highlighter.js"></script>
+</head>
+<body>
+  <div class="navbar">
+    <img src="../../images/zekken_icon.png" alt="Zekken Logo" class="logo-img">
+    <span class="logo-text">Zekken</span>
+    <nav>
+      <a href="../../index.html">Home</a>
+      <a href="./demo.html" class="active">Demo</a>
+      <a href="../Docs/docs.html">Docs</a>
+      <a href="../Download/download.html">Download</a>
+      <a href="../About/about.html">About</a>
+    </nav>
+  </div>
+  <div class="container">
+    <h2>Zekken Programming Language Demo</h2>
+    <textarea id="code" spellcheck="false">// Write Zekken code here
+@println => |"Hello, Web!"|</textarea>
+    <div class="button-row">
+      <button id="runBtn">Run</button>
+      <button id="resetBtn">Reset</button> 
+    </div>
+    <pre id="output" class="output-area">(output will appear here)</pre>
+  </div>
+
+  <script type="module">
+    import init, { run_zekken } from "./js/WASM/zekken_wasm.js";
+    
+    let ready = false;
+    init("./js/WASM/zekken_wasm_bg.wasm").then(() => ready = true);
+
+    // Initialize input editor
+    const editor = CodeMirror.fromTextArea(document.getElementById('code'), {
+      mode: "text/x-zekken",
+      theme: 'dracula',
+      lineNumbers: true,
+      tabSize: 2,
+      indentUnit: 2,
+      autofocus: true,
+      viewportMargin: Infinity,
+      lineWrapping: true,
+      extraKeys: {
+        "Tab": (cm) => cm.replaceSelection("  "),
+      }
+    });
+
+    editor.setSize('100%', '180px');
+    
+    function showOutput(text, isError = false) {
+      const output = document.getElementById('output');
+      output.textContent = text;
+      output.className = isError ? "output-area error-output" : "output-area";
+    }
+
+    document.getElementById('runBtn').onclick = () => {
+      if (!ready) {
+        showOutput("WASM not loaded yet!", true);
+        return;
+      }
+      try {
+        const result = run_zekken(editor.getValue());
+        const isError = result && (
+          result.includes("Error:") || 
+          result.includes("Syntax Error") || 
+          result.includes("Runtime Error") || 
+          result.includes("Type Error")
+        );
+        showOutput(result || "(no output)", isError);
+      } catch (e) {
+        showOutput("Error: " + e.message || e, true);
+      }
+    };
+
+    document.getElementById('resetBtn').onclick = () => {
+      editor.setValue("// Write Zekken code here\n@println => |\"Hello, Web!\"|");
+      showOutput("(output will appear here)");
+    };
+  </script>
+</body>
+</html>

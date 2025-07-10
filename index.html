@@ -2,86 +2,33 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Zekken Programming Language Demo</title>
+  <title>Zekken Programming Language</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/dracula.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
-  <script src="js/zekken-mode.js"></script>
-  <script src="js/ansi-to-html.js" type="module"></script>
+  <link rel="icon" type="image/png" href="images/zekken_icon.png">
+  <link rel="stylesheet" href="website/Home/styles.css">
 </head>
 <body>
-  <div class="container">
-    <h2>Zekken Programming Language Demo</h2>
-    <textarea id="code" spellcheck="false">// Write Zekken code here
-@println => |"Hello, Web!"|</textarea>
-    <div class="button-row">
-      <button id="runBtn">Run</button>
-      <button id="resetBtn">Reset</button> 
-    </div>
-    <pre id="output" class="output-area">(output will appear here)</pre>
+  <div class="navbar">
+    <img src="images/zekken_icon.png" alt="Zekken Logo" class="logo-img">
+    <span class="logo-text">Zekken</span>
+    
+    <nav>
+      <a href="index.html" class="active">Home</a>
+      <a href="website/Demo/demo.html">Demo</a>
+      <a href="website/Docs/docs.html">Docs</a>
+      <a href="website/Download/download.html">Download</a>
+      <a href="website/About/about.html">About</a>
+    </nav>
   </div>
-
-  <script type="module">
-    import init, { run_zekken } from "./pkg/zekken_wasm.js";
-    import { ansiToHtml } from "./js/ansi-to-html.js";
-    
-    let ready = false;
-    init("./pkg/zekken_wasm_bg.wasm").then(() => ready = true);
-
-    // Initialize input editor
-    const editor = CodeMirror.fromTextArea(document.getElementById('code'), {
-      mode: "text/x-zekken",
-      theme: 'dracula',
-      lineNumbers: true,
-      tabSize: 2,
-      indentUnit: 2,
-      autofocus: true,
-      viewportMargin: Infinity,
-      lineWrapping: true,
-      extraKeys: {
-        "Tab": (cm) => cm.replaceSelection("  "),
-      }
-    });
-
-    editor.setSize('100%', '180px');
-    
-    function showOutput(text, isError = false) {
-      const output = document.getElementById('output');
-      if (isError) {
-        output.innerHTML = ansiToHtml(text);
-        output.className = "output-area error-output";
-      } else {
-        output.textContent = text;
-        output.className = "output-area";
-      }
-    }
-
-    document.getElementById('runBtn').onclick = () => {
-      if (!ready) {
-        showOutput("WASM not loaded yet!", true);
-        return;
-      }
-      try {
-        const result = run_zekken(editor.getValue());
-        const isError = result && (
-          result.includes("Error:") || 
-          result.includes("Syntax Error") || 
-          result.includes("Runtime Error") || 
-          result.includes("Type Error")
-        );
-        showOutput(result || "(no output)", isError);
-      } catch (e) {
-        showOutput("Error: " + e.message || e, true);
-      }
-    };
-
-    document.getElementById('resetBtn').onclick = () => {
-      editor.setValue("// Write Zekken code here\n@println => |\"Hello, Web!\"|");
-      showOutput("(output will appear here)");
-    };
-  </script>
+  <div class="container">
+    <h1>Welcome to Zekken</h1>
+    <p>
+      Zekken is a general-purpose programming language built with Rust, designed to be easy to learn, fast, and safe.<br>
+      Explore the language, try the demo, or read the docs!
+    </p>
+    <div class="placeholder">
+      <p>Docs, Download, and About pages coming soon.</p>
+    </div>
+  </div>
 </body>
 </html>

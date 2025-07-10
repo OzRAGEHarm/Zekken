@@ -30,7 +30,7 @@ h2 {
 /* Shared styles for both input and output */
 #code, #output {
   width: 100%;
-  min-height: 180px;
+  min-height: 300px;
   padding: 12px;
   background: #181c24;
   color: #e0e0e0;
