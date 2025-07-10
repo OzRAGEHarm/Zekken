@@ -219,10 +219,15 @@ lazy_static::lazy_static! {
     // Store errors as (kind, line, column, message) to deduplicate
     static ref ERROR_SET: Mutex<HashSet<(String, usize, usize, String)>> = Mutex::new(HashSet::new());
     pub static ref ERROR_LIST: Mutex<Vec<ZekkenError>> = Mutex::new(Vec::new());
-    static ref NO_COLOR: Mutex<bool> = Mutex::new(
-        std::env::var("NO_COLOR").is_ok() ||
-        std::env::var("TERM").map(|term| term == "dumb").unwrap_or(false)
-    );
+    static ref NO_COLOR: Mutex<bool> = Mutex::new({
+        #[cfg(target_arch = "wasm32")]
+        { false } // Always allow color in WASM
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            std::env::var("NO_COLOR").is_ok() ||
+            std::env::var("TERM").map(|term| term == "dumb").unwrap_or(false)
+        }
+    });
     pub static ref REPL_MODE: Mutex<bool> = Mutex::new(false);
 }
 

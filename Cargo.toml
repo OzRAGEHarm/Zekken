@@ -30,7 +30,7 @@ name = "zekken_wasm"
 crate-type = ["cdylib", "rlib"]
 
 [[bin]]
-name = "zekken_cli"
+name = "zekken"
 path = "src/main.rs"
 
 [package.metadata.wasm-pack.profile.release]

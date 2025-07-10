@@ -56,17 +56,38 @@ pub fn run_zekken(input: &str) -> String {
 
     let mut output = String::new();
 
+    // Print all parser errors (syntax)
     for error in &parser.errors {
         output.push_str(&format!("{}\n", error));
     }
     if !parser.errors.is_empty() {
         return output;
     }
+
+    // Evaluate and print all runtime/type/reference errors
     match eval::statement::evaluate_statement(&ast::Stmt::Program(ast), &mut env) {
         Ok(Some(val)) if !matches!(val, environment::Value::Void) => {
             output.push_str(&format!("{}\n", val));
         }
-        Err(e) => output.push_str(&format!("{}\n", e)), // Use Display, not to_repl_string
+        Err(e) => {
+            // If it's an "internal" error for multiple runtime errors, print all from ERROR_LIST
+            #[cfg(target_arch = "wasm32")]
+            {
+                use crate::errors::ERROR_LIST;
+                let errors = ERROR_LIST.lock().unwrap();
+                if !errors.is_empty() {
+                    for err in errors.iter() {
+                        output.push_str(&format!("{}\n", err));
+                    }
+                } else {
+                    output.push_str(&format!("{}\n", e));
+                }
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                output.push_str(&format!("{}\n", e));
+            }
+        }
         _ => {}
     }
 
