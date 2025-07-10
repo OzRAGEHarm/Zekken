@@ -127,11 +127,40 @@ button:hover {
 
 .error-output span {
   font-family: inherit;
+  font-size: inherit;
+  white-space: pre;
 }
 
-/* Default color for non-colored text */
-.error-output:not(span) {
+/* ANSI color overrides for error output */
+.error-output .ansi-red { color: #FF5555; font-weight: bold; }
+.error-output .ansi-magenta { color: #FF79C6; font-weight: bold; }
+.error-output .ansi-yellow { color: #F1FA8C; font-weight: bold; }
+.error-output .ansi-blue { color: #6272A4; font-weight: bold; }
+.error-output .ansi-gray { color: #6272A4; font-weight: bold; }
+.error-output .ansi-green { color: #50FA7B; font-weight: bold; }
+.error-output .ansi-location { color: #F8F8F2; font-weight: bold; }
+.error-output .ansi-comment { color: #6A9955; font-style: italic; }
+.error-output .ansi-keyword { color: #569CD6; }
+.error-output .ansi-func { color: #DCDCAA; }
+.error-output .ansi-control { color: #C678DD; }
+.error-output .ansi-var { color: #9CDCFE; }
+.error-output .ansi-type { color: #4EC9B0; }
+.error-output .ansi-number { color: #B5CEA8; }
+.error-output .ansi-string { color: #CE9178; }
+
+.output-area {
+  font-family: 'Fira Mono', 'Consolas', 'Menlo', monospace;
+  font-size: 1.1em;
+  background: #181c24;
   color: #e0e0e0;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 0 0 16px 0;
+  min-height: 180px;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  box-sizing: border-box;
 }
 
 @media (max-width: 800px) {

@@ -21,11 +21,12 @@
       <button id="runBtn">Run</button>
       <button id="resetBtn">Reset</button> 
     </div>
-    <textarea id="output" readonly></textarea>
+    <pre id="output" class="output-area">(output will appear here)</pre>
   </div>
 
   <script type="module">
     import init, { run_zekken } from "./pkg/zekken.js";
+    import { ansiToHtml } from "./js/ansi-to-html.js";
     
     let ready = false;
     init("./pkg/zekken_bg.wasm").then(() => ready = true);
@@ -45,26 +46,17 @@
       }
     });
 
-    // Initialize output display
-    const output = CodeMirror.fromTextArea(document.getElementById('output'), {
-      mode: "text/x-zekken",
-      theme: 'monokai',
-      readOnly: true,
-      lineWrapping: true,
-      viewportMargin: Infinity,
-    });
-
     editor.setSize('100%', '180px');
-    output.setSize('100%', 'auto');
     
     function showOutput(text, isError = false) {
-      output.setValue(text);
-      output.getWrapperElement().className = 
-        output.getWrapperElement().className.replace(/\berror-output\b/, '') +
-        (isError ? ' error-output' : '');
-      
-      // Force refresh to properly size the output
-      output.refresh();
+      const output = document.getElementById('output');
+      if (isError) {
+        output.innerHTML = ansiToHtml(text);
+        output.className = "output-area error-output";
+      } else {
+        output.textContent = text;
+        output.className = "output-area";
+      }
     }
 
     document.getElementById('runBtn').onclick = () => {
