@@ -26,7 +26,7 @@ CodeMirror.defineMode("zekken", function() {
       if (stream.match(/'(?:[^'\\]|\\.)*'/)) return "string";
       
       // Built-in functions (@println etc)
-      if (stream.match(/(?<=@)([a-zA-Z_][a-zA-Z0-9_]*)(?=\s*=>)/)) return "builtin";
+      if (stream.match(/(?<=@)[a-zA-Z_][a-zA-Z0-9_]*/)) return "builtin";
 
       // Keywords
       if (stream.match(/\b(if|else|for|while|try|catch|return)\b/)) return "keyword-control";

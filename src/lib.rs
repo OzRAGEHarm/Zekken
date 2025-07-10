@@ -31,7 +31,6 @@ pub fn run_zekken(input: &str) -> String {
     let ast = parser.produce_ast(input.to_string());
     let mut env = environment::Environment::new();
 
-    // Clear WASM output buffer and patch println in WASM
     #[cfg(target_arch = "wasm32")]
     {
         WASM_OUTPUT.lock().unwrap().clear();
@@ -57,8 +56,9 @@ pub fn run_zekken(input: &str) -> String {
 
     let mut output = String::new();
 
+    // --- CHANGE: Use full Display output for all errors ---
     for error in &parser.errors {
-        output.push_str(&format!("{}\n", error.to_repl_string()));
+        output.push_str(&format!("{}\n", error)); // Use Display, not to_repl_string
     }
     if !parser.errors.is_empty() {
         return output;
@@ -67,11 +67,10 @@ pub fn run_zekken(input: &str) -> String {
         Ok(Some(val)) if !matches!(val, environment::Value::Void) => {
             output.push_str(&format!("{}\n", val));
         }
-        Err(e) => output.push_str(&format!("{}\n", e.to_repl_string())),
+        Err(e) => output.push_str(&format!("{}\n", e)), // Use Display, not to_repl_string
         _ => {}
     }
 
-    // Append WASM output buffer if in WASM
     #[cfg(target_arch = "wasm32")]
     {
         output.push_str(&WASM_OUTPUT.lock().unwrap());
