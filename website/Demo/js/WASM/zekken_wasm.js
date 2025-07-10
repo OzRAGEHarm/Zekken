@@ -134,6 +134,10 @@ export function run_zekken(input) {
     }
 }
 
+export function clear_errors() {
+    wasm.clear_errors();
+}
+
 async function __wbg_load(module, imports) {
     if (typeof Response === 'function' && module instanceof Response) {
         if (typeof WebAssembly.instantiateStreaming === 'function') {

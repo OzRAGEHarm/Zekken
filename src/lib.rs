@@ -98,3 +98,10 @@ pub fn run_zekken(input: &str) -> String {
 
     output
 }
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn clear_errors() {
+    use crate::errors::ERROR_LIST;
+    ERROR_LIST.lock().unwrap().clear();
+}

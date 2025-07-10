@@ -39,7 +39,7 @@
   </div>
 
   <script type="module">
-    import init, { run_zekken } from "./js/WASM/zekken_wasm.js";
+    import init, { run_zekken, clear_errors } from "./js/WASM/zekken_wasm.js";
     
     let ready = false;
     init("./js/WASM/zekken_wasm_bg.wasm").then(() => ready = true);
@@ -112,6 +112,7 @@
         showOutput("WASM not loaded yet!", true);
         return;
       }
+      clear_errors(); // Clear all errors before running new code
       try {
         const result = run_zekken(editor.getValue());
         const isError = result && (
@@ -127,6 +128,7 @@
     };
 
     document.getElementById('resetBtn').onclick = () => {
+      clear_errors(); // Also clear errors on reset
       editor.setValue("// Write Zekken code here\n@println => |\"Hello, Web!\"|");
       showOutput("(output will appear here)");
     };
