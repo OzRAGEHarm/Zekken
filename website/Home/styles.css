@@ -42,24 +42,29 @@ body {
   padding-left: 16px;
   transition: opacity 0.15s;
   opacity: 0.85;
+  flex: 0 0 auto;
+  width: auto;
+  min-width: unset;
+  max-width: 48px;
+  box-sizing: content-box;
 }
 .github-btn:hover,
 .github-btn:focus {
   opacity: 1;
 }
-.github-icon {
-  height: 30px;
-  width: 30px;
-  display: block;
+.github-btn img.github-icon {
+  height: 20px;
+  width: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  max-width: 20px;
+  max-height: 20px;
+  margin: 0;
+  padding: 0;
   border-radius: 6px;
   background: none;
   box-shadow: none;
-  transition: box-shadow 0.15s, transform 0.12s;
-}
-.github-btn:hover .github-icon,
-.github-btn:focus .github-icon {
-  box-shadow: 0 2px 8px #0004;
-  transform: scale(1.08);
+  display: block;
 }
 .container {
   max-width: 800px;
@@ -125,8 +130,8 @@ h1 {
 }
 
 .button .github-icon {
-  height: 26px;
-  width: 26px;
+  height: 20px;
+  width: 20px;
   margin-left: 8px;
   border-radius: 6px;
   background: none;
