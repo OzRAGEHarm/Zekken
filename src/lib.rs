@@ -56,9 +56,8 @@ pub fn run_zekken(input: &str) -> String {
 
     let mut output = String::new();
 
-    // --- CHANGE: Use full Display output for all errors ---
     for error in &parser.errors {
-        output.push_str(&format!("{}\n", error)); // Use Display, not to_repl_string
+        output.push_str(&format!("{}\n", error));
     }
     if !parser.errors.is_empty() {
         return output;
@@ -67,7 +66,7 @@ pub fn run_zekken(input: &str) -> String {
         Ok(Some(val)) if !matches!(val, environment::Value::Void) => {
             output.push_str(&format!("{}\n", val));
         }
-        Err(e) => output.push_str(&format!("{}\n", e)), // Use Display, not to_repl_string
+        Err(e) => output.push_str(&format!("{}\n", e)),
         _ => {}
     }
 
