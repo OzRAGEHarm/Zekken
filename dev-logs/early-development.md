@@ -150,3 +150,7 @@
 ### Early Development Build #28 (7/7/25):
 - Added `REPL` **(Read-Eval-Print Loop)** for CLI usage
 - Added a web demo using WASM
+
+### Early Development Build #29 (7/10/25):
+- Started development of Zekken's website
+- Made changes to the web demo to improve it and implement features that are also found within the CLI version such as syntax highlighting and formatted error messages also with highlighting

@@ -1,0 +1,96 @@
+body {
+  background: #181c24;
+  color: #e0e0e0;
+  font-family: 'Fira Mono', 'Consolas', 'Menlo', monospace;
+  margin: 0;
+  min-height: 100vh;
+}
+.navbar {
+  background: #23283b;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  height: 56px;
+  box-shadow: 0 2px 8px #0004;
+}
+.navbar .logo {
+  font-size: 1.5em;
+  font-weight: bold;
+  color: #ba1923;
+  margin-right: 40px;
+  letter-spacing: 2px;
+}
+.navbar nav {
+  margin-left: 32px;
+  flex: 1 1 auto;
+}
+.navbar nav a {
+  color: #e0e0e0;
+  text-decoration: none;
+  margin-right: 24px;
+  font-size: 1.1em;
+  transition: color 0.2s;
+}
+.navbar nav a:hover, .navbar nav a.active {
+  color: #ba1923;
+}
+.github-btn {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding-left: 16px;
+  transition: opacity 0.15s;
+  opacity: 0.85;
+}
+.github-btn:hover,
+.github-btn:focus {
+  opacity: 1;
+}
+.github-icon {
+  height: 30px;
+  width: 30px;
+  display: block;
+  border-radius: 6px;
+  background: none;
+  box-shadow: none;
+  transition: box-shadow 0.15s, transform 0.12s;
+}
+.github-btn:hover .github-icon,
+.github-btn:focus .github-icon {
+  box-shadow: 0 2px 8px #0004;
+  transform: scale(1.08);
+}
+.container {
+  max-width: 800px;
+  margin: 40px auto 0 auto;
+  background: #23283b;
+  border-radius: 12px;
+  box-shadow: 0 4px 32px #000a;
+  padding: 32px 32px 24px 32px;
+}
+h1 {
+  color: #ba1923;
+  margin-top: 0;
+  font-size: 2.2em;
+  letter-spacing: 1px;
+}
+.logo-img {
+  height: 36px;
+  vertical-align: middle;
+  margin-right: 12px;
+  border-radius: 6px;
+}
+.logo-text {
+  font-size: 1.5em;
+  font-weight: bold;
+  color: #ba1923;
+  letter-spacing: 2px;
+  vertical-align: middle;
+}
+.placeholder {
+  color: #888;
+  font-style: italic;
+  margin: 32px 0;
+  text-align: center;
+}

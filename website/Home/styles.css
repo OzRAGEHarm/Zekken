@@ -22,6 +22,7 @@ body {
 }
 .navbar nav {
   margin-left: 32px;
+  flex: 1 1 auto;
 }
 .navbar nav a {
   color: #e0e0e0;
@@ -32,6 +33,33 @@ body {
 }
 .navbar nav a:hover, .navbar nav a.active {
   color: #ba1923;
+}
+.github-btn {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding-left: 16px;
+  transition: opacity 0.15s;
+  opacity: 0.85;
+}
+.github-btn:hover,
+.github-btn:focus {
+  opacity: 1;
+}
+.github-icon {
+  height: 30px;
+  width: 30px;
+  display: block;
+  border-radius: 6px;
+  background: none;
+  box-shadow: none;
+  transition: box-shadow 0.15s, transform 0.12s;
+}
+.github-btn:hover .github-icon,
+.github-btn:focus .github-icon {
+  box-shadow: 0 2px 8px #0004;
+  transform: scale(1.08);
 }
 .container {
   max-width: 800px;
@@ -65,4 +93,100 @@ h1 {
   color: #ba1923;
   letter-spacing: 2px;
   vertical-align: middle;
+}
+
+.button-row {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin: 32px 0 0 0;
+  flex-wrap: wrap;
+}
+
+.button {
+  background: #ba1923;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 36px 12px 28px;
+  font-size: 1.1em;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px #0002;
+  transition: background 0.18s, color 0.18s, transform 0.12s;
+  text-decoration: none;
+  outline: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 200px;
+  justify-content: center;
+}
+
+.button .github-icon {
+  height: 26px;
+  width: 26px;
+  margin-left: 8px;
+  border-radius: 6px;
+  background: none;
+  box-shadow: none;
+  transition: box-shadow 0.15s, transform 0.12s;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.button:hover, .button:focus {
+  background: #d62d2d;
+  color: #fff;
+  transform: translateY(-2px) scale(1.04);
+  box-shadow: 0 4px 16px #0003;
+}
+
+.why-zekken {
+  margin-top: 40px;
+  background: #23283b;
+  border-radius: 10px;
+  box-shadow: 0 2px 12px #0002;
+  padding: 28px 28px 20px 28px;
+  border: 3px solid #ba1923;
+}
+
+.why-zekken h2 {
+  color: #ba1923;
+  font-size: 1.5em;
+  margin-top: 0;
+  margin-bottom: 18px;
+  letter-spacing: 1px;
+  text-align: center;
+}
+
+.why-zekken ul {
+  list-style: disc inside;
+  padding-left: 0;
+  margin: 0;
+}
+
+.why-zekken li {
+  margin-bottom: 14px;
+  font-size: 1.08em;
+  line-height: 1.6;
+}
+
+.why-zekken li strong {
+  color: #ba1923;
+  font-weight: 700;
+}
+
+@media (max-width: 600px) {
+  .button-row {
+    flex-direction: column;
+    gap: 14px;
+    align-items: center;
+  }
+  .button {
+    width: 90%;
+    text-align: center;
+    padding: 12px 0;
+  }
 }
