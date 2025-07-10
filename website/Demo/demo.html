@@ -60,11 +60,51 @@
     });
 
     editor.setSize('100%', '180px');
-    
+
+    // Convert ANSI color codes to HTML spans for error highlighting
+    function ansiToHtml(text) {
+      const ansiMap = [
+        { re: /\x1b\[1;31m/g, cls: "ansi-red" },
+        { re: /\x1b\[1;35m/g, cls: "ansi-magenta" },
+        { re: /\x1b\[1;33m/g, cls: "ansi-yellow" },
+        { re: /\x1b\[1;34m/g, cls: "ansi-blue" },
+        { re: /\x1b\[1;90m/g, cls: "ansi-gray" },
+        { re: /\x1b\[1;32m/g, cls: "ansi-green" },
+        { re: /\x1b\[1;37m/g, cls: "ansi-location" },
+        { re: /\x1b\[38;2;106;153;85m/g, cls: "ansi-comment" },
+        { re: /\x1b\[38;2;86;156;214m/g, cls: "ansi-keyword" },
+        { re: /\x1b\[38;2;220;220;170m/g, cls: "ansi-func" },
+        { re: /\x1b\[38;2;198;120;221m/g, cls: "ansi-control" },
+        { re: /\x1b\[38;2;156;220;254m/g, cls: "ansi-var" },
+        { re: /\x1b\[38;2;78;201;176m/g, cls: "ansi-type" },
+        { re: /\x1b\[38;2;181;206;168m/g, cls: "ansi-number" },
+        { re: /\x1b\[38;2;206;145;120m/g, cls: "ansi-string" },
+        { re: /\x1b\[38;2;215;186;125m\x1b\[1m/g, cls: "ansi-escape" },
+        { re: /\x1b\[0m/g, cls: "/span" }
+      ];
+      let html = text
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); // Escape HTML
+      ansiMap.forEach(({ re, cls }) => {
+        if (cls === "/span") {
+          html = html.replace(re, "</span>");
+        } else {
+          html = html.replace(re, `<span class="${cls}">`);
+        }
+      });
+      // Remove any stray ANSI codes
+      html = html.replace(/\x1b\[[0-9;]*m/g, "");
+      return html;
+    }
+
     function showOutput(text, isError = false) {
       const output = document.getElementById('output');
-      output.textContent = text;
-      output.className = isError ? "output-area error-output" : "output-area";
+      if (isError) {
+        output.innerHTML = ansiToHtml(text);
+        output.className = "output-area error-output";
+      } else {
+        output.textContent = text;
+        output.className = "output-area";
+      }
     }
 
     document.getElementById('runBtn').onclick = () => {

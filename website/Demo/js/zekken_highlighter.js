@@ -26,12 +26,15 @@ CodeMirror.defineMode("zekken", function() {
       if (stream.match(/'(?:[^'\\]|\\.)*'/)) return "string";
       
       // Built-in functions (@println etc)
-      if (stream.match(/@([a-zA-Z_][a-zA-Z0-9_]*)/)) {
-        // Only highlight as builtin if immediately followed by '=>'
-        if (stream.match(/\s*=>/, false)) {
-          return "builtin";
+      if (stream.match(/@/)) {
+        // Don't highlight the '@', just move past it
+        if (stream.match(/[a-zA-Z_][a-zA-Z0-9_]*/)) {
+          if (stream.match(/\s*=>/, false)) {
+            return "builtin";
+          }
+          return "variable";
         }
-        return "variable";
+        return null;
       }
 
       // Function names (identifier before '=>', but not after '@')
