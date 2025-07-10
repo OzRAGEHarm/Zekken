@@ -25,11 +25,11 @@
   </div>
 
   <script type="module">
-    import init, { run_zekken } from "./pkg/zekken.js";
+    import init, { run_zekken } from "./pkg/zekken_wasm.js";
     import { ansiToHtml } from "./js/ansi-to-html.js";
     
     let ready = false;
-    init("./pkg/zekken_bg.wasm").then(() => ready = true);
+    init("./pkg/zekken_wasm_bg.wasm").then(() => ready = true);
 
     // Initialize input editor
     const editor = CodeMirror.fromTextArea(document.getElementById('code'), {

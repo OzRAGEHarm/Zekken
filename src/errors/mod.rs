@@ -239,20 +239,17 @@ impl fmt::Display for ZekkenError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         #[cfg(target_arch = "wasm32")]
         {
-            // Always use full CLI formatting in WASM
             let (kind, color) = match self.kind {
                 ErrorKind::Syntax => ("Syntax Error", "\x1b[1;31m"),
-                ErrorKind::Runtime => ("Runtime Error", "\x1b[1;35m"), 
+                ErrorKind::Runtime => ("Runtime Error", "\x1b[1;35m"),
                 ErrorKind::Type => ("Type Error", "\x1b[1;33m"),
                 ErrorKind::Reference => ("Reference Error", "\x1b[1;34m"),
                 ErrorKind::Internal => ("Internal Error", "\x1b[1;41m"),
             };
-
             let kind_str = colorize(kind, color);
-            let location = format!("{} -> [Ln: {}, Col: {}]", 
+            let location = format!("{} -> [Ln: {}, Col: {}]",
                 self.context.filename, self.context.line, self.context.column);
             let line_num = format!("{:>4}", self.context.line);
-
             return write!(
                 f,
                 "{}: {}\n     | {}\n     |\n{} | {}\n     | {}\n{}",
@@ -271,7 +268,7 @@ impl fmt::Display for ZekkenError {
         } else {
             let (kind, color) = match self.kind {
                 ErrorKind::Syntax => ("Syntax Error", "\x1b[1;31m"),
-                ErrorKind::Runtime => ("Runtime Error", "\x1b[1;35m"), 
+                ErrorKind::Runtime => ("Runtime Error", "\x1b[1;35m"),
                 ErrorKind::Type => ("Type Error", "\x1b[1;33m"),
                 ErrorKind::Reference => ("Reference Error", "\x1b[1;34m"),
                 ErrorKind::Internal => ("Internal Error", "\x1b[1;41m"),
