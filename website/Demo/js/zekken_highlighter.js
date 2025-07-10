@@ -26,7 +26,20 @@ CodeMirror.defineMode("zekken", function() {
       if (stream.match(/'(?:[^'\\]|\\.)*'/)) return "string";
       
       // Built-in functions (@println etc)
-      if (stream.match(/(?<=@)[a-zA-Z_][a-zA-Z0-9_]*(?=\\s*=>)/)) return "builtin";
+      if (stream.match(/@([a-zA-Z_][a-zA-Z0-9_]*)/)) {
+        // If immediately followed by '=>', treat as builtin
+        const pos = stream.pos;
+        if (stream.match(/\s*=>/, false)) {
+          stream.backUp(stream.pos - pos); // reset to after '@name'
+          return "builtin";
+        } else {
+          stream.backUp(stream.pos - pos); // reset to after '@name'
+          return "variable"; // treat as variable if not a call
+        }
+      }
+
+      // Function names (identifier before '=>', but not after '@')
+      if (stream.match(/\b[a-zA-Z_][a-zA-Z0-9_]*\b(?=\s*=>)/)) return "function";
 
       // Keywords
       if (stream.match(/\b(if|else|for|while|try|catch|return)\b/)) return "keyword-control";
@@ -44,9 +57,6 @@ CodeMirror.defineMode("zekken", function() {
       
       // Operators
       if (stream.match(/[+\-*/%=<>!|]+/)) return "operator";
-      
-      // Function names
-      if (stream.match(/\b[a-zA-Z_][a-zA-Z0-9_]*\s*(?==>)/)) return "function";
       
       // Variables
       if (stream.match(/\b[a-zA-Z_][a-zA-Z0-9_]*\b/)) return "variable";
