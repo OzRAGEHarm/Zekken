@@ -66,7 +66,7 @@ pub fn run_zekken(input: &str) -> String {
         Ok(Some(val)) if !matches!(val, environment::Value::Void) => {
             output.push_str(&format!("{}\n", val));
         }
-        Err(e) => output.push_str(&format!("{}\n", e)),
+        Err(e) => output.push_str(&format!("{}\n", e)), // Use Display, not to_repl_string
         _ => {}
     }
 
