@@ -26,7 +26,12 @@ debug = false
 incremental = false
 
 [lib]
+name = "zekken_wasm"
 crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "zekken_cli"
+path = "src/main.rs"
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false

@@ -77,7 +77,6 @@ button:hover {
 .success { color: #50fa7b; font-weight: bold; }
 /* CodeMirror customization */
 .CodeMirror {
-  height: 180px !important;
   font-family: 'Fira Mono', 'Consolas', 'Menlo', monospace;
   font-size: 1.1em;
   border: 1px solid #333;
@@ -86,36 +85,32 @@ button:hover {
   background: #181c24 !important;
 }
 
-.CodeMirror-scroll {
-  min-height: 180px;
+/* Input editor specific */
+#code + .CodeMirror {
+  height: 180px !important;
 }
 
-.CodeMirror-lines {
-  padding: 12px 0;
+/* Output editor specific */
+#output + .CodeMirror {
+  min-height: 50px;
+  height: auto !important;
 }
 
-.CodeMirror pre.CodeMirror-line,
-.CodeMirror pre.CodeMirror-line-like {
-  padding: 0 12px;
+/* Error styling for output */
+.error-output.CodeMirror {
+  border-color: #ff5555;
 }
 
-.CodeMirror:focus-within {
-  border-color: #ba1923;
-}
-
-.CodeMirror-selected { background: #ba192333 !important; }
-.CodeMirror-cursor { border-left-color: #ba1923 !important; }
-
-/* Zekken Syntax Colors */
-.cm-s-dracula .cm-comment { color: #6A9955 !important; font-style: italic !important; }
-.cm-s-dracula .cm-keyword { color: #569CD6 !important; }
-.cm-s-dracula .cm-keyword-control { color: #C678DD !important; }
-.cm-s-dracula .cm-builtin { color: #569CD6 !important; }
-.cm-s-dracula .cm-function { color: #DCDCAA !important; }
-.cm-s-dracula .cm-variable { color: #9CDCFE !important; }
-.cm-s-dracula .cm-type { color: #4EC9B0 !important; }
-.cm-s-dracula .cm-number { color: #B5CEA8 !important; }
-.cm-s-dracula .cm-string { color: #CE9178 !important; }
+/* Common theme overrides */
+.cm-s-dracula .cm-comment, .cm-s-monokai .cm-comment { color: #6A9955 !important; font-style: italic !important; }
+.cm-s-dracula .cm-keyword, .cm-s-monokai .cm-keyword { color: #569CD6 !important; }
+.cm-s-dracula .cm-keyword-control, .cm-s-monokai .cm-keyword-control { color: #C678DD !important; }
+.cm-s-dracula .cm-builtin, .cm-s-monokai .cm-builtin { color: #569CD6 !important; }
+.cm-s-dracula .cm-function, .cm-s-monokai .cm-function { color: #DCDCAA !important; }
+.cm-s-dracula .cm-variable, .cm-s-monokai .cm-variable { color: #9CDCFE !important; }
+.cm-s-dracula .cm-type, .cm-s-monokai .cm-type { color: #4EC9B0 !important; }
+.cm-s-dracula .cm-number, .cm-s-monokai .cm-number { color: #B5CEA8 !important; }
+.cm-s-dracula .cm-string, .cm-s-monokai .cm-string { color: #CE9178 !important; }
 .cm-s-dracula .cm-boolean { color: #569CD6 !important; }
 .cm-s-dracula .cm-operator { color: #D4D4D4 !important; }
 

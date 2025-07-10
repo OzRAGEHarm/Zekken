@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/dracula.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
   <script src="js/zekken-mode.js"></script>
   <script src="js/ansi-to-html.js" type="module"></script>
@@ -20,17 +21,16 @@
       <button id="runBtn">Run</button>
       <button id="resetBtn">Reset</button> 
     </div>
-    <pre id="output">(output will appear here)</pre>
+    <textarea id="output" readonly></textarea>
   </div>
 
   <script type="module">
     import init, { run_zekken } from "./pkg/zekken.js";
-    import { ansiToHtml } from "./js/ansi-to-html.js";
     
     let ready = false;
     init("./pkg/zekken_bg.wasm").then(() => ready = true);
 
-    // Initialize CodeMirror with custom config
+    // Initialize input editor
     const editor = CodeMirror.fromTextArea(document.getElementById('code'), {
       mode: "text/x-zekken",
       theme: 'dracula',
@@ -41,18 +41,30 @@
       viewportMargin: Infinity,
       lineWrapping: true,
       extraKeys: {
-        "Tab": (cm) => cm.replaceSelection("  "), // 2 spaces
+        "Tab": (cm) => cm.replaceSelection("  "),
       }
     });
 
-    // Match container width
-    editor.setSize('100%', '180px');
+    // Initialize output display
+    const output = CodeMirror.fromTextArea(document.getElementById('output'), {
+      mode: "text/x-zekken",
+      theme: 'monokai',
+      readOnly: true,
+      lineWrapping: true,
+      viewportMargin: Infinity,
+    });
 
-    const output = document.getElementById('output');
+    editor.setSize('100%', '180px');
+    output.setSize('100%', 'auto');
     
     function showOutput(text, isError = false) {
-      output.innerHTML = isError ? ansiToHtml(text) : text;
-      output.className = isError ? "error-output" : "";
+      output.setValue(text);
+      output.getWrapperElement().className = 
+        output.getWrapperElement().className.replace(/\berror-output\b/, '') +
+        (isError ? ' error-output' : '');
+      
+      // Force refresh to properly size the output
+      output.refresh();
     }
 
     document.getElementById('runBtn').onclick = () => {

@@ -40,13 +40,15 @@ impl ErrorContext {
                     .map(|(l, f)| (l.clone(), f.clone()))
                     .unwrap_or((vec![], "main.zk".to_string()))
             };
-            let line_content = if line > 0 && line <= lines.len() {
-                let content = lines[line - 1].clone();
-                highlight_zekken_line(&content)
+            // Always grab the raw line first
+            let raw_line = if line > 0 && line <= lines.len() {
+                lines[line - 1].clone()
             } else {
-                "".to_string()
+                "<line not found>".to_string()
             };
-            Self::new(filename, line, column, line_content)
+            // Then highlight it using the same function as CLI
+            let highlighted = highlight_zekken_line(&raw_line);
+            Self::new(filename, line, column, highlighted)
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -251,7 +253,6 @@ impl fmt::Display for ZekkenError {
                 self.context.filename, self.context.line, self.context.column);
             let line_num = format!("{:>4}", self.context.line);
 
-            // Update format to match CLI exactly
             write!(
                 f,
                 "{}: {}\n     | {}\n     |\n{} | {}\n     | {}\n{}",
@@ -260,7 +261,7 @@ impl fmt::Display for ZekkenError {
                 colorize(&location, "\x1b[1;37m"),
                 colorize(&line_num, "\x1b[1;90m"),
                 self.context.line_content,
-                colorize(&self.context.pointer, "\x1b[1;31m"),  // Changed to red pointer
+                colorize(&self.context.pointer, "\x1b[1;31m"),
                 self.extra.clone().unwrap_or_default()
             )
         }
