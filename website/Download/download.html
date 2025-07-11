@@ -10,18 +10,37 @@
 <body>
   <div class="navbar">
     <img src="../../images/zekken_icon.png" alt="Zekken Logo" class="logo-img">
-    <span class="logo-text">Zekken</span>
     
     <nav>
+      <a href="https://github.com/OzRAGEHarm/Zekken" class="github-btn" target="_blank" rel="noopener" title="View on GitHub">
+        <img src="../../images/github.png" alt="GitHub" class="github-icon">
+      </a>
       <a href="../../index.html">Home</a>
       <a href="../Demo/demo.html">Demo</a>
       <a href="../Docs/docs.html">Docs</a>
       <a href="download.html" class="active">Download</a>
     </nav>
-    <a href="https://github.com/OzRAGEHarm/Zekken" class="github-btn" target="_blank" rel="noopener" title="View on GitHub">
-      <img src="../../images/github.png" alt="GitHub" class="github-icon">
-    </a>
+    <button class="hamburger" aria-label="Open menu" tabindex="0">
+      <span></span><span></span><span></span>
+    </button>
   </div>
+  <script>
+    // Hamburger menu toggle
+    const hamburger = document.querySelector('.hamburger');
+    const navbar = document.querySelector('.navbar');
+    const nav = document.querySelector('.navbar nav');
+    hamburger.addEventListener('click', () => {
+      navbar.classList.toggle('menu-open');
+      hamburger.classList.toggle('active');
+    });
+    // Close menu when clicking a nav link (mobile)
+    nav.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', () => {
+        navbar.classList.remove('menu-open');
+        hamburger.classList.remove('active');
+      });
+    });
+  </script>
 
   <div class="container">
     <div class="placeholder">Downloads coming soon!</div>

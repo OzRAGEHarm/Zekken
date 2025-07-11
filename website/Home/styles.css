@@ -12,6 +12,9 @@ body {
   align-items: center;
   height: 56px;
   box-shadow: 0 2px 8px #0004;
+  position: sticky; /* Make navbar stick to top */
+  top: 0; /* Stick to the top */
+  z-index: 100; /* Ensure it's above other content */
 }
 .navbar .logo {
   font-size: 1.5em;
@@ -23,6 +26,8 @@ body {
 .navbar nav {
   margin-left: 32px;
   flex: 1 1 auto;
+  align-items: center; /* Vertically center nav items */
+  display: flex; /* Ensure align-items works */
 }
 .navbar nav a {
   color: #e0e0e0;
@@ -91,13 +96,6 @@ h1 {
   vertical-align: middle;
   margin-right: 12px;
   border-radius: 6px;
-}
-.logo-text {
-  font-size: 1.5em;
-  font-weight: bold;
-  color: #ba1923;
-  letter-spacing: 2px;
-  vertical-align: middle;
 }
 
 .button-row {
@@ -181,6 +179,126 @@ h1 {
 .why-zekken li strong {
   color: #ba1923;
   font-weight: 700;
+}
+
+/* Hamburger styles */
+.hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  margin-left: 0;
+  margin-right: 0;
+  z-index: 102;
+  position: static;
+  padding: 0;
+}
+.hamburger:focus,
+.hamburger:active {
+  outline: none;
+  background: none;
+  box-shadow: none;
+  border: none;
+}
+.hamburger span {
+  display: block;
+  width: 18px;
+  height: 2.5px;
+  background: #ba1923;
+  margin: 3px 0;
+  border-radius: 2px;
+  transition: background 0.18s;
+}
+.hamburger.active span {
+  background: #ffffff;
+}
+
+/* Hide the menu-github button by default (desktop), show navbar-github */
+.menu-github { display: none; }
+.navbar-github { display: flex; }
+
+/* Responsive navbar for mobile */
+@media (max-width: 800px) {
+  .navbar {
+    flex-wrap: nowrap;
+    position: sticky;
+    height: 56px; /* Same height as desktop */
+    justify-content: flex-start;
+    align-items: center;
+  }
+  .logo-img {
+    order: 0;
+    margin-right: 0;
+  }
+  nav {
+    order: 1;
+    margin-left: 0;
+    flex: unset;
+  }
+  .hamburger {
+    display: flex;
+    margin-left: auto;
+    margin-right: 0;
+    order: 3;
+  }
+  .navbar nav {
+    position: fixed;
+    top: 0;
+    left: auto;
+    right: -260px;
+    width: 240px;
+    height: 100vh;
+    background: #23283b;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 56px 0 8px 0;
+    box-shadow: -2px 0 12px #0006;
+    z-index: 100;
+    display: flex;
+    transition: right 0.22s cubic-bezier(0.4, 0.2, 0.2, 1);
+    box-sizing: border-box;
+  }
+
+  .navbar.menu-open nav {
+    right: 0;
+  }
+
+  /* Regular navbar github button */
+  .navbar > .github-btn {
+    display: none !important;
+  }
+
+  /* Menu github button */
+  .navbar nav .github-btn {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 56px;
+    height: 56px;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    margin: 0;
+    border-bottom: none;
+    z-index: 101;
+  }
+
+  .navbar:not(.menu-open) .github-btn {
+    display: none !important;
+  }
+
+  .navbar nav a {
+    width: 100%;
+    padding: 14px 24px;
+    border-bottom: 1px solid #2226;
+    margin: 0;
+  }
 }
 
 @media (max-width: 600px) {

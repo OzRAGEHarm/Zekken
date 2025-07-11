@@ -10,17 +10,18 @@
 <body>
   <div class="navbar">
     <img src="images/zekken_icon.png" alt="Zekken Logo" class="logo-img">
-    <span class="logo-text">Zekken</span>
-    
     <nav>
+      <a href="https://github.com/OzRAGEHarm/Zekken" class="github-btn" target="_blank" rel="noopener" title="View on GitHub">
+        <img src="images/github.png" alt="GitHub" class="github-icon">
+      </a>
       <a href="index.html" class="active">Home</a>
       <a href="website/Demo/demo.html">Demo</a>
       <a href="website/Docs/docs.html">Docs</a>
       <a href="website/Download/download.html">Download</a>
     </nav>
-    <a href="https://github.com/OzRAGEHarm/Zekken" class="github-btn" target="_blank" rel="noopener" title="View on GitHub">
-      <img src="images/github.png" alt="GitHub" class="github-icon">
-    </a>
+    <button class="hamburger" aria-label="Open menu" tabindex="0">
+      <span></span><span></span><span></span>
+    </button>
   </div>
   <div class="container">
     <div align="center">
@@ -51,5 +52,22 @@
       </a>
     </div>
   </div>
+  <script>
+    // Hamburger menu toggle
+    const hamburger = document.querySelector('.hamburger');
+    const navbar = document.querySelector('.navbar');
+    const nav = document.querySelector('.navbar nav');
+    hamburger.addEventListener('click', () => {
+      navbar.classList.toggle('menu-open');
+      hamburger.classList.toggle('active');
+    });
+    // Close menu when clicking a nav link (mobile)
+    nav.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', () => {
+        navbar.classList.remove('menu-open');
+        hamburger.classList.remove('active');
+      });
+    });
+  </script>
 </body>
 </html>
