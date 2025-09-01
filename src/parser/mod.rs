@@ -942,6 +942,7 @@ impl Parser {
             return Content::Expression(Box::new(Expr::Call(CallExpr {
                 callee: Box::new(Expr::Identifier(ident)),
                 args,
+                is_native: true,
                 location: ident_token.location(),
             })));
         }
@@ -1077,6 +1078,7 @@ impl Parser {
             return Content::Expression(Box::new(Expr::Call(CallExpr {
                 callee,
                 args,
+                is_native: false,
                 location: self.at().location(),
             })));
         }

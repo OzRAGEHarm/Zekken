@@ -154,3 +154,17 @@
 ### Early Development Build #29 (7/10/25):
 - Started development of Zekken's website
 - Made changes to the web demo to improve it and implement features that are also found within the CLI version such as syntax highlighting and formatted error messages also with highlighting
+
+### Early Development Build #30 (7/16/25):
+- Added content to the [downloads](https://ozrageharm.github.io/Zekken/website/Download/download.html) page
+
+### Early Development Build #31 (8/5/25):
+- Fixed a bug with `os.exit` function where it would instantly exit the program as soon as the file runs
+- Fixed a bug with try-catch statements, in the catch block, errors were not objects, preventing access to specific error parts like the message
+
+### Early Development Build #32 (8/30/25 - 8/31/25):
+- Added a built-in linter to detect errors before code execution, for better performance and stability.
+- Updated some of the test files.
+- Fixed a ton of errors such as the `@input` native/built-in function would be called before anything else, even if it was placed at the very end of the code.
+- Fixed a bunch of the newly added linter functionality, because a lot of it was very buggy beforehand.
+- Made the `init` command create a `main.zk` file and a `Zekken.toml` file for the package manager that will be implemented soon.

@@ -49,8 +49,8 @@ fn main() {
 
     match &cli.command {
         Commands::Init { default } => {
-            let (name, version, entry_point, author) = if *default {
-                ("zekken_project".to_string(), "0.0.1".to_string(), "main.zk".to_string(), "".to_string())
+            let (name, version, entry_point, author, description) = if *default {
+                ("zekken_project".to_string(), "0.0.1".to_string(), "main.zk".to_string(), "".to_string(), "A Zekken Package".to_string())
             } else {
                 let mut input = String::new();
                 print!("Project name: ");
@@ -75,15 +75,34 @@ fn main() {
                 io::stdout().flush().unwrap();
                 io::stdin().read_line(&mut input).unwrap();
                 let author = input.trim().to_string();
+                input.clear();
 
-                (name, version, entry_point, author)
+                print!("Description: ");
+                io::stdout().flush().unwrap();
+                io::stdin().read_line(&mut input).unwrap();
+                let description = input.trim().to_string();
+
+                (name, version, entry_point, author, description)
             };
 
+            // This is the modified section.
             let manifest = format!(
-                "{{\n  \"name\": \"{}\",\n  \"version\": \"{}\",\n  \"entry_point\": \"{}\",\n  \"author\": \"{}\",\n  \"dependencies\": {{}}\n}}",
-                name, version, entry_point, author
+"[package]
+
+name = \"{}\"
+version = \"{}\"
+entry_point = \"{}\"
+author = \"{}\"
+description = \"{}\"
+
+[dependencies]
+",
+                name, version, entry_point, author, description
             );
-            fs::write("zekken.json", manifest).expect("Failed to write zekken.json");
+
+            // This is the modified file creation.
+            fs::write("Zekken.toml", manifest).expect("Failed to write package manifest file.");
+            fs::write(&entry_point, "@println => |\"Hello World!\"|\n").expect("Failed to create entry point file.");
             println!("Initialized new Zekken project.");
         }
         Commands::Run { file } => {
@@ -121,6 +140,7 @@ fn main() {
             let result = match evaluate_statement(&Stmt::Program(ast), &mut env) {
                 Ok(val) => Some(val),
                 Err(e) => {
+
                     // Don't push the dummy internal error for multiple errors
                     if e.kind != crate::errors::ErrorKind::Internal || e.message != "Multiple runtime errors occurred" {
                         push_error(e);

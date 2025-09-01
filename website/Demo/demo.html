@@ -48,7 +48,15 @@
   </script>
 
   <div class="container">
-    <h2>Zekken Programming Language Demo</h2>
+    <h2>Zekken Demo | Zekken Programming Language Demo</h2>
+
+    <select id="exampleSelect">
+      <option value="">Select an Example</option>
+      <option value="fibonacci">Fibonacci Sequence</option>
+      <option value="hello_world">Hello, World!</option>
+      <option value="bmi_calculator">BMI Calculator</option>
+    </select>
+
     <textarea id="code" spellcheck="false">// Write Zekken code here
 @println => |"Hello, Web!"|</textarea>
     <div class="button-row">
@@ -152,6 +160,44 @@
       editor.setValue("// Write Zekken code here\n@println => |\"Hello, Web!\"|");
       showOutput("(output will appear here)");
     };
+
+    // Example selection
+    document.getElementById('exampleSelect').addEventListener('change', function() {
+      const example = this.value;
+      let code = "";
+      switch (example) {
+        case 'fibonacci':
+          code = `func fibonacci => |n| {
+  if (n <= 1) {
+    return n;
+  } else {
+    return fibonacci => |n - 1| + fibonacci => |n - 2|;
+  }
+};
+
+@println => |fibonacci => |10||`;
+          break;
+        case 'hello_world':
+          code = `@println => |"Hello, World!"|`;
+          break;
+        case 'bmi_calculator':
+          code = `func calculate_bmi => |weight, height| {
+  let bmi = weight / (height * height);
+  return bmi;
+};
+
+let weight = 70.0; // in kg
+let height = 1.75; // in meters
+
+let bmi = calculate_bmi => |weight, height|;
+@println => |bmi|`;
+          break;
+        default:
+          code = "// Write Zekken code here\n@println => |\"Hello, Web!\"|";
+      }
+      editor.setValue(code);
+      showOutput("(output will appear here)");
+    });
   </script>
 </body>
 </html>

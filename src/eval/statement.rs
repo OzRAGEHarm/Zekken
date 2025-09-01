@@ -2,10 +2,13 @@ use crate::ast::*;
 use crate::environment::{Environment, Value, FunctionValue};
 use crate::parser::Parser;
 use super::expression::evaluate_expression;
-use crate::errors::{ZekkenError, push_error};
+use crate::errors::{ZekkenError, ErrorKind, push_error};
 use crate::libraries::load_library;
 use crate::lexer::DataType;
 use std::collections::HashMap;
+use std::path::Path;
+// use std::process;
+use super::lint::{lint_statement, lint_expression, lint_include, lint_use};
 
 // Check if the value type matches the expected type
 fn check_value_type(value: &Value, expected: &DataType) -> bool {
@@ -18,6 +21,168 @@ fn check_value_type(value: &Value, expected: &DataType) -> bool {
         (Value::Object(_), DataType::Object) => true,
         (Value::Function(_), DataType::Fn) => true,
         _ => false,
+    }
+}
+
+// Helper function to create a dummy value based on type
+fn create_dummy_value(data_type: &DataType) -> Value {
+    match data_type {
+        DataType::String => Value::String(String::new()),
+        DataType::Int => Value::Int(0),
+        DataType::Float => Value::Float(0.0),
+        DataType::Bool => Value::Boolean(false),
+        DataType::Array => Value::Array(vec![]),
+        DataType::Object => Value::Object(HashMap::new()),
+        DataType::Fn => Value::Function(FunctionValue { 
+            params: vec![], 
+            body: vec![] 
+        }),
+        _ => Value::Void,
+    }
+}
+
+// Helper function to process a statement for declarations
+fn process_statement_scope(stmt: &Stmt, env: &mut Environment) {
+    match stmt {
+        Stmt::Lambda(lambda) => {
+            // Register the lambda function in the environment during the first pass
+            let function_value = FunctionValue {
+                params: lambda.params.clone(),
+                body: lambda.body.clone(),
+            };
+            env.declare(lambda.ident.clone(), Value::Function(function_value), lambda.constant);
+        },
+        Stmt::VarDecl(var_decl) => {
+            // Skip type checking for object iteration patterns in for loops
+            if var_decl.ident.contains(", ") {
+                // This is likely a for-loop pattern, we'll validate types during evaluation
+                env.declare(var_decl.ident.clone(), Value::Void, false);
+                return;
+            }
+            
+            if let Some(content) = &var_decl.value {
+                match content {
+                    Content::Expression(expr) => {
+                        // Special handling for call expressions to native functions
+                        if let Expr::Call(call) = &**expr {
+                            if let Some(ident) = match &*call.callee {
+                                Expr::Identifier(id) => Some(id),
+                                _ => None,
+                            } {
+                                // Check if it's a native function by looking it up in the environment
+                                if matches!(env.lookup(&ident.name), Some(Value::NativeFunction(_))) {
+                                    // For @input specifically, we know it returns a string
+                                    if ident.name == "@input" && var_decl.type_ != DataType::Any && var_decl.type_ != DataType::String {
+                                        push_error(ZekkenError::type_error(
+                                            &format!("Type mismatch in variable declaration '{}': expected {:?}, found string (from @input)", var_decl.ident, var_decl.type_),
+                                            &format!("{:?}", var_decl.type_),
+                                            "string",
+                                            var_decl.location.line,
+                                            var_decl.location.column
+                                        ));
+                                    }
+                                } else {
+                                    // Evaluate non-native function calls normally
+                                    match evaluate_expression(expr, env) {
+                                        Ok(val) => {
+                                            if !check_value_type(&val, &var_decl.type_) {
+                                                push_error(ZekkenError::type_error(
+                                                    &format!("Type mismatch in variable declaration '{}': expected {:?}, found {}", var_decl.ident, var_decl.type_, value_type_name(&val)),
+                                                    &format!("{:?}", var_decl.type_),
+                                                    value_type_name(&val),
+                                                    var_decl.location.line,
+                                                    var_decl.location.column
+                                                ));
+                                            }
+                                        },
+                                        Err(_) => {}
+                                    }
+                                }
+                            } else {
+                                // Evaluate non-identifier callees normally
+                                match evaluate_expression(expr, env) {
+                                    Ok(val) => {
+                                        if !check_value_type(&val, &var_decl.type_) {
+                                            push_error(ZekkenError::type_error(
+                                                &format!("Type mismatch in variable declaration '{}': expected {:?}, found {}", var_decl.ident, var_decl.type_, value_type_name(&val)),
+                                                &format!("{:?}", var_decl.type_),
+                                                value_type_name(&val),
+                                                var_decl.location.line,
+                                                var_decl.location.column
+                                            ));
+                                        }
+                                    },
+                                    Err(_) => {}
+                                }
+                            }
+                        } else {
+                            // Evaluate non-call expressions normally
+                            match evaluate_expression(expr, env) {
+                                Ok(val) => {
+                                    if !check_value_type(&val, &var_decl.type_) {
+                                        push_error(ZekkenError::type_error(
+                                            &format!("Type mismatch in variable declaration '{}': expected {:?}, found {}", var_decl.ident, var_decl.type_, value_type_name(&val)),
+                                            &format!("{:?}", var_decl.type_),
+                                            value_type_name(&val),
+                                            var_decl.location.line,
+                                            var_decl.location.column
+                                        ));
+                                    }
+                                },
+                                Err(_) => {}
+                            }
+                        }
+                    },
+                    Content::Statement(_) => {}
+                }
+            }
+            // Register variable with dummy value based on its type
+            let dummy_val = create_dummy_value(&var_decl.type_);
+            env.declare(var_decl.ident.clone(), dummy_val, var_decl.constant);
+        },
+        Stmt::FuncDecl(func_decl) => {
+            // First, register the function itself in the environment
+            let function_value = FunctionValue {
+                params: func_decl.params.clone(),
+                body: func_decl.body.clone(),
+            };
+            env.declare(func_decl.ident.clone(), Value::Function(function_value), false);
+            
+            // Process function parameters in the current environment
+            for param in &func_decl.params {
+                let dummy_val = create_dummy_value(&param.type_);
+                env.declare(param.ident.clone(), dummy_val, false);
+            }
+            
+            // Process the function body
+            for content in &func_decl.body {
+                if let Content::Statement(stmt) = &**content {
+                    process_statement_scope(stmt, env);
+                }
+            }
+        },
+        Stmt::BlockStmt(block) => {
+            // Process block contents in the current environment
+            for content in &block.body {
+                if let Content::Statement(stmt) = &**content {
+                    process_statement_scope(stmt, env);
+                }
+            }
+        },
+        Stmt::ForStmt(for_stmt) => {
+            // Process initializer if it exists
+            if let Some(init) = &for_stmt.init {
+                process_statement_scope(init, env);
+            }
+            
+            // Process the loop body
+            for content in &for_stmt.body {
+                if let Content::Statement(stmt) = &**content {
+                    process_statement_scope(stmt, env);
+                }
+            }
+        },
+        _ => {}
     }
 }
 
@@ -59,7 +224,109 @@ pub fn evaluate_statement(stmt: &Stmt, env: &mut Environment) -> Result<Option<V
 
 // Evaluate the entire program
 fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
-    // Process imports first
+    let mut errors = Vec::new();
+
+    // Create environment for processing
+    let mut temp_env = env.clone();
+
+    // First pass: Process imports and declarations
+    for import in &program.imports {
+        if let Content::Statement(stmt) = &*import {
+            match **stmt {
+                Stmt::Include(ref include) => {
+                    // First check if the file exists
+                    if let Err(e) = lint_include(include) {
+                        errors.push(e);
+                        continue;
+                    }
+                    // If file exists, evaluate it to set up the environment
+                    if let Err(e) = evaluate_include(include, &mut temp_env) {
+                        errors.push(e);
+                    }
+                },
+                Stmt::Use(ref use_stmt) => {
+                    // First check if the library is valid
+                    if let Err(e) = lint_use(use_stmt) {
+                        errors.push(e);
+                        continue;
+                    }
+                    // If library is valid, load it to set up the environment
+                    if let Err(e) = evaluate_use(use_stmt, &mut temp_env) {
+                        errors.push(e);
+                    }
+                },
+                _ => errors.push(ZekkenError::syntax(
+                    "Invalid import statement",
+                    0,
+                    0,
+                    None,
+                    None,
+                ))
+            }
+        }
+    }
+
+    // If there were import errors, report them and stop (except internal errors)
+    if !errors.is_empty() {
+        for error in errors {
+            if error.kind == ErrorKind::Internal {
+                continue; // Skip internal errors
+            }
+            push_error(error.clone());
+        }
+        // Just return an error to stop execution, but don't log it
+        return Err(ZekkenError::internal("Import errors found"));
+    }
+
+    // Process top-level declarations using same environment
+    let mut lint_errors = Vec::new();
+
+    // Process all top-level statements in the same environment
+    for content in &program.content {
+        if let Content::Statement(stmt) = &**content {
+            process_statement_scope(stmt, &mut temp_env);
+        }
+    }
+    
+    // Process all top-level statements
+    for content in &program.content {
+        if let Content::Statement(stmt) = &**content {
+            process_statement_scope(stmt, &mut temp_env);
+        }
+    }
+    
+    // Second pass: Now lint everything with the complete environment
+    for content in &program.content {
+        match &**content {
+            Content::Statement(stmt) => {
+                if let Err(e) = lint_statement(stmt, &temp_env) {
+                    lint_errors.push(e);
+                }
+            },
+            Content::Expression(expr) => {
+                if let Err(e) = lint_expression(expr, &temp_env) {
+                    lint_errors.push(e);
+                }
+            }
+        }
+    }
+
+    // If any errors were found during linting, report them (except internal errors)
+    if !lint_errors.is_empty() {
+        for error in lint_errors {
+            if error.kind == ErrorKind::Internal {
+                continue; // Skip internal errors
+            }
+            push_error(error.clone());
+        }
+        // Just return an error to stop execution, but don't log it
+        return Err(ZekkenError::internal("Linting errors found"));
+    }
+    
+    // Update the real environment with all the declarations we processed
+    *env = temp_env;
+
+    // If no errors found during linting, proceed with execution of the main content
     for import in &program.imports {
         if let Content::Statement(stmt) = &*import {
             match **stmt {
@@ -76,7 +343,7 @@ fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<V
         }
     }
 
-    // Process main content, collect all errors
+    // Process main content
     let mut last_value = None;
     let mut had_error = false;
     for content in &program.content {
@@ -288,8 +555,14 @@ fn evaluate_try_catch(try_catch: &TryCatchStmt, env: &mut Environment) -> Result
         Err(error) => {
             if let Some(catch_block) = &try_catch.catch_block {
                 let mut catch_env = Environment::new_with_parent(env.clone());
-                let error_str = error.to_string();
-                catch_env.declare("e".to_string(), Value::String(error_str), false);
+                let mut err_obj = std::collections::HashMap::new();
+                err_obj.insert("message".to_string(), Value::String(error.message.clone()));
+                err_obj.insert("kind".to_string(), Value::String(format!("{:?}", error.kind)));
+                err_obj.insert("line".to_string(), Value::Int(error.context.line as i64));
+                err_obj.insert("column".to_string(), Value::Int(error.context.column as i64));
+                // Add the pretty error string for display
+                err_obj.insert("__zekken_error__".to_string(), Value::String(error.to_string()));
+                catch_env.declare("e".to_string(), Value::Object(err_obj), false);
                 evaluate_block_content(catch_block, &mut catch_env)
             } else {
                 Err(error)
@@ -346,13 +619,29 @@ fn evaluate_lambda(lambda: &LambdaDecl, env: &mut Environment) -> Result<Option<
 
 // Handle use statements for importing libraries
 fn evaluate_use(use_stmt: &UseStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
-    if let Some(methods) = &use_stmt.methods {
-        let method_values = methods.iter().map(|m| Value::String(m.clone())).collect();
-        env.declare("__IMPORT_METHODS__".to_string(), Value::Array(method_values), true);
-    }
-
     match load_library(&use_stmt.module, env) {
-        Ok(_) => Ok(None),
+        Ok(_) => {
+            // If specific methods are requested, extract them from the library object
+            if let Some(methods) = &use_stmt.methods {
+                // Get the library object
+                if let Some(Value::Object(lib_obj)) = env.lookup(&use_stmt.module) {
+                    // Import each requested method directly into the target environment
+                    for method in methods {
+                        if let Some(value) = lib_obj.get(method) {
+                            env.declare(method.clone(), value.clone(), false);
+                        } else {
+                            return Err(ZekkenError::runtime(
+                                &format!("Method '{}' not found in library '{}'", method, use_stmt.module),
+                                use_stmt.location.line,
+                                use_stmt.location.column,
+                                None,
+                            ));
+                        }
+                    }
+                }
+            }
+            Ok(None)
+        },
         Err(e) => Err(ZekkenError::runtime(
             &format!("Failed to load library '{}': {}", use_stmt.module, e),
             use_stmt.location.line,
@@ -364,27 +653,25 @@ fn evaluate_use(use_stmt: &UseStmt, env: &mut Environment) -> Result<Option<Valu
 
 // Handle include statements for including external files
 fn evaluate_include(include: &IncludeStmt, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
-    let current_dir = env.lookup("ZEKKEN_CURRENT_DIR")
-        .and_then(|v| if let Value::String(s) = v { Some(s) } else { None })
-        .unwrap_or_default();
-
-    let file_path = if include.file_path.contains("../") || include.file_path.starts_with("./") {
-        let mut path = std::path::PathBuf::from(current_dir);
-        path.push(&include.file_path);
-        std::fs::canonicalize(path)
-            .map_err(|e| ZekkenError::runtime(
-                &format!("Invalid include path: {}", e),
-                include.location.line,
-                include.location.column,
-                None,
-            ))?
-            .to_string_lossy()
-            .to_string()
+    // Get the directory of the current file being processed
+    let current_file = std::env::var("ZEKKEN_CURRENT_FILE").unwrap_or_else(|_| "<unknown>".to_string());
+    let current_dir = if current_file == "<unknown>" {
+        env.lookup("ZEKKEN_CURRENT_DIR")
+            .and_then(|v| if let Value::String(s) = v { Some(s) } else { None })
+            .unwrap_or_default()
     } else {
-        let mut path = std::path::PathBuf::from(current_dir);
-        path.push(&include.file_path);
-        path.to_string_lossy().to_string()
+        Path::new(&current_file)
+            .parent()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default()
     };
+
+    // Always resolve paths relative to current file's directory
+    let mut path = std::path::PathBuf::from(&current_dir);
+    path.push(&include.file_path);
+
+    // Try to canonicalize but don't require it to succeed
+    let file_path = path.to_string_lossy().to_string();
     
     let file_contents = std::fs::read_to_string(&file_path)
         .map_err(|e| ZekkenError::runtime(
@@ -463,6 +750,7 @@ fn evaluate_for_object(
     body: &Vec<Box<Content>>,
     env: &mut Environment
 ) -> Result<Option<Value>, ZekkenError> {
+    // Extract key and value identifiers
     let idents: Vec<String> = var_decl.ident.split(", ").map(|s| s.to_string()).collect();
     if idents.len() != 2 {
         return Err(ZekkenError::syntax(
@@ -473,6 +761,8 @@ fn evaluate_for_object(
             None,
         ));
     }
+    
+    // Get the keys array from the object
     let keys = if let Some(Value::Array(keys)) = map.get("__keys__") {
         keys
     } else {
@@ -485,12 +775,39 @@ fn evaluate_for_object(
         ));
     };
 
+    // Create a new environment for each iteration
+    let mut iter_env = Environment::new_with_parent(env.clone());
+    
+    // Declare the variables with their proper types before the loop
+    iter_env.declare(idents[0].clone(), Value::String(String::new()), false); // key is always string
+    match var_decl.type_ {
+        DataType::Any => {}, // For Any type, accept any value type
+        DataType::String => iter_env.declare(idents[1].clone(), Value::String(String::new()), false),
+        DataType::Int => iter_env.declare(idents[1].clone(), Value::Int(0), false),
+        DataType::Float => iter_env.declare(idents[1].clone(), Value::Float(0.0), false),
+        DataType::Bool => iter_env.declare(idents[1].clone(), Value::Boolean(false), false),
+        DataType::Object => iter_env.declare(idents[1].clone(), Value::Object(HashMap::new()), false),
+        DataType::Array => iter_env.declare(idents[1].clone(), Value::Array(Vec::new()), false),
+        DataType::Fn => iter_env.declare(idents[1].clone(), Value::Function(FunctionValue { params: vec![], body: vec![] }), false),
+    }
+
     for key_val in keys {
         if let Value::String(ref key) = key_val {
             if let Some(value) = map.get(key) {
-                env.declare(idents[0].clone(), Value::String(key.clone()), false);
-                env.declare(idents[1].clone(), value.clone(), false);
-                evaluate_block_content(body, env)?;
+                // Check if the value matches the declared type
+                if var_decl.type_ != DataType::Any && !check_value_type(value, &var_decl.type_) {
+                    return Err(ZekkenError::type_error(
+                        &format!("Type mismatch in for loop value: expected {:?}, found {}", var_decl.type_, value_type_name(value)),
+                        &format!("{:?}", var_decl.type_),
+                        value_type_name(value),
+                        var_decl.location.line,
+                        var_decl.location.column
+                    ));
+                }
+                
+                iter_env.declare(idents[0].clone(), Value::String(key.clone()), false);
+                iter_env.declare(idents[1].clone(), value.clone(), false);
+                evaluate_block_content(body, &mut iter_env)?;
             }
         }
     }

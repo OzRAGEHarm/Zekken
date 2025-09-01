@@ -179,6 +179,7 @@ pub struct MemberExpr {
 pub struct CallExpr {
     pub callee: Box<Expr>,
     pub args: Vec<Box<Expr>>,
+    pub is_native: bool,
     pub location: Location,
 }
 

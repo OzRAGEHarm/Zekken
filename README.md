@@ -2,9 +2,18 @@
   <picture>
     <img src="images/Zekken_Lang_Logo.png" alt="Zekken Logo" width="75%"/>
   </picture>
+
+[Website] | [Documentation] | [Demo] | [Download]
 </div>
 
-Zekken is a general-purpose language created purely with the Rust programming language, meant to be easy to learn and understand!
+---
+
+[Website]: https://ozrageharm.github.io/Zekken/
+[Documentation]: https://ozrageharm.github.io/Zekken/website/Docs/docs.html
+[Demo]: https://ozrageharm.github.io/Zekken/website/Demo/demo.html
+[Download]: https://ozrageharm.github.io/Zekken/website/Download/download.html
+
+***Zekken ("ZEH-ken") is a general-purpose language created purely with the Rust programming language, meant to be easy to learn and understand!***
 
 ## Why Zekken?
 - **Performance**: Zekken, built on Rust, provides high-speed execution and efficient resource management, making it ideal for both small scripts and large applications.

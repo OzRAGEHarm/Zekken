@@ -1,9 +1,11 @@
 // use fs (file system) library
 use fs;
 
+@println => |"IDK"|
+
 // create a file
-let input: string = @input => |"Enter some text: "|;
-fs.write_file => |"data.txt", input|
+let user_input: string = @input => |"Enter some text: "|;
+fs.write_file => |"data.txt", user_input|
 
 // read file content
 let data: string = fs.read_file => |"data.txt"|; // read the file

@@ -5,8 +5,8 @@ let height: float = 1.75;
 
 // Print some information
 @println => |"Hello, my name is " + name|
-@println => |"I am", age, "years old"|
-@println => |"My height is", height, "meters"|
+@println => |"I am " + age + " years old"|
+@println => |"My height is " + height + " meters"|
 
 // Define a function to calculate BMI
 func calculateBMI | weight: float, height: float | {
@@ -23,7 +23,7 @@ let person: obj = {
 
 // Calculate and print BMI
 let bmi: float = calculateBMI => |person.weight, person.height|;
-@println => |"My BMI is:", bmi|
+@println => |"My BMI is: " + bmi|
 
 // Use a conditional statement
 if bmi < 25.0 {

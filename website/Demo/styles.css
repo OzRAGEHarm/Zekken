@@ -358,3 +358,17 @@ button:hover {
     margin: 0;
   }
 }
+
+#exampleSelect {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 16px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #181c24;
+  color: #e0e0e0;
+  font-family: 'Fira Mono', 'Consolas', 'Menlo', monospace;
+  font-size: 1em;
+  outline: none;
+  box-sizing: border-box;
+}

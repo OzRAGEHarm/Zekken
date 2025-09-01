@@ -1,12 +1,13 @@
 [package]
 name = "zekken"
-version = "0.0.29"
+version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 regex = "1.3.9"
+toml = "0.9.5"
 serde_json = { version = "1.0.140", features = ["preserve_order"] }
 clap = { version = "4.5", features = ["derive"] }
 lazy_static = "1.4"
@@ -14,6 +15,12 @@ wasm-bindgen = "0.2.92"
 console_error_panic_hook = "0.1.7"
 
 [profile.dev]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = false
 incremental = false
 
 [profile.release]

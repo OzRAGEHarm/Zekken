@@ -89,34 +89,20 @@ impl Value {
                 }
             },
             Value::Object(obj) => {
-                let keys = obj.get("__keys__").and_then(|v| {
-                    if let Value::Array(keys) = v {
-                        Some(keys.clone())
-                    } else {
-                        None
-                    }
-                }).unwrap_or_else(Vec::new);
-
-                if keys.is_empty() {
-                    write!(f, "{{}}")
+                // If this object is an error (has __zekken_error__), print the pretty error string
+                if let Some(Value::String(pretty)) = obj.get("__zekken_error__") {
+                    write!(f, "{}", pretty)
                 } else {
-                    writeln!(f, "{{")?;
+                    // fallback: print as JSON or key-value pairs
+                    write!(f, "{{")?;
                     let mut first = true;
-                    for key_val in keys {
-                        if let Value::String(key) = key_val {
-                            if key == "__keys__" { continue; }
-                            if let Some(value) = obj.get(&key) {
-                                if !first {
-                                    writeln!(f, ",")?;
-                                }
-                                write!(f, "{}\"{}\": ", indent_str(indent + 1), key)?;
-                                value.fmt_with_indent(f, indent + 1, true)?;
-                                first = false;
-                            }
-                        }
+                    for (k, v) in obj.iter() {
+                        if k == "__keys__" || k == "__zekken_error__" { continue; }
+                        if !first { write!(f, ", ")?; }
+                        write!(f, "{}: {}", k, v)?;
+                        first = false;
                     }
-                    writeln!(f)?;
-                    write!(f, "{}}}", indent_str(indent))
+                    write!(f, "}}")
                 }
             },
             Value::String(s) => {
@@ -215,7 +201,7 @@ impl Environment {
           constants: HashMap::new(),
       };
 
-      env.variables.insert(
+      env.constants.insert(
         "println".to_string(),
         Value::NativeFunction(Arc::new(|args: Vec<Value>| -> Result<Value, String> {
             // Check for ZEKKEN_DISABLE_PRINT environment variable
@@ -318,8 +304,8 @@ impl Environment {
   }
 
   pub fn lookup(&self, name: &str) -> Option<Value> {
-      self.variables.get(name)
-          .or_else(|| self.constants.get(name))
+      self.constants.get(name)
+          .or_else(|| self.variables.get(name))
           .cloned()
           .or_else(|| self.parent.as_ref().and_then(|p| p.lookup(name)))
   }
@@ -413,9 +399,29 @@ impl Value {
             Value::String(s) => Self::handle_string_method(s, method_name, args),
             Value::Array(arr) => Self::handle_array_method(arr, method_name, args, env, variable_name),
             Value::Object(obj) => {
+                // First check if the object has the method as a native function
                 if let Some(Value::NativeFunction(func)) = obj.get(method_name) {
+                    // Execute the native function directly
                     return (func)(args);
                 }
+                
+                // If we didn't find a native function but found something, treat it as a regular value
+                if let Some(value) = obj.get(method_name) {
+                    // If it's a function, call it with the arguments
+                    if let Value::Function(_) = value {
+                        return value.call_method("__call__", args, env, None);
+                    }
+                    // If it's a native function, call it with the arguments
+                    if let Value::NativeFunction(func) = value {
+                        return (func)(args);
+                    }
+                    // For other values, just return them if no args were provided
+                    if args.is_empty() {
+                        return Ok(value.clone());
+                    }
+                }
+                
+                // If nothing else matched, try standard object methods
                 Self::handle_object_method(obj, method_name, args)
             }
             Value::Int(n) => Self::handle_int_method(*n, method_name, args),
@@ -512,6 +518,12 @@ impl Value {
     }
 
     fn handle_object_method(obj: &HashMap<String, Value>, method_name: &str, args: Vec<Value>) -> Result<Value, String> {
+        // First check if it's a NativeFunction
+        if let Some(Value::NativeFunction(func)) = obj.get(method_name) {
+            return (func)(args);
+        }
+
+        // If not a native function, try standard object methods
         match method_name {
             "keys" => {
                 let keys_value = obj.get("__keys__").cloned();

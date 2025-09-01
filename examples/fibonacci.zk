@@ -6,7 +6,7 @@ func fibonacci | n: int, a: int, b: int, count: int | {
     }
 }
 
-func startFibonacci | n: int  | {
+func startFibonacci | n: int | {
     if n > 0 {
         fibonacci => |n, 0, 1, 0|
     }

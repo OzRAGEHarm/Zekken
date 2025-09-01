@@ -68,8 +68,8 @@ try {
 }
 
 // User input
-let input: string = @input => |"Enter your name: "|;
-@println => |"Hello, " + input + "!"|
+let user_input: string = @input => |"Enter your name: "|;
+@println => |"Hello, " + user_input + "!"|
 
 // File I/O
 // Read and write to a file

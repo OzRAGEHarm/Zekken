@@ -127,6 +127,7 @@ fn interpolate_string(template: &str, env: &Environment) -> String {
 */
 
 fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
+    // First check for member expressions (method calls)
     if let Expr::Member(ref member_expr) = *call.callee {
         let object = evaluate_expression(&member_expr.object, env)?;
         let method_name = match *member_expr.property {
@@ -140,208 +141,214 @@ fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Result<Va
             )),
         };
 
+        // Call the method on any value type
         let mut args = Vec::new();
         for arg in &call.args {
             args.push(evaluate_expression(arg, env)?);
         }
 
-        // Determine the variable name, if applicable
-        let variable_name = if let Expr::Identifier(ref ident) = *member_expr.object {
+        // Try to call the method on any value type (strings, arrays, objects, etc)
+        match object.call_method(&method_name, args, Some(env), if let Expr::Identifier(ref ident) = *member_expr.object {
             Some(ident.name.as_str())
         } else {
             None
+        }) {
+            Ok(result) => return Ok(result),
+            Err(msg) => return Err(ZekkenError::runtime(&msg, call.location.line, call.location.column, None)),
         };
-
-        // Call the method with the environment and variable name
-        return object.call_method(&method_name, args, Some(env), variable_name)
-            .map_err(|s| ZekkenError::runtime(&s, call.location.line, call.location.column, None));
     }
 
-    // When resolving the callee (e.g., function name), use lookup_with_kind
-    let (callee_val, callee_kind) = match &*call.callee {
-        Expr::Identifier(ident) => env.lookup_with_kind(&ident.name),
-        _ => (None, None),
-    };
-    let kind_str = callee_kind.unwrap_or("function");
-    let callee = match callee_val {
-        Some(val) => val,
-        None => {
-            return Err(ZekkenError::reference(
-                &format!("{} '{}' not found", kind_str[0..1].to_uppercase() + &kind_str[1..], match &*call.callee {
-                    Expr::Identifier(ident) => &ident.name,
-                    _ => "<unknown>",
-                }),
-                kind_str,
-                call.location.line,
-                call.location.column,
-            ));
+    // When resolving the callee, try to look up as an identifier first
+    if let Expr::Identifier(ref ident) = *call.callee {
+        // Try to look up the identifier in the environment
+        if let Some(val) = env.lookup(&ident.name) {
+            match &val {
+                Value::Function(_) => {
+                    return evaluate_function_call(&val, call, env);
+                },
+                Value::NativeFunction(_) => {
+                    return evaluate_native_function_call(&val, call, env);
+                },
+                _ => {}
+            }
         }
-    };
+        
+        return Err(ZekkenError::reference(
+            &format!("Function '{}' not found", &ident.name),
+            "function",
+            call.location.line,
+            call.location.column,
+        ));
+    }
 
-    match callee {
-        Value::NativeFunction(native_func) => {
-            let mut args = Vec::new();
-            for arg in &call.args {
-                args.push(evaluate_expression(arg, env)?);
-            }
-            (native_func)(args).map_err(|s| ZekkenError::runtime(&s, call.location.line, call.location.column, None))
-        },
-        Value::Function(func) => {
-            if call.args.len() != func.params.len() {
-                return Err(ZekkenError::runtime(
-                    &format!("Expected {} arguments but got {}", func.params.len(), call.args.len()),
-                    call.location.line,
-                    call.location.column,
-                    Some("argument mismatch"),
-                ));
-            }
-
-            let mut args = Vec::new();
-            for arg in &call.args {
-                args.push(evaluate_expression(arg, env)?);
-            }
-
-            let mut function_env = Environment::new_with_parent(env.clone());
-            for (param, arg) in func.params.iter().zip(args.into_iter()) {
-                function_env.declare(param.ident.clone(), arg, false);
-            }
-
-            let mut result = Value::Void;
-            for stmt in &func.body {
-                match **stmt {
-                    Content::Expression(ref expr) => {
-                        result = evaluate_expression(expr, &mut function_env)?;
-                    },
-                    Content::Statement(ref stmt) => {
-                        if let Ok(Some(val)) = evaluate_statement(stmt, &mut function_env) {
-                            result = val;
-                        }
-                    }
-                }
-            }
-            Ok(result)
-        },
+    // If not a method call or identifier, evaluate as a regular expression
+    let callee_val = evaluate_expression(&call.callee, env)?;
+    match callee_val {
+        Value::Function(_) => evaluate_function_call(&callee_val, call, env),
+        Value::NativeFunction(_) => evaluate_native_function_call(&callee_val, call, env),
         _ => Err(ZekkenError::type_error(
             "Cannot call non-function value",
             "function",
             "non-function",
             call.location.line,
-            call.location.column
+            call.location.column,
+        )),
+    }
+}
+
+fn evaluate_function_call(func: &Value, call: &CallExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
+    if let Value::Function(ref func_def) = func {
+        if call.args.len() != func_def.params.len() {
+            return Err(ZekkenError::runtime(
+                &format!("Expected {} arguments but got {}", func_def.params.len(), call.args.len()),
+                call.location.line,
+                call.location.column,
+                Some("argument mismatch"),
+            ));
+        }
+
+        let mut args = Vec::new();
+        for arg in &call.args {
+            args.push(evaluate_expression(arg, env)?);
+        }
+
+        let mut function_env = Environment::new_with_parent(env.clone());
+        for (param, arg) in func_def.params.iter().zip(args.into_iter()) {
+            function_env.declare(param.ident.clone(), arg, false);
+        }
+
+        let mut result = Value::Void;
+        for stmt in &func_def.body {
+            match **stmt {
+                Content::Expression(ref expr) => {
+                    result = evaluate_expression(expr, &mut function_env)?;
+                },
+                Content::Statement(ref stmt) => {
+                    if let Ok(Some(val)) = evaluate_statement(stmt, &mut function_env) {
+                        result = val;
+                    }
+                }
+            }
+        }
+        Ok(result)
+    } else {
+        Err(ZekkenError::type_error(
+            "Cannot call non-function value",
+            "function",
+            "non-function",
+            call.location.line,
+            call.location.column,
+        ))
+    }
+}
+
+fn evaluate_native_function_call(native_func: &Value, call: &CallExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
+    if let Value::NativeFunction(ref native) = native_func {
+        let mut args = Vec::new();
+        for arg in &call.args {
+            args.push(evaluate_expression(arg, env)?);
+        }
+        match (native)(args) {
+            Ok(val) => Ok(val),
+            Err(s) => Err(ZekkenError::runtime(&s, call.location.line, call.location.column, None))
+        }
+    } else {
+        Err(ZekkenError::type_error(
+            "Cannot call non-function value",
+            "function",
+            "non-function",
+            call.location.line,
+            call.location.column,
         ))
     }
 }
 
 fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
     let object = evaluate_expression(&member.object, env)?;
-
-    match &*member.property {
-        Expr::Identifier(ref ident) => {
-            let property = ident.name.clone();
-            match object {
-                Value::Object(ref map) => {
-                    if let Some(value) = map.get(&property) {
-                        Ok(value.clone())
-                    } else {
-                        Err(ZekkenError::reference(
-                            &format!("Property '{}' not found", property),
-                            &property,
-                            member.location.line,
-                            member.location.column,
-                        ))
-                    }
-                }
-                _ => Err(ZekkenError::type_error(
-                    "Invalid member access",
-                    "object",
-                    "other",
-                    member.location.line,
-                    member.location.column,
-                )),
-            }
-        }
-        Expr::StringLit(ref lit) => {
-            let property = lit.value.clone();
-            match object {
-                Value::Object(ref map) => {
-                    if let Some(value) = map.get(&property) {
-                        Ok(value.clone())
-                    } else {
-                        Err(ZekkenError::reference(
-                            &format!("Property '{}' not found", property),
-                            &property,
-                            member.location.line,
-                            member.location.column,
-                        ))
-                    }
-                }
-                _ => Err(ZekkenError::type_error(
-                    "Invalid member access",
-                    "object",
-                    "other",
-                    member.location.line,
-                    member.location.column,
-                )),
-            }
-        }
-        Expr::IntLit(ref lit) => {
-            let idx = lit.value as usize;
-            match object {
-                Value::Array(ref arr) => {
-                    arr.get(idx)
-                        .cloned()
-                        .ok_or_else(|| ZekkenError::runtime(
-                            &format!("Array index {} out of bounds", idx),
-                            member.location.line,
-                            member.location.column,
-                            None,
-                        ))
-                }
-                Value::Object(ref map) => {
-                    // Support numeric indexing for objects with __keys__
-                    if let Some(Value::Array(keys)) = map.get("__keys__") {
-                        if let Some(Value::String(key)) = keys.get(idx) {
-                            if let Some(value) = map.get(key) {
-                                Ok(value.clone())
-                            } else {
-                                Err(ZekkenError::reference(
-                                    &format!("Property '{}' not found", key),
-                                    key,
-                                    member.location.line,
-                                    member.location.column,
-                                ))
-                            }
-                        } else {
-                            Err(ZekkenError::runtime(
-                                &format!("Object index {} out of bounds", idx),
-                                member.location.line,
-                                member.location.column,
-                                None,
-                            ))
-                        }
-                    } else {
-                        Err(ZekkenError::runtime(
-                            "Object does not support numeric indexing",
-                            member.location.line,
-                            member.location.column,
-                            None,
-                        ))
-                    }
-                }
-                _ => Err(ZekkenError::type_error(
-                    "Invalid member access",
-                    "object/array",
-                    "other",
-                    member.location.line,
-                    member.location.column,
-                )),
-            }
-        }
+    let result = match &*member.property {
+        Expr::Identifier(ref ident) => evaluate_property_access(&object, &ident.name, member.location.line, member.location.column),
+        Expr::StringLit(ref lit) => evaluate_property_access(&object, &lit.value, member.location.line, member.location.column),
+        Expr::IntLit(ref lit) => evaluate_index_access(&object, lit.value as usize, member.location.line, member.location.column),
         _ => Err(ZekkenError::type_error(
             "Invalid property access",
             "string/int/identifier",
             "other",
             member.location.line,
             member.location.column,
+        )),
+    }?;
+    Ok(result)
+}
+
+fn evaluate_property_access(object: &Value, property: &str, line: usize, column: usize) -> Result<Value, ZekkenError> {
+    match object {
+        Value::Object(map) => {
+            map.get(property)
+                .cloned()
+                .ok_or_else(|| ZekkenError::reference(
+                    &format!("Property '{}' not found", property),
+                    property,
+                    line,
+                    column,
+                ))
+        }
+        _ => Err(ZekkenError::type_error(
+            "Invalid member access",
+            "object",
+            "other",
+            line,
+            column,
+        )),
+    }
+}
+
+fn evaluate_index_access(object: &Value, idx: usize, line: usize, column: usize) -> Result<Value, ZekkenError> {
+    match object {
+        Value::Array(arr) => {
+            arr.get(idx)
+                .cloned()
+                .ok_or_else(|| ZekkenError::runtime(
+                    &format!("Array index {} out of bounds", idx),
+                    line,
+                    column,
+                    None,
+                ))
+        }
+        Value::Object(map) => {
+            // Support numeric indexing for objects with __keys__
+            if let Some(Value::Array(keys)) = map.get("__keys__") {
+                if let Some(Value::String(key)) = keys.get(idx) {
+                    map.get(key)
+                        .cloned()
+                        .ok_or_else(|| ZekkenError::reference(
+                            &format!("Property '{}' not found", key),
+                            key,
+                            line,
+                            column,
+                        ))
+                } else {
+                    Err(ZekkenError::runtime(
+                        &format!("Object index {} out of bounds", idx),
+                        line,
+                        column,
+                        None,
+                    ))
+                }
+            } else {
+                Err(ZekkenError::runtime(
+                    "Object does not support numeric indexing",
+                    line,
+                    column,
+                    None,
+                ))
+            }
+        }
+        _ => Err(ZekkenError::type_error(
+            "Invalid member access",
+            "object/array",
+            "other",
+            line,
+            column,
         )),
     }
 }

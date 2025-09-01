@@ -5,10 +5,8 @@ use std::path::Path;
 use std::sync::Arc;
 
 pub fn register(env: &mut Environment) -> Result<(), String> {
-    let mut fs_obj = HashMap::new();
-
-    // File Operations
-    fs_obj.insert("read_file".to_string(), Value::NativeFunction(Arc::new(|args| {
+    // Create reusable function values
+    let read_file_fn = Value::NativeFunction(Arc::new(|args| {
         if let [Value::String(path)] = args.as_slice() {
             match fs::read_to_string(Path::new(path.as_str())) {
                 Ok(content) => Ok(Value::String(content)),
@@ -17,7 +15,13 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
         } else {
             Err("read_file expects a string path argument".to_string())
         }
-    })));
+    }));
+
+    // For object-style access, we maintain an fs object
+    let mut fs_obj = HashMap::new();
+
+    // Add functions to the fs object
+    fs_obj.insert("read_file".to_string(), read_file_fn.clone());
 
     fs_obj.insert("write_file".to_string(), Value::NativeFunction(Arc::new(|args| {
         if let [Value::String(path), Value::String(content)] = args.as_slice() {
@@ -106,21 +110,8 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
         }
     })));
 
-    if let Some(Value::Array(methods)) = env.lookup("__IMPORT_METHODS__") {
-        // Specific imports
-        for method in methods {
-            if let Value::String(name) = method {
-                if let Some(value) = fs_obj.get(&name) {
-                    env.declare(name, value.clone(), true);
-                } else {
-                    return Err(format!("FS module error: '{}' not found", name));
-                }
-            }
-        }
-    } else {
-        // Full module import
-        env.declare("fs".to_string(), Value::Object(fs_obj), true);
-    }
+    // Register our object in the environment
+    env.declare("fs".to_string(), Value::Object(fs_obj), true);
 
     Ok(())
 }

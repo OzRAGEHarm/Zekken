@@ -77,7 +77,24 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
         } else {
             0
         };
-        std::process::exit(code);
+        // Return a special error string to signal exit
+        Err(format!("ZK_EXIT_CODE: {}", code))
+    })));
+
+    // Get process ID
+    os_obj.insert("pid".to_string(), Value::NativeFunction(Arc::new(|_args| {
+        let pid = std::process::id();
+        Ok(Value::Int(pid as i64))
+    })));
+
+    // Sleep for a given number of milliseconds
+    os_obj.insert("sleep".to_string(), Value::NativeFunction(Arc::new(|args| {
+        if let Some(Value::Int(ms)) = args.get(0) {
+            std::thread::sleep(std::time::Duration::from_millis(*ms as u64));
+            Ok(Value::Void)
+        } else {
+            Err("sleep expects an integer (milliseconds)".to_string())
+        }
     })));
 
     env.declare("os".to_string(), Value::Object(os_obj), true);

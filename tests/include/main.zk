@@ -1,9 +1,9 @@
 include "export.zk";
 
-@println => |"Included integer: " + integer_value|
-@println => |"Included float: " + float_value|
-@println => |"Included string: " + string_value|
+@println => |"Included integer: " + integer_value| // Prints 123
+@println => |"Included float: " + float_value| // Prints 45.67
+@println => |"Included string: " + string_value| // Prints "Hello from export.zk!"
 
-let result: int = function => |5|;
-@println => |"Result of included function: " + result|
-@println => |string_value|
+let result: int = function => |5|; // Function multiplies input by 2
+@println => |"Result of included function: " + result| // Prints 10
+@println => |string_value| // Prints "Hello from export.zk!"

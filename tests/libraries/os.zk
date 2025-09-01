@@ -5,12 +5,21 @@ let cwd: string = os.cwd => | |;
 @println => |"Current directory: " + cwd|
 
 // Test listing files in current directory
-let files: arr = os.ls => |"."|;
+let files: arr = os.ls => |"./images"|;
 @println => |"Files: " + files|
 
 // Test platform/OS
 let plat: string = os.platform => | |;
 @println => |"Platform: " + plat|
+
+// Test Process ID
+let pid: int = os.pid => | |;
+@println => |"Process ID: " + pid|
+
+// Test sleep function
+@println => |"Sleeping for 2 seconds..."|
+os.sleep => |2000| // Sleep for 2 seconds
+@println => |"Slept for 2 seconds"| // Should print after 2 seconds
 
 // Test environment variable set/get/remove
 os.set_env => |"ZK_TEST_VAR", "hello"| // Set env var
@@ -20,5 +29,8 @@ os.remove_env => |"ZK_TEST_VAR"| // Remove env var
 let env_val2: string = os.env => |"ZK_TEST_VAR"|; // Should be empty string if not set
 @println => |"ZK_TEST_VAR after remove: " + env_val2|
 
-// Test exit (commented out to not stop test runner)
-// let _dummy3: string = os.exit => |0|
+// Test exit function
+@println => |"Exiting with code 0..."| // Should print before exit
+
+// Exit with code 0
+os.exit => |0|
