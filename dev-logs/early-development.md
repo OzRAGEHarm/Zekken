@@ -185,3 +185,4 @@
 - Improved website syntax highlighting consistency (including function declaration names and built-in call formatting to match the Zekken highlighter rules).
 - Reworked website documentation into multi-page docs with persistent sidebar navigation, previous/next section flow, responsive mobile layout fixes, and starter documentation content.
 - Fixed `for |value| in array` / nested loop evaluation edge cases and improved dynamic array indexing (`arr[i]`, `arr[i][0]`) so matrix-style numeric code executes correctly.
+- Added support for indexed member assignments (`arr[i]`, `arr[i][j]`) including compound operators (`+=`, `-=`, `*=`, `/=`, `%=`), and updated linting so member assignment targets are validated correctly.

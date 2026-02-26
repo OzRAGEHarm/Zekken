@@ -415,58 +415,170 @@ fn evaluate_index_access(object: &Value, idx: usize, line: usize, column: usize)
 }
 
 fn evaluate_assignment(assign: &AssignExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
-    let left = match *assign.left {
-        Expr::Identifier(ref ident) => ident.name.clone(),
-        _ => return Err(ZekkenError::type_error(
-            "Invalid assignment target",
-            "identifier",
-            "other",
-            assign.location.line,
-            assign.location.column
-        )),
+    enum AssignTarget {
+        Identifier(String),
+        Member(Box<Expr>),
+    }
+
+    let target = match &*assign.left {
+        Expr::Identifier(ident) => AssignTarget::Identifier(ident.name.clone()),
+        Expr::Member(_) => AssignTarget::Member(assign.left.clone()),
+        _ => {
+            return Err(ZekkenError::type_error(
+                "Invalid assignment target",
+                "identifier or member access",
+                "other",
+                assign.location.line,
+                assign.location.column,
+            ))
+        }
     };
 
-    // Handle compound assignments (+=, -=, *=, /=, %=)
-    if assign.operator != "=" {
-        let left_val = env.lookup(&left).ok_or_else(|| ZekkenError::reference(
-            &format!("Variable '{}' not found", left),
-            &left,
-            assign.location.line,
-            assign.location.column
-        ))?;
-        let right_val = evaluate_expression(&assign.right, env)?;
+    let left_val = match &target {
+        AssignTarget::Identifier(name) => env.lookup(name).ok_or_else(|| {
+            ZekkenError::reference(
+                &format!("Variable '{}' not found", name),
+                name,
+                assign.location.line,
+                assign.location.column,
+            )
+        })?,
+        AssignTarget::Member(expr) => evaluate_expression(expr, env)?,
+    };
 
-        let result = match assign.operator.as_str() {
+    let value_to_store = if assign.operator != "=" {
+        let right_val = evaluate_expression(&assign.right, env)?;
+        match assign.operator.as_str() {
             "+=" => add_values(&left_val, &right_val),
             "-=" => subtract_values(&left_val, &right_val),
             "*=" => multiply_values(&left_val, &right_val),
             "/=" => divide_values(&left_val, &right_val),
             "%=" => modulo_values(left_val, right_val),
-            _ => return Err(ZekkenError::runtime(
-                &format!("Unknown operator: {}", assign.operator),
-                assign.location.line,
-                assign.location.column,
-                None
-            )),
-        };
-
-        let result_cloned = result.clone();
-        let result = result.map_err(|e| ZekkenError::runtime(&e, assign.location.line, assign.location.column, None))?;
-        match result_cloned {
-            Ok(value) => {
-                env.assign(&left, value).map_err(|err| ZekkenError::runtime(&err, assign.location.line, assign.location.column, None))?;
-            },
-            Err(err) => return Err(ZekkenError::runtime(&err, assign.location.line, assign.location.column, None)),
+            _ => {
+                return Err(ZekkenError::runtime(
+                    &format!("Unknown operator: {}", assign.operator),
+                    assign.location.line,
+                    assign.location.column,
+                    None,
+                ))
+            }
         }
-        return Ok(result);
+        .map_err(|e| ZekkenError::runtime(&e, assign.location.line, assign.location.column, None))?
+    } else {
+        evaluate_expression(&assign.right, env)?
+    };
+
+    match target {
+        AssignTarget::Identifier(name) => {
+            env.assign(&name, value_to_store.clone()).map_err(|err| {
+                ZekkenError::runtime(&err, assign.location.line, assign.location.column, None)
+            })?;
+        }
+        AssignTarget::Member(member_expr) => {
+            assign_to_member(&member_expr, value_to_store.clone(), env).map_err(|err| {
+                ZekkenError::runtime(&err, assign.location.line, assign.location.column, None)
+            })?;
+        }
     }
 
-    // Regular assignment
-    let value = evaluate_expression(&assign.right, env)?;
-    if let Err(err) = env.assign(&left, value.clone()) {
-        return Err(ZekkenError::runtime(&err, assign.location.line, assign.location.column, None));
+    Ok(value_to_store)
+}
+
+#[derive(Debug, Clone)]
+enum MemberKey {
+    Property(String),
+    Index(usize),
+}
+
+fn resolve_member_key(expr: &Expr, env: &mut Environment) -> Result<MemberKey, String> {
+    match expr {
+        Expr::Identifier(id) => {
+            if let Some(val) = env.lookup(&id.name) {
+                match val {
+                    Value::Int(i) if i >= 0 => Ok(MemberKey::Index(i as usize)),
+                    Value::Float(f) if f >= 0.0 && f.fract() == 0.0 => Ok(MemberKey::Index(f as usize)),
+                    _ => Ok(MemberKey::Property(id.name.clone())),
+                }
+            } else {
+                Ok(MemberKey::Property(id.name.clone()))
+            }
+        }
+        Expr::StringLit(s) => Ok(MemberKey::Property(s.value.clone())),
+        Expr::IntLit(i) if i.value >= 0 => Ok(MemberKey::Index(i.value as usize)),
+        Expr::FloatLit(f) if f.value >= 0.0 && f.value.fract() == 0.0 => Ok(MemberKey::Index(f.value as usize)),
+        _ => Err("Invalid member key for assignment".to_string()),
     }
-    Ok(value)
+}
+
+fn collect_member_path(expr: &Expr, env: &mut Environment) -> Result<(String, Vec<MemberKey>), String> {
+    match expr {
+        Expr::Identifier(id) => Ok((id.name.clone(), Vec::new())),
+        Expr::Member(member) => {
+            let (root, mut path) = collect_member_path(&member.object, env)?;
+            path.push(resolve_member_key(&member.property, env)?);
+            Ok((root, path))
+        }
+        _ => Err("Invalid member assignment target".to_string()),
+    }
+}
+
+fn assign_at_path(current: &mut Value, path: &[MemberKey], value: Value) -> Result<(), String> {
+    if path.is_empty() {
+        *current = value;
+        return Ok(());
+    }
+
+    match &path[0] {
+        MemberKey::Index(idx) => match current {
+            Value::Array(arr) => {
+                if *idx >= arr.len() {
+                    return Err(format!("Array index {} out of bounds", idx));
+                }
+                assign_at_path(&mut arr[*idx], &path[1..], value)
+            }
+            Value::Object(map) => {
+                let key_for_index = match map.get("__keys__") {
+                    Some(Value::Array(keys)) => match keys.get(*idx) {
+                        Some(Value::String(key)) => Some(key.clone()),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+                if let Some(key) = key_for_index {
+                    if let Some(next) = map.get_mut(&key) {
+                        assign_at_path(next, &path[1..], value)
+                    } else {
+                        Err(format!("Property '{}' not found", key))
+                    }
+                } else {
+                    Err("Object does not support numeric indexing".to_string())
+                }
+            }
+            _ => Err("Invalid member assignment target (indexing non-array/object)".to_string()),
+        },
+        MemberKey::Property(prop) => match current {
+            Value::Object(map) => {
+                if path.len() == 1 {
+                    map.insert(prop.clone(), value);
+                    Ok(())
+                } else if let Some(next) = map.get_mut(prop) {
+                    assign_at_path(next, &path[1..], value)
+                } else {
+                    Err(format!("Property '{}' not found", prop))
+                }
+            }
+            _ => Err("Invalid member assignment target (property on non-object)".to_string()),
+        },
+    }
+}
+
+fn assign_to_member(member_expr: &Expr, value: Value, env: &mut Environment) -> Result<(), String> {
+    let (root, path) = collect_member_path(member_expr, env)?;
+    let mut root_value = env
+        .lookup(&root)
+        .ok_or_else(|| format!("Variable '{}' not found", root))?;
+    assign_at_path(&mut root_value, &path, value)?;
+    env.assign(&root, root_value)
 }
 
 fn add_values(left: &Value, right: &Value) -> Result<Value, String> {

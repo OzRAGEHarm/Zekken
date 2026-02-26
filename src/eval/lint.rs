@@ -93,10 +93,13 @@ pub fn lint_expression(expr: &Expr, env: &Environment) -> Result<(), ZekkenError
                         ));
                     }
                 },
+                Expr::Member(ref member) => {
+                    lint_expression(&member.object, env)?;
+                }
                 _ => {
                     return Err(ZekkenError::type_error(
                         "Invalid assignment target",
-                        "identifier",
+                        "identifier or member access",
                         "other",
                         assign.location.line,
                         assign.location.column,
