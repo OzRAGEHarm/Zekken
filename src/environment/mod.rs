@@ -159,8 +159,8 @@ impl Value {
 
 #[derive(Debug, Clone)]
 pub struct FunctionValue {
-  pub params: Vec<Param>,
-  pub body: Vec<Box<Content>>,
+  pub params: Arc<Vec<Param>>,
+  pub body: Arc<Vec<Box<Content>>>,
   //pub closure: Environment,
 }
 
@@ -207,15 +207,14 @@ impl Environment {
           constants: HashMap::new(),
       };
 
+      let disable_print = match std::env::var("ZEKKEN_DISABLE_PRINT") {
+          Ok(val) => val == "1" || val.eq_ignore_ascii_case("true"),
+          Err(_) => false,
+      };
+
       env.constants.insert(
         "println".to_string(),
-        Value::NativeFunction(Arc::new(|args: Vec<Value>| -> Result<Value, String> {
-            // Check for ZEKKEN_DISABLE_PRINT environment variable
-            let disable_print = match std::env::var("ZEKKEN_DISABLE_PRINT") {
-                Ok(val) => val == "1" || val.eq_ignore_ascii_case("true"),
-                Err(_) => false,
-            };
-
+        Value::NativeFunction(Arc::new(move |args: Vec<Value>| -> Result<Value, String> {
             if disable_print {
                 return Ok(Value::Void);
             }
@@ -230,7 +229,6 @@ impl Environment {
             let return_value = args[0].clone();
 
             writeln!(stdout, "{}", return_value).map_err(|e| e.to_string())?;
-            stdout.flush().map_err(|e| e.to_string())?;
 
             Ok(Value::Void)
         }))
@@ -296,9 +294,9 @@ impl Environment {
           return Err(format!("Cannot reassign constant '{}'", name));
       }
 
-      // First check if variable exists in current scope
-      if self.variables.contains_key(name) {
-          self.variables.insert(name.to_string(), value);
+      // First check if variable exists in current scope.
+      if let Some(slot) = self.variables.get_mut(name) {
+          *slot = value;
           return Ok(());
       }
 
@@ -315,6 +313,34 @@ impl Environment {
           .or_else(|| self.variables.get(name))
           .cloned()
           .or_else(|| self.parent.as_ref().and_then(|p| p.lookup(name)))
+  }
+
+  pub fn lookup_ref(&self, name: &str) -> Option<&Value> {
+      if let Some(v) = self.constants.get(name) {
+          Some(v)
+      } else if let Some(v) = self.variables.get(name) {
+          Some(v)
+      } else if let Some(parent) = self.parent.as_ref() {
+          parent.lookup_ref(name)
+      } else {
+          None
+      }
+  }
+
+  pub fn lookup_mut_assignable(&mut self, name: &str) -> Result<&mut Value, String> {
+      if self.constants.contains_key(name) {
+          return Err(format!("Cannot reassign constant '{}'", name));
+      }
+
+      if let Some(v) = self.variables.get_mut(name) {
+          return Ok(v);
+      }
+
+      if let Some(parent) = self.parent.as_mut() {
+          return parent.lookup_mut_assignable(name);
+      }
+
+      Err(format!("Variable '{}' not found", name))
   }
 
   /// Lookup a name and return (Option<Value>, Option<&'static str> kind)

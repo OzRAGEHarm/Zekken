@@ -160,7 +160,7 @@ fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Result<Va
     // When resolving the callee, try to look up as an identifier first
     if let Expr::Identifier(ref ident) = *call.callee {
         // Try to look up the identifier in the environment
-        if let Some(val) = env.lookup(&ident.name) {
+        if let Some(val) = env.lookup_ref(&ident.name).cloned() {
             match &val {
                 Value::Function(_) => {
                     return evaluate_function_call(&val, call, env);
@@ -217,7 +217,7 @@ fn evaluate_function_call(func: &Value, call: &CallExpr, env: &mut Environment) 
         }
 
         let mut result = Value::Void;
-        for stmt in &func_def.body {
+        for stmt in func_def.body.iter() {
             match **stmt {
                 Content::Expression(ref expr) => {
                     result = evaluate_expression(expr, &mut function_env)?;
@@ -314,13 +314,13 @@ fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Res
     let result = match &*member.property {
         Expr::Identifier(ref ident) => {
             // Support dynamic indexing like arr[i] / obj[i] when `i` resolves to a number.
-            if let Some(index_val) = env.lookup(&ident.name) {
+            if let Some(index_val) = env.lookup_ref(&ident.name) {
                 match index_val {
-                    Value::Int(i) if i >= 0 => {
-                        evaluate_index_access(&object, i as usize, member.location.line, member.location.column)
+                    Value::Int(i) if *i >= 0 => {
+                        evaluate_index_access(&object, *i as usize, member.location.line, member.location.column)
                     }
-                    Value::Float(f) if f >= 0.0 && f.fract() == 0.0 => {
-                        evaluate_index_access(&object, f as usize, member.location.line, member.location.column)
+                    Value::Float(f) if *f >= 0.0 && f.fract() == 0.0 => {
+                        evaluate_index_access(&object, *f as usize, member.location.line, member.location.column)
                     }
                     _ => evaluate_property_access(&object, &ident.name, member.location.line, member.location.column),
                 }
@@ -434,6 +434,132 @@ fn evaluate_assignment(assign: &AssignExpr, env: &mut Environment) -> Result<Val
         }
     };
 
+    // Fast path: in-place compound assignment for identifiers to avoid cloning
+    // large values (especially arrays) in tight loops.
+    if let AssignTarget::Identifier(name) = &target {
+        if assign.operator != "=" {
+            let right_val = evaluate_expression(&assign.right, env)?;
+            if let Ok(left_slot) = env.lookup_mut_assignable(name) {
+                match assign.operator.as_str() {
+                    "+=" => match left_slot {
+                        Value::Int(l) => match &right_val {
+                            Value::Int(r) => return Ok(Value::Int({ *l += *r; *l })),
+                            Value::Float(r) => {
+                                let v = *l as f64 + *r;
+                                *left_slot = Value::Float(v);
+                                return Ok(Value::Float(v));
+                            }
+                            _ => {}
+                        },
+                        Value::Float(l) => match &right_val {
+                            Value::Float(r) => return Ok(Value::Float({ *l += *r; *l })),
+                            Value::Int(r) => return Ok(Value::Float({ *l += *r as f64; *l })),
+                            _ => {}
+                        },
+                        Value::String(l) => match &right_val {
+                            Value::String(r) => {
+                                l.push_str(r);
+                                return Ok(Value::String(l.clone()));
+                            }
+                            other => {
+                                l.push_str(&other.to_string());
+                                return Ok(Value::String(l.clone()));
+                            }
+                        },
+                        Value::Array(l) => {
+                            if let Value::Array(r) = &right_val {
+                                l.extend(r.iter().cloned());
+                                return Ok(Value::Array(l.clone()));
+                            }
+                        }
+                        _ => {}
+                    },
+                    "-=" => match left_slot {
+                        Value::Int(l) => match &right_val {
+                            Value::Int(r) => return Ok(Value::Int({ *l -= *r; *l })),
+                            Value::Float(r) => {
+                                let v = *l as f64 - *r;
+                                *left_slot = Value::Float(v);
+                                return Ok(Value::Float(v));
+                            }
+                            _ => {}
+                        },
+                        Value::Float(l) => match &right_val {
+                            Value::Float(r) => return Ok(Value::Float({ *l -= *r; *l })),
+                            Value::Int(r) => return Ok(Value::Float({ *l -= *r as f64; *l })),
+                            _ => {}
+                        },
+                        _ => {}
+                    },
+                    "*=" => match left_slot {
+                        Value::Int(l) => match &right_val {
+                            Value::Int(r) => return Ok(Value::Int({ *l *= *r; *l })),
+                            Value::Float(r) => {
+                                let v = *l as f64 * *r;
+                                *left_slot = Value::Float(v);
+                                return Ok(Value::Float(v));
+                            }
+                            _ => {}
+                        },
+                        Value::Float(l) => match &right_val {
+                            Value::Float(r) => return Ok(Value::Float({ *l *= *r; *l })),
+                            Value::Int(r) => return Ok(Value::Float({ *l *= *r as f64; *l })),
+                            _ => {}
+                        },
+                        _ => {}
+                    },
+                    "/=" => match left_slot {
+                        Value::Int(l) => match &right_val {
+                            Value::Int(r) => {
+                                if *r == 0 {
+                                    return Err(ZekkenError::runtime("Division by zero", assign.location.line, assign.location.column, None));
+                                }
+                                return Ok(Value::Int({ *l /= *r; *l }));
+                            }
+                            Value::Float(r) => {
+                                if *r == 0.0 {
+                                    return Err(ZekkenError::runtime("Division by zero", assign.location.line, assign.location.column, None));
+                                }
+                                let v = *l as f64 / *r;
+                                *left_slot = Value::Float(v);
+                                return Ok(Value::Float(v));
+                            }
+                            _ => {}
+                        },
+                        Value::Float(l) => match &right_val {
+                            Value::Float(r) => {
+                                if *r == 0.0 {
+                                    return Err(ZekkenError::runtime("Division by zero", assign.location.line, assign.location.column, None));
+                                }
+                                return Ok(Value::Float({ *l /= *r; *l }));
+                            }
+                            Value::Int(r) => {
+                                if *r == 0 {
+                                    return Err(ZekkenError::runtime("Division by zero", assign.location.line, assign.location.column, None));
+                                }
+                                return Ok(Value::Float({ *l /= *r as f64; *l }));
+                            }
+                            _ => {}
+                        },
+                        _ => {}
+                    },
+                    "%=" => {
+                        if let Value::Int(l) = left_slot {
+                            if let Value::Int(r) = &right_val {
+                                if *r == 0 {
+                                    return Err(ZekkenError::runtime("Modulo by zero", assign.location.line, assign.location.column, None));
+                                }
+                                *l %= *r;
+                                return Ok(Value::Int(*l));
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
     let left_val = match &target {
         AssignTarget::Identifier(name) => env.lookup(name).ok_or_else(|| {
             ZekkenError::reference(
@@ -490,13 +616,13 @@ enum MemberKey {
     Index(usize),
 }
 
-fn resolve_member_key(expr: &Expr, env: &mut Environment) -> Result<MemberKey, String> {
+fn resolve_member_key(expr: &Expr, env: &Environment) -> Result<MemberKey, String> {
     match expr {
         Expr::Identifier(id) => {
-            if let Some(val) = env.lookup(&id.name) {
+            if let Some(val) = env.lookup_ref(&id.name) {
                 match val {
-                    Value::Int(i) if i >= 0 => Ok(MemberKey::Index(i as usize)),
-                    Value::Float(f) if f >= 0.0 && f.fract() == 0.0 => Ok(MemberKey::Index(f as usize)),
+                    Value::Int(i) if *i >= 0 => Ok(MemberKey::Index(*i as usize)),
+                    Value::Float(f) if *f >= 0.0 && f.fract() == 0.0 => Ok(MemberKey::Index(*f as usize)),
                     _ => Ok(MemberKey::Property(id.name.clone())),
                 }
             } else {
@@ -510,7 +636,7 @@ fn resolve_member_key(expr: &Expr, env: &mut Environment) -> Result<MemberKey, S
     }
 }
 
-fn collect_member_path(expr: &Expr, env: &mut Environment) -> Result<(String, Vec<MemberKey>), String> {
+fn collect_member_path(expr: &Expr, env: &Environment) -> Result<(String, Vec<MemberKey>), String> {
     match expr {
         Expr::Identifier(id) => Ok((id.name.clone(), Vec::new())),
         Expr::Member(member) => {
@@ -574,11 +700,8 @@ fn assign_at_path(current: &mut Value, path: &[MemberKey], value: Value) -> Resu
 
 fn assign_to_member(member_expr: &Expr, value: Value, env: &mut Environment) -> Result<(), String> {
     let (root, path) = collect_member_path(member_expr, env)?;
-    let mut root_value = env
-        .lookup(&root)
-        .ok_or_else(|| format!("Variable '{}' not found", root))?;
-    assign_at_path(&mut root_value, &path, value)?;
-    env.assign(&root, root_value)
+    let root_value = env.lookup_mut_assignable(&root)?;
+    assign_at_path(root_value, &path, value)
 }
 
 fn add_values(left: &Value, right: &Value) -> Result<Value, String> {

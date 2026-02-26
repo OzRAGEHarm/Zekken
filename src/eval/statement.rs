@@ -7,6 +7,7 @@ use crate::libraries::load_library;
 use crate::lexer::DataType;
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 // use std::process;
 use super::lint::{lint_statement, lint_expression, lint_include, lint_use};
 
@@ -35,8 +36,8 @@ fn create_dummy_value(data_type: &DataType) -> Value {
         DataType::Array => Value::Array(vec![]),
         DataType::Object => Value::Object(HashMap::new()),
         DataType::Fn => Value::Function(FunctionValue { 
-            params: vec![], 
-            body: vec![] 
+            params: Arc::new(vec![]), 
+            body: Arc::new(vec![]) 
         }),
         _ => Value::Void,
     }
@@ -48,8 +49,8 @@ fn process_statement_scope(stmt: &Stmt, env: &mut Environment) {
         Stmt::Lambda(lambda) => {
             // Register the lambda function in the environment during the first pass
             let function_value = FunctionValue {
-                params: lambda.params.clone(),
-                body: lambda.body.clone(),
+                params: Arc::new(lambda.params.clone()),
+                body: Arc::new(lambda.body.clone()),
             };
             env.declare(lambda.ident.clone(), Value::Function(function_value), lambda.constant);
         },
@@ -162,8 +163,8 @@ fn process_statement_scope(stmt: &Stmt, env: &mut Environment) {
         Stmt::FuncDecl(func_decl) => {
             // First, register the function itself in the environment
             let function_value = FunctionValue {
-                params: func_decl.params.clone(),
-                body: func_decl.body.clone(),
+                params: Arc::new(func_decl.params.clone()),
+                body: Arc::new(func_decl.body.clone()),
             };
             env.declare(func_decl.ident.clone(), Value::Function(function_value), false);
             
@@ -296,6 +297,10 @@ pub fn evaluate_statement(stmt: &Stmt, env: &mut Environment) -> Result<Option<V
 // Evaluate the entire program
 fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     let mut errors = Vec::new();
+    let skip_lint = matches!(
+        std::env::var("ZEKKEN_NO_LINT"),
+        Ok(v) if v == "1" || v.eq_ignore_ascii_case("true")
+    );
 
     // Create environment for processing
     let mut temp_env = env.clone();
@@ -358,32 +363,34 @@ fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<V
             process_statement_scope(stmt, &mut temp_env);
         }
     }
-    
-    // Second pass: Now lint everything with the complete environment
-    for content in &program.content {
-        match &**content {
-            Content::Statement(stmt) => {
-                if let Err(e) = lint_statement(stmt, &temp_env) {
-                    lint_errors.push(e);
-                }
-            },
-            Content::Expression(expr) => {
-                if let Err(e) = lint_expression(expr, &temp_env) {
-                    lint_errors.push(e);
-                }
-            }
-        }
-    }
 
-    // Report lint errors and stop before execution.
-    if !lint_errors.is_empty() {
-        for error in lint_errors {
-            if error.kind == ErrorKind::Internal {
-                continue; // Skip internal errors
+    if !skip_lint {
+        // Second pass: Now lint everything with the complete environment
+        for content in &program.content {
+            match &**content {
+                Content::Statement(stmt) => {
+                    if let Err(e) = lint_statement(stmt, &temp_env) {
+                        lint_errors.push(e);
+                    }
+                },
+                Content::Expression(expr) => {
+                    if let Err(e) = lint_expression(expr, &temp_env) {
+                        lint_errors.push(e);
+                    }
+                }
             }
-            push_error(error.clone());
         }
-        return Err(ZekkenError::internal("Linting errors found"));
+
+        // Report lint errors and stop before execution.
+        if !lint_errors.is_empty() {
+            for error in lint_errors {
+                if error.kind == ErrorKind::Internal {
+                    continue; // Skip internal errors
+                }
+                push_error(error.clone());
+            }
+            return Err(ZekkenError::internal("Linting errors found"));
+        }
     }
     
     // Update the real environment with all the declarations we processed
@@ -470,8 +477,8 @@ fn evaluate_var_declaration(decl: &VarDecl, env: &mut Environment) -> Result<Opt
 // Handle function declarations
 fn evaluate_function_declaration(func: &FuncDecl, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     let function_value = FunctionValue {
-        params: func.params.clone(),
-        body: func.body.clone(),
+        params: Arc::new(func.params.clone()),
+        body: Arc::new(func.body.clone()),
     };
 
     env.declare(func.ident.clone(), Value::Function(function_value), false);
@@ -665,8 +672,8 @@ fn evaluate_return(ret: &ReturnStmt, env: &mut Environment) -> Result<Option<Val
 // Handle lambda expressions
 fn evaluate_lambda(lambda: &LambdaDecl, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
     let function_value = FunctionValue {
-        params: lambda.params.clone(),
-        body: lambda.body.clone(),
+        params: Arc::new(lambda.params.clone()),
+        body: Arc::new(lambda.body.clone()),
     };
 
     env.declare(lambda.ident.clone(), Value::Function(function_value), lambda.constant);
@@ -856,7 +863,11 @@ fn evaluate_for_object(
         DataType::Bool => iter_env.declare(idents[1].clone(), Value::Boolean(false), false),
         DataType::Object => iter_env.declare(idents[1].clone(), Value::Object(HashMap::new()), false),
         DataType::Array => iter_env.declare(idents[1].clone(), Value::Array(Vec::new()), false),
-        DataType::Fn => iter_env.declare(idents[1].clone(), Value::Function(FunctionValue { params: vec![], body: vec![] }), false),
+        DataType::Fn => iter_env.declare(
+            idents[1].clone(),
+            Value::Function(FunctionValue { params: Arc::new(vec![]), body: Arc::new(vec![]) }),
+            false,
+        ),
     }
 
     for key_val in keys {

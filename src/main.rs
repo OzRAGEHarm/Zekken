@@ -38,6 +38,9 @@ enum Commands {
     Run {
         /// The script file to run
         file: String,
+        /// Skip pre-execution lint pass for performance benchmarking
+        #[arg(long)]
+        no_lint: bool,
     },
 
     /// Start a Zekken REPL
@@ -105,8 +108,13 @@ description = \"{}\"
             fs::write(&entry_point, "@println => |\"Hello World!\"|\n").expect("Failed to create entry point file.");
             println!("Initialized new Zekken project.");
         }
-        Commands::Run { file } => {
+        Commands::Run { file, no_lint } => {
             std::env::set_var("ZEKKEN_CURRENT_FILE", file);
+            if *no_lint {
+                std::env::set_var("ZEKKEN_NO_LINT", "1");
+            } else {
+                std::env::remove_var("ZEKKEN_NO_LINT");
+            }
             let source_code = fs::read_to_string(file).unwrap_or_else(|err| {
                 eprintln!("Error reading file {}: {}", file, err);
                 process::exit(1)

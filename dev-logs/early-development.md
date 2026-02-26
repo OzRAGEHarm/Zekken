@@ -186,3 +186,4 @@
 - Reworked website documentation into multi-page docs with persistent sidebar navigation, previous/next section flow, responsive mobile layout fixes, and starter documentation content.
 - Fixed `for |value| in array` / nested loop evaluation edge cases and improved dynamic array indexing (`arr[i]`, `arr[i][0]`) so matrix-style numeric code executes correctly.
 - Added support for indexed member assignments (`arr[i]`, `arr[i][j]`) including compound operators (`+=`, `-=`, `*=`, `/=`, `%=`), and updated linting so member assignment targets are validated correctly.
+- Added a performance-focused run mode (`run --no-lint`) and improved runtime efficiency with lower-overhead function storage/lookups plus in-place assignment/update paths for hot numeric loops.
