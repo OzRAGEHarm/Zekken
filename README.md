@@ -9,7 +9,7 @@
 ---
 
 [Website]: https://ozrageharm.github.io/Zekken/
-[Documentation]: https://ozrageharm.github.io/Zekken/website/Docs/docs.html
+[Documentation]: https://ozrageharm.github.io/Zekken/website/Docs/getting-started.html
 [Demo]: https://ozrageharm.github.io/Zekken/website/Demo/demo.html
 [Download]: https://ozrageharm.github.io/Zekken/website/Download/download.html
 
@@ -27,7 +27,30 @@ Stay informed about the latest changes, improvements, and fixes to Zekken. Below
 - **[View Full Development Log](./dev-logs/early-development.md)**
 
 ## Documentation 📖
-There isn't much documentation that I can resourcefully give as the language is still in early developement stages and hasn't fully matured and/or been tested 100%.
+### Website Docs
+- **[Getting Started](https://ozrageharm.github.io/Zekken/website/Docs/getting-started.html)**
+- **[Syntax Basics](https://ozrageharm.github.io/Zekken/website/Docs/syntax-basics.html)**
+- **[Types](https://ozrageharm.github.io/Zekken/website/Docs/types.html)**
+- **[Functions](https://ozrageharm.github.io/Zekken/website/Docs/functions.html)**
+- **[Libraries](https://ozrageharm.github.io/Zekken/website/Docs/libraries.html)**
+- **[Errors](https://ozrageharm.github.io/Zekken/website/Docs/errors.html)**
+- **[Examples](https://ozrageharm.github.io/Zekken/website/Docs/examples.html)**
+- **[Roadmap](https://ozrageharm.github.io/Zekken/website/Docs/roadmap.html)**
+
+### Quick Start
+```bash
+# Build release CLI
+./scripts/build-cli.sh
+
+# Run a file
+./target/release/zekken run main.zk
+```
+
+Windows:
+```bat
+.\scripts\build-cli.bat
+.\target\release\zekken.exe run main.zk
+```
 
 ## License 🏛
 This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
