@@ -70,4 +70,54 @@ let ceil: int = num.ceil => | |; // 4
 let even: bool = num.isEven => | |; // false
 @println => |"Is Number Even: " + even|
 
+@println => |"\nType Casting Methods:\n"|
+
+// String casts
+@println => |"String Casts:"|
+let str_num: string = "-42";
+let cast_str_to_int: int = str_num.cast => |"int"|;
+let cast_str_to_float: float = str_num.cast => |"float"|;
+let cast_str_to_bool: bool = "true".cast => |"bool"|;
+@println => |"String to int: " + cast_str_to_int|
+@println => |"String to float: " + cast_str_to_float|
+@println => |"String to bool: " + cast_str_to_bool|
+
+// Int casts
+@println => |"\nInteger Casts:"|
+let int_val: int = -15;
+let cast_int_to_string: string = int_val.cast => |"string"|;
+let cast_int_to_float: float = int_val.cast => |"float"|;
+let cast_int_to_bool: bool = int_val.cast => |"bool"|;
+@println => |"Int to string: " + cast_int_to_string|
+@println => |"Int to float: " + cast_int_to_float|
+@println => |"Int to bool: " + cast_int_to_bool|
+
+// Float casts
+@println => |"\nFloat Casts:"|
+let float_val: float = -7.9;
+let cast_float_to_int: int = float_val.cast => |"int"|; // truncates
+let cast_float_to_string: string = float_val.cast => |"string"|;
+let cast_float_to_bool: bool = float_val.cast => |"bool"|;
+@println => |"Float to int: " + cast_float_to_int|
+@println => |"Float to string: " + cast_float_to_string|
+@println => |"Float to bool: " + cast_float_to_bool|
+
+// Bool casts
+@println => |"\nBool Casts:"|
+let bool_val: bool = false;
+let cast_bool_to_int: int = bool_val.cast => |"int"|;
+let cast_bool_to_float: float = bool_val.cast => |"float"|;
+let cast_bool_to_string: string = bool_val.cast => |"string"|;
+@println => |"Bool to int: " + cast_bool_to_int|
+@println => |"Bool to float: " + cast_bool_to_float|
+@println => |"Bool to string: " + cast_bool_to_string|
+
+// Invalid cast example
+try {
+  let bad_cast: int = "Hello".cast => |"int"|;
+  @println => |bad_cast|
+} catch |e| {
+  @println => |"Invalid cast handled: " + e.message|
+}
+
 @println => |"\nAll type method tests complete!"|

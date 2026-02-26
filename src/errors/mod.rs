@@ -15,27 +15,97 @@ pub struct ErrorContext {
 
 impl ErrorContext {
     pub fn new(filename: String, line: usize, column: usize, line_content: String) -> Self {
-        let pointer = " ".repeat(column.saturating_sub(1)) + "^";
+        Self::new_with_span(filename, line, column, line_content, 1)
+    }
+
+    pub fn new_with_span(
+        filename: String,
+        line: usize,
+        column: usize,
+        line_content: String,
+        span_len: usize,
+    ) -> Self {
+        let capped_span = span_len.max(1);
+        let mut pointer = " ".repeat(column.saturating_sub(1));
+        pointer.push('^');
+        if capped_span > 1 {
+            pointer.push_str(&"~".repeat(capped_span - 1));
+        }
         Self { filename, line, column, line_content, pointer }
     }
 }
 
 #[cfg(target_arch = "wasm32")]
-static mut WASM_SOURCE_LINES: Option<(Vec<String>, String)> = None;
+lazy_static::lazy_static! {
+    static ref WASM_SOURCE_LINES: Mutex<Option<(Vec<String>, String)>> = Mutex::new(None);
+}
 
 #[cfg(target_arch = "wasm32")]
+#[allow(dead_code)]
 pub fn set_wasm_source_lines(source: &str, filename: &str) {
-    unsafe {
-        WASM_SOURCE_LINES = Some((source.lines().map(|l| l.to_string()).collect(), filename.to_string()));
-    }
+    *WASM_SOURCE_LINES.lock().unwrap() = Some((
+        source.lines().map(|l| l.to_string()).collect(),
+        filename.to_string(),
+    ));
 }
 
 impl ErrorContext {
+    fn infer_span_len(raw_line: &str, column: usize) -> usize {
+        if raw_line.is_empty() || raw_line == "<line not found>" {
+            return 1;
+        }
+
+        let chars: Vec<char> = raw_line.chars().collect();
+        if chars.is_empty() {
+            return 1;
+        }
+
+        let start = column.saturating_sub(1).min(chars.len().saturating_sub(1));
+        let ch = chars[start];
+
+        if ch == '"' || ch == '\'' {
+            let quote = ch;
+            let mut i = start + 1;
+            while i < chars.len() {
+                if chars[i] == '\\' {
+                    i += 2;
+                    continue;
+                }
+                if chars[i] == quote {
+                    return i - start + 1;
+                }
+                i += 1;
+            }
+            return chars.len().saturating_sub(start).max(1);
+        }
+
+        if ch.is_alphanumeric() || ch == '_' || ch == '@' {
+            let mut i = start;
+            while i < chars.len() {
+                let c = chars[i];
+                if c.is_alphanumeric() || c == '_' || c == '@' {
+                    i += 1;
+                } else {
+                    break;
+                }
+            }
+            return i.saturating_sub(start).max(1);
+        }
+
+        1
+    }
+
     pub fn from_env(line: usize, column: usize) -> Self {
+        Self::from_env_with_span(line, column, None)
+    }
+
+    pub fn from_env_with_span(line: usize, column: usize, span_len: Option<usize>) -> Self {
         #[cfg(target_arch = "wasm32")]
         {
-            let (lines, filename) = unsafe {
+            let (lines, filename) = {
                 WASM_SOURCE_LINES
+                    .lock()
+                    .unwrap()
                     .as_ref()
                     .map(|(l, f)| (l.clone(), f.clone()))
                     .unwrap_or((vec![], "main.zk".to_string()))
@@ -48,12 +118,13 @@ impl ErrorContext {
             };
             // Then highlight it using the same function as CLI
             let highlighted = highlight_zekken_line(&raw_line);
-            Self::new(filename, line, column, highlighted)
+            let inferred_len = span_len.unwrap_or_else(|| Self::infer_span_len(&raw_line, column));
+            Self::new_with_span(filename, line, column, highlighted, inferred_len)
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
             let filename = std::env::var("ZEKKEN_CURRENT_FILE").unwrap_or_else(|_| "<unknown>".to_string());
-            let line_content = if filename != "<unknown>" {
+            let raw_line = if filename != "<unknown>" {
                 std::fs::read_to_string(&filename)
                     .ok()
                     .and_then(|src| src.lines().nth(line.saturating_sub(1)).map(|l| l.trim_end().to_string()))
@@ -61,8 +132,9 @@ impl ErrorContext {
             } else {
                 "<line not found>".to_string()
             };
-            let highlighted = highlight_zekken_line(&line_content);
-            Self::new(filename, line, column, highlighted)
+            let highlighted = highlight_zekken_line(&raw_line);
+            let inferred_len = span_len.unwrap_or_else(|| Self::infer_span_len(&raw_line, column));
+            Self::new_with_span(filename, line, column, highlighted, inferred_len)
         }
     }
 }
@@ -146,6 +218,15 @@ impl ZekkenError {
             extra: details.map(|d| d.to_string()),
         }
     }
+    pub fn runtime_with_span(msg: &str, line: usize, column: usize, span_len: usize, details: Option<&str>) -> Self {
+        let ctx = ErrorContext::from_env_with_span(line, column, Some(span_len.max(1)));
+        Self {
+            kind: ErrorKind::Runtime,
+            message: msg.to_string(),
+            context: ctx,
+            extra: details.map(|d| d.to_string()),
+        }
+    }
     pub fn type_error(msg: &str, expected: &str, found: &str, line: usize, column: usize) -> Self {
         let ctx = ErrorContext::from_env(line, column);
         
@@ -195,6 +276,7 @@ impl ZekkenError {
     }
 
     /// Render a REPL-friendly error string (single-line, no file/line context)
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn to_repl_string(&self) -> String {
         let kind = match self.kind {
             ErrorKind::Syntax => "Syntax Error",
@@ -216,8 +298,8 @@ impl ZekkenError {
 }
 
 lazy_static::lazy_static! {
-    // Store errors as (kind, line, column, message) to deduplicate
-    static ref ERROR_SET: Mutex<HashSet<(String, usize, usize, String)>> = Mutex::new(HashSet::new());
+    // Store errors as (kind, filename, line, column) to deduplicate
+    static ref ERROR_SET: Mutex<HashSet<(String, String, usize, usize)>> = Mutex::new(HashSet::new());
     pub static ref ERROR_LIST: Mutex<Vec<ZekkenError>> = Mutex::new(Vec::new());
     static ref NO_COLOR: Mutex<bool> = Mutex::new({
         #[cfg(target_arch = "wasm32")]
@@ -241,33 +323,34 @@ fn colorize(text: &str, color_code: &str) -> String {
 }
 
 impl fmt::Display for ZekkenError {
+    #[cfg(target_arch = "wasm32")]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        #[cfg(target_arch = "wasm32")]
-        {
-            let (kind, color) = match self.kind {
-                ErrorKind::Syntax => ("Syntax Error", "\x1b[1;31m"),
-                ErrorKind::Runtime => ("Runtime Error", "\x1b[1;35m"),
-                ErrorKind::Type => ("Type Error", "\x1b[1;33m"),
-                ErrorKind::Reference => ("Reference Error", "\x1b[1;34m"),
-                ErrorKind::Internal => ("Internal Error", "\x1b[1;41m"),
-            };
-            let kind_str = colorize(kind, color);
-            let location = format!("{} -> [Ln: {}, Col: {}]",
-                self.context.filename, self.context.line, self.context.column);
-            let line_num = format!("{:>4}", self.context.line);
-            return write!(
-                f,
-                "{}: {}\n     | {}\n     |\n{} | {}\n     | {}\n{}",
-                kind_str,
-                self.message,
-                colorize(&location, "\x1b[1;37m"),
-                colorize(&line_num, "\x1b[1;90m"),
-                self.context.line_content,
-                colorize(&self.context.pointer, "\x1b[1;31m"),
-                self.extra.clone().unwrap_or_default()
-            );
-        }
+        let (kind, color) = match self.kind {
+            ErrorKind::Syntax => ("Syntax Error", "\x1b[1;31m"),
+            ErrorKind::Runtime => ("Runtime Error", "\x1b[1;35m"),
+            ErrorKind::Type => ("Type Error", "\x1b[1;33m"),
+            ErrorKind::Reference => ("Reference Error", "\x1b[1;34m"),
+            ErrorKind::Internal => ("Internal Error", "\x1b[1;41m"),
+        };
+        let kind_str = colorize(kind, color);
+        let location = format!("{} -> [Ln: {}, Col: {}]",
+            self.context.filename, self.context.line, self.context.column);
+        let line_num = format!("{:>4}", self.context.line);
+        write!(
+            f,
+            "{}: {}\n     | {}\n     |\n{} | {}\n     | {}\n{}",
+            kind_str,
+            self.message,
+            colorize(&location, "\x1b[1;37m"),
+            colorize(&line_num, "\x1b[1;90m"),
+            self.context.line_content,
+            colorize(&self.context.pointer, "\x1b[1;31m"),
+            self.extra.clone().unwrap_or_default()
+        )
+    }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if *REPL_MODE.lock().unwrap() {
             write!(f, "{}", self.to_repl_string())
         } else {
@@ -303,12 +386,17 @@ impl Error for ZekkenError {}
 
 // Add a global error collector using a Mutex-protected Vec
 
+pub fn extract_exit_code(message: &str) -> Option<i32> {
+    let code_str = message.strip_prefix("ZK_EXIT_CODE: ")?;
+    code_str.trim().parse::<i32>().ok()
+}
+
 pub fn push_error(error: ZekkenError) {
     let key = (
         format!("{:?}", error.kind),
+        error.context.filename.clone(),
         error.context.line,
         error.context.column,
-        error.message.clone(),
     );
     let mut set = ERROR_SET.lock().unwrap();
     if set.insert(key) {
@@ -321,6 +409,13 @@ pub fn push_error(error: ZekkenError) {
 pub fn print_and_clear_errors() -> bool {
     let mut errors = ERROR_LIST.lock().unwrap();
     if !errors.is_empty() {
+        errors.sort_by(|a, b| {
+            a.context
+                .filename
+                .cmp(&b.context.filename)
+                .then(a.context.line.cmp(&b.context.line))
+                .then(a.context.column.cmp(&b.context.column))
+        });
         for error in errors.iter() {
             eprintln!("{}", error);
         }

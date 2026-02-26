@@ -1,8 +1,6 @@
 // use fs (file system) library
 use fs;
 
-@println => |"IDK"|
-
 // create a file
 let user_input: string = @input => |"Enter some text: "|;
 fs.write_file => |"data.txt", user_input|

@@ -15,7 +15,7 @@ use parser::Parser as ZkParser;
 use eval::statement::evaluate_statement;
 use environment::{Environment, Value};
 use ast::Stmt;
-use errors::{push_error, print_and_clear_errors};
+use errors::{extract_exit_code, push_error, print_and_clear_errors};
 
 /// Zekken Language CLI
 #[derive(Parser)]
@@ -120,13 +120,13 @@ description = \"{}\"
                 push_error(error.clone());
             }
 
-            let mut env = Environment::new();
-
-            // If there were any syntax errors, set a flag in the environment to disable printing
+            // Stop immediately when parsing failed.
             if !parser.errors.is_empty() {
-                env.declare("__DISABLE_PRINT__".to_string(), Value::Boolean(true), true);
-                std::env::set_var("ZEKKEN_DISABLE_PRINT", "1");
+                let _ = print_and_clear_errors();
+                process::exit(1);
             }
+
+            let mut env = Environment::new();
 
             let file_path = std::path::Path::new(file);
             let current_dir = file_path.parent()
@@ -140,9 +140,12 @@ description = \"{}\"
             let result = match evaluate_statement(&Stmt::Program(ast), &mut env) {
                 Ok(val) => Some(val),
                 Err(e) => {
+                    if let Some(code) = extract_exit_code(&e.message) {
+                        process::exit(code);
+                    }
 
-                    // Don't push the dummy internal error for multiple errors
-                    if e.kind != crate::errors::ErrorKind::Internal || e.message != "Multiple runtime errors occurred" {
+                    // Internal errors are control markers; user-facing errors are already collected.
+                    if e.kind != crate::errors::ErrorKind::Internal {
                         push_error(e);
                     }
                     None
@@ -193,7 +196,12 @@ description = \"{}\"
                 match evaluate_statement(&Stmt::Program(ast), &mut env) {
                     Ok(Some(Value::Void)) | Ok(None) => {}
                     Ok(Some(val)) => println!("{}", val),
-                    Err(e) => println!("{}", e), // Will use REPL-friendly format
+                    Err(e) => {
+                        if let Some(_code) = extract_exit_code(&e.message) {
+                            break;
+                        }
+                        println!("{}", e)
+                    }, // Will use REPL-friendly format
                 }
             }
             // Disable REPL mode after exiting

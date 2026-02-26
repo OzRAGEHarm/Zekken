@@ -1,6 +1,10 @@
 CodeMirror.defineMode("zekken", function() {
   return {
     token: function(stream, state) {
+      if (stream.sol()) {
+        state.expectFuncName = false;
+      }
+
       // Comments
       if (stream.match("//")) {
         stream.skipToEnd();
@@ -25,46 +29,71 @@ CodeMirror.defineMode("zekken", function() {
       if (stream.match(/"(?:[^"\\]|\\.)*"/)) return "string";
       if (stream.match(/'(?:[^'\\]|\\.)*'/)) return "string";
       
-      // Built-in functions (@println etc)
-      if (stream.match(/@/)) {
-        // Don't highlight the '@', just move past it
-        if (stream.match(/[a-zA-Z_][a-zA-Z0-9_]*/)) {
-          if (stream.match(/\s*=>/, false)) {
-            return "builtin";
-          }
-          return "variable";
-        }
+      // Keep '@' unstyled, but mark next identifier as builtin/function name.
+      if (stream.peek() === "@") {
+        stream.next();
+        state.afterAt = true;
         return null;
+      }
+
+      // Identifier handling with context.
+      if (stream.match(/[a-zA-Z_][a-zA-Z0-9_]*/)) {
+        const ident = stream.current();
+
+        // Declaration name after 'func'
+        if (state.expectFuncName) {
+          state.expectFuncName = false;
+          return "function";
+        }
+
+        // Built-in name right after '@'
+        if (state.afterAt) {
+          state.afterAt = false;
+          return "builtin";
+        }
+
+        // Function/method call name before =>
+        if (stream.match(/\s*=>/, false)) {
+          return "function";
+        }
+
+        // Keywords
+        if (/^(if|else|for|while|try|catch|return)$/.test(ident)) return "keyword-control";
+        if (/^(use|include|export|from|in|let|const)$/.test(ident)) return "keyword";
+        if (ident === "func") {
+          state.expectFuncName = true;
+          return "keyword";
+        }
+
+        // Types
+        if (/^(int|float|bool|string|arr|obj|fn)$/.test(ident)) return "type";
+
+        // Booleans
+        if (/^(true|false)$/.test(ident)) return "boolean";
+
+        // Variables
+        return "variable";
       }
 
       // Function names (identifier before '=>', but not after '@')
       if (stream.match(/\b[a-zA-Z_][a-zA-Z0-9_]*\b(?=\s*=>)/)) return "function";
       
-      // Keywords
-      if (stream.match(/\b(if|else|for|while|try|catch|return)\b/)) return "keyword-control";
-      if (stream.match(/\b(use|include|export|func|let|const|from|in)\b/)) return "keyword";
-      
-      // Types
-      if (stream.match(/\b(int|float|bool|string|arr|obj|fn)\b/)) return "type";
-      
       // Numbers
       if (stream.match(/\b\d+\.\d+\b/)) return "number";
       if (stream.match(/\b\d+\b/)) return "number";
       
-      // Booleans
-      if (stream.match(/\b(true|false)\b/)) return "boolean";
-      
       // Operators
       if (stream.match(/[+\-*/%=<>!|]+/)) return "operator";
-      
-      // Variables
-      if (stream.match(/\b[a-zA-Z_][a-zA-Z0-9_]*\b/)) return "variable";
       
       stream.next();
       return null;
     },
     startState: function() {
-      return { inComment: false };
+      return {
+        inComment: false,
+        afterAt: false,
+        expectFuncName: false
+      };
     }
   };
 });

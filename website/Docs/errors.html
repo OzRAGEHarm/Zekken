@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Docs: Errors | Zekken</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/png" href="../../images/zekken_icon.png">
+  <link rel="stylesheet" href="../Docs/styles.css">
+  <script src="js/zekken_docs_highlighter.js" defer></script>
+</head>
+<body>
+  <div class="navbar">
+    <img src="../../images/zekken_icon.png" alt="Zekken Logo" class="logo-img">
+    <nav>
+      <a href="https://github.com/OzRAGEHarm/Zekken" class="github-btn" target="_blank" rel="noopener" title="View on GitHub">
+        <img src="../../images/github.png" alt="GitHub" class="github-icon">
+      </a>
+      <a href="../../index.html">Home</a>
+      <a href="../Demo/demo.html">Demo</a>
+      <a href="getting-started.html" class="active">Docs</a>
+      <a href="../Download/download.html">Download</a>
+    </nav>
+    <button class="hamburger" aria-label="Open menu" tabindex="0">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+
+  <div class="container">
+    <header class="docs-header">
+      <h1>Zekken Documentation</h1>
+      <p class="docs-lead">Official docs for writing, running, and exploring Zekken programs.</p>
+    </header>
+
+    <div class="docs-layout">
+      <aside class="docs-toc">
+        <h2>Contents</h2>
+        <a href="getting-started.html">Getting Started</a>
+        <a href="syntax-basics.html">Syntax Basics</a>
+        <a href="types.html">Types</a>
+        <a href="functions.html">Functions</a>
+        <a href="libraries.html">Libraries</a>
+        <a href="errors.html" class="current">Errors</a>
+        <a href="examples.html">Examples</a>
+        <a href="roadmap.html">Roadmap</a>
+      </aside>
+
+      <main class="docs-main">
+        <section class="docs-section">
+          <span class="docs-page-label">Section 6 of 8</span>
+          <h2>Errors</h2>
+          <p>Zekken reports syntax, reference, type, and runtime errors with line/column pointers.</p>
+          <ul>
+            <li>Syntax errors: parser expectations and token mismatch.</li>
+            <li>Reference errors: missing variables/functions.</li>
+            <li>Type errors: declaration and operation mismatches.</li>
+            <li>Runtime errors: execution failures, such as missing files.</li>
+          </ul>
+          <div class="placeholder-card">
+            <strong>Coming soon:</strong> full error catalog and troubleshooting guide.
+          </div>
+
+          <div class="docs-pager">
+            <a href="libraries.html">Previous: Libraries</a>
+            <a href="examples.html">Next: Examples</a>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    const hamburger = document.querySelector('.hamburger');
+    const navbar = document.querySelector('.navbar');
+    const nav = document.querySelector('.navbar nav');
+    hamburger.addEventListener('click', () => {
+      navbar.classList.toggle('menu-open');
+      hamburger.classList.toggle('active');
+    });
+    nav.querySelectorAll('a').forEach((link) => {
+      link.addEventListener('click', () => {
+        navbar.classList.remove('menu-open');
+        hamburger.classList.remove('active');
+      });
+    });
+  </script>
+</body>
+</html>

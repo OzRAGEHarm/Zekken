@@ -73,12 +73,13 @@ fn process_statement_scope(stmt: &Stmt, env: &mut Environment) {
                                 if matches!(env.lookup(&ident.name), Some(Value::NativeFunction(_))) {
                                     // For @input specifically, we know it returns a string
                                     if ident.name == "@input" && var_decl.type_ != DataType::Any && var_decl.type_ != DataType::String {
+                                        let loc = expr_location(expr);
                                         push_error(ZekkenError::type_error(
                                             &format!("Type mismatch in variable declaration '{}': expected {:?}, found string (from @input)", var_decl.ident, var_decl.type_),
                                             &format!("{:?}", var_decl.type_),
                                             "string",
-                                            var_decl.location.line,
-                                            var_decl.location.column
+                                            loc.line,
+                                            loc.column
                                         ));
                                     }
                                 } else {
@@ -86,12 +87,13 @@ fn process_statement_scope(stmt: &Stmt, env: &mut Environment) {
                                     match evaluate_expression(expr, env) {
                                         Ok(val) => {
                                             if !check_value_type(&val, &var_decl.type_) {
+                                                let loc = expr_location(expr);
                                                 push_error(ZekkenError::type_error(
                                                     &format!("Type mismatch in variable declaration '{}': expected {:?}, found {}", var_decl.ident, var_decl.type_, value_type_name(&val)),
                                                     &format!("{:?}", var_decl.type_),
                                                     value_type_name(&val),
-                                                    var_decl.location.line,
-                                                    var_decl.location.column
+                                                    loc.line,
+                                                    loc.column
                                                 ));
                                             }
                                         },
@@ -103,12 +105,13 @@ fn process_statement_scope(stmt: &Stmt, env: &mut Environment) {
                                 match evaluate_expression(expr, env) {
                                     Ok(val) => {
                                         if !check_value_type(&val, &var_decl.type_) {
+                                            let loc = expr_location(expr);
                                             push_error(ZekkenError::type_error(
                                                 &format!("Type mismatch in variable declaration '{}': expected {:?}, found {}", var_decl.ident, var_decl.type_, value_type_name(&val)),
                                                 &format!("{:?}", var_decl.type_),
                                                 value_type_name(&val),
-                                                var_decl.location.line,
-                                                var_decl.location.column
+                                                loc.line,
+                                                loc.column
                                             ));
                                         }
                                     },
@@ -120,12 +123,13 @@ fn process_statement_scope(stmt: &Stmt, env: &mut Environment) {
                             match evaluate_expression(expr, env) {
                                 Ok(val) => {
                                     if !check_value_type(&val, &var_decl.type_) {
+                                        let loc = expr_location(expr);
                                         push_error(ZekkenError::type_error(
                                             &format!("Type mismatch in variable declaration '{}': expected {:?}, found {}", var_decl.ident, var_decl.type_, value_type_name(&val)),
                                             &format!("{:?}", var_decl.type_),
                                             value_type_name(&val),
-                                            var_decl.location.line,
-                                            var_decl.location.column
+                                            loc.line,
+                                            loc.column
                                         ));
                                     }
                                 },
@@ -182,6 +186,41 @@ fn process_statement_scope(stmt: &Stmt, env: &mut Environment) {
                 }
             }
         },
+        Stmt::IfStmt(if_stmt) => {
+            for content in &if_stmt.body {
+                if let Content::Statement(stmt) = &**content {
+                    process_statement_scope(stmt, env);
+                }
+            }
+            if let Some(alt) = &if_stmt.alt {
+                for content in alt {
+                    if let Content::Statement(stmt) = &**content {
+                        process_statement_scope(stmt, env);
+                    }
+                }
+            }
+        },
+        Stmt::WhileStmt(while_stmt) => {
+            for content in &while_stmt.body {
+                if let Content::Statement(stmt) = &**content {
+                    process_statement_scope(stmt, env);
+                }
+            }
+        },
+        Stmt::TryCatchStmt(try_catch) => {
+            for content in &try_catch.try_block {
+                if let Content::Statement(stmt) = &**content {
+                    process_statement_scope(stmt, env);
+                }
+            }
+            if let Some(catch_block) = &try_catch.catch_block {
+                for content in catch_block {
+                    if let Content::Statement(stmt) = &**content {
+                        process_statement_scope(stmt, env);
+                    }
+                }
+            }
+        },
         _ => {}
     }
 }
@@ -199,6 +238,23 @@ fn value_type_name(val: &Value) -> &'static str {
         Value::NativeFunction(_) => "",
         Value::Void => "void",
         _ => "unknown",
+    }
+}
+
+fn expr_location(expr: &Expr) -> Location {
+    match expr {
+        Expr::Assign(e) => e.location.clone(),
+        Expr::Member(e) => e.location.clone(),
+        Expr::Call(e) => e.location.clone(),
+        Expr::Binary(e) => e.location.clone(),
+        Expr::Identifier(e) => e.location.clone(),
+        Expr::Property(e) => e.location.clone(),
+        Expr::IntLit(e) => e.location.clone(),
+        Expr::FloatLit(e) => e.location.clone(),
+        Expr::StringLit(e) => e.location.clone(),
+        Expr::BoolLit(e) => e.location.clone(),
+        Expr::ArrayLit(e) => e.location.clone(),
+        Expr::ObjectLit(e) => e.location.clone(),
     }
 }
 
@@ -288,13 +344,6 @@ fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<V
         }
     }
     
-    // Process all top-level statements
-    for content in &program.content {
-        if let Content::Statement(stmt) = &**content {
-            process_statement_scope(stmt, &mut temp_env);
-        }
-    }
-    
     // Second pass: Now lint everything with the complete environment
     for content in &program.content {
         match &**content {
@@ -311,7 +360,7 @@ fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<V
         }
     }
 
-    // If any errors were found during linting, report them (except internal errors)
+    // Report lint errors and stop before execution.
     if !lint_errors.is_empty() {
         for error in lint_errors {
             if error.kind == ErrorKind::Internal {
@@ -319,7 +368,6 @@ fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<V
             }
             push_error(error.clone());
         }
-        // Just return an error to stop execution, but don't log it
         return Err(ZekkenError::internal("Linting errors found"));
     }
     
@@ -345,16 +393,14 @@ fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<V
 
     // Process main content
     let mut last_value = None;
-    let mut had_error = false;
     for content in &program.content {
         match &**content {
             Content::Statement(stmt) => {
                 match evaluate_statement(stmt, env) {
                     Ok(val) => last_value = val,
                     Err(e) => {
-                        push_error(e.clone());
-                        had_error = true;
-                        // continue to next statement instead of returning
+                        // Stop immediately on first uncaught execution error.
+                        return Err(e);
                     }
                 }
             }
@@ -362,18 +408,12 @@ fn evaluate_program(program: &Program, env: &mut Environment) -> Result<Option<V
                 match evaluate_expression(expr, env) {
                     Ok(val) => last_value = Some(val),
                     Err(e) => {
-                        push_error(e.clone());
-                        had_error = true;
-                        // continue to next expression instead of returning
+                        // Stop immediately on first uncaught execution error.
+                        return Err(e);
                     }
                 }
             }
         }
-    }
-
-    if had_error {
-        // Return a dummy error so main.rs knows not to print a result
-        return Err(ZekkenError::internal("Multiple runtime errors occurred"));
     }
 
     Ok(last_value)
@@ -386,12 +426,13 @@ fn evaluate_var_declaration(decl: &VarDecl, env: &mut Environment) -> Result<Opt
             Content::Expression(expr) => {
                 let val = evaluate_expression(expr, env)?;
                 if !check_value_type(&val, &decl.type_) {
+                    let loc = expr_location(expr);
                     return Err(ZekkenError::type_error(
                         &format!("Type mismatch in variable declaration '{}'", decl.ident),
                         &format!("{:?}", decl.type_),
                         value_type_name(&val),
-                        decl.location.line,
-                        decl.location.column
+                        loc.line,
+                        loc.column
                     ));
                 }
                 val
@@ -688,6 +729,18 @@ fn evaluate_include(include: &IncludeStmt, env: &mut Environment) -> Result<Opti
 
     let mut parser = Parser::new();
     let included_ast = parser.produce_ast(file_contents);
+    if !parser.errors.is_empty() {
+        for parse_error in parser.errors {
+            push_error(parse_error);
+        }
+        return Err(ZekkenError::syntax(
+            "Failed to parse included file",
+            include.location.line,
+            include.location.column,
+            Some("valid zekken source"),
+            Some(&include.file_path),
+        ));
+    }
 
     // Create a new child environment with current env as parent
     let mut child_env = Environment::new_with_parent(env.clone());
@@ -821,10 +874,16 @@ fn evaluate_for_array(
     body: &Vec<Box<Content>>,
     env: &mut Environment
 ) -> Result<Option<Value>, ZekkenError> {
-    let idents: Vec<String> = var_decl.ident.split(", ").map(|s| s.to_string()).collect();
-    if idents.len() != 1 {
+    let idents: Vec<String> = var_decl
+        .ident
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    if idents.is_empty() || idents.len() > 2 {
         return Err(ZekkenError::syntax(
-            "Array iteration requires one identifier",
+            "Array iteration requires one or two identifiers",
             var_decl.location.line,
             var_decl.location.column,
             None,
@@ -832,8 +891,13 @@ fn evaluate_for_array(
         ));
     }
 
-    for value in arr.iter() {
-        env.declare(idents[0].clone(), value.clone(), false);
+    for (index, value) in arr.iter().enumerate() {
+        if idents.len() == 1 {
+            env.declare(idents[0].clone(), value.clone(), false);
+        } else {
+            env.declare(idents[0].clone(), Value::Int(index as i64), false);
+            env.declare(idents[1].clone(), value.clone(), false);
+        }
         evaluate_block_content(body, env)?;
     }
     Ok(None)

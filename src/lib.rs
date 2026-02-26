@@ -37,7 +37,7 @@ pub fn run_zekken(input: &str) -> String {
         {
             use environment::Value;
             use std::sync::Arc;
-            env.variables.insert(
+            env.constants.insert(
                 "println".to_string(),
                 Value::NativeFunction(Arc::new(|args: Vec<Value>| -> Result<Value, String> {
                     let mut buf = WASM_OUTPUT.lock().unwrap();
@@ -70,6 +70,13 @@ pub fn run_zekken(input: &str) -> String {
             output.push_str(&format!("{}\n", val));
         }
         Err(e) => {
+            if crate::errors::extract_exit_code(&e.message).is_some() {
+                #[cfg(target_arch = "wasm32")]
+                {
+                    output.push_str(&WASM_OUTPUT.lock().unwrap());
+                }
+                return output;
+            }
             // If it's an "internal" error for multiple runtime errors, print all from ERROR_LIST
             #[cfg(target_arch = "wasm32")]
             {

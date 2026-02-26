@@ -1,0 +1,6 @@
+try {
+  let bad: int = "Hello".cast => |"string"|;
+  @println => |bad|
+} catch |e| {
+  @println => |"Handled: " + e.message|
+}

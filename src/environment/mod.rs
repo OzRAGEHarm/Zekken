@@ -113,7 +113,13 @@ impl Value {
                 }
             },
             Value::Int(i) => write!(f, "{}", i),
-            Value::Float(fl) => write!(f, "{}", fl),
+            Value::Float(fl) => {
+                if fl.fract() == 0.0 {
+                    write!(f, "{:.1}", fl)
+                } else {
+                    write!(f, "{}", fl)
+                }
+            },
             Value::Boolean(b) => write!(f, "{}", b),
             Value::Function(_) => write!(f, "<function>"),
             Value::NativeFunction(_) => write!(f, "<native function>"),
@@ -285,12 +291,13 @@ impl Environment {
   }
 
   pub fn assign(&mut self, name: &str, value: Value) -> Result<(), String> {
+      // Constants cannot be reassigned in their declaring scope.
+      if self.constants.contains_key(name) {
+          return Err(format!("Cannot reassign constant '{}'", name));
+      }
+
       // First check if variable exists in current scope
       if self.variables.contains_key(name) {
-          // Check if the variable is declared as constant
-          if self.constants.contains_key(name) {
-              return Err(format!("Cannot reassign constant '{}'", name));
-          }
           self.variables.insert(name.to_string(), value);
           return Ok(());
       }
@@ -395,6 +402,10 @@ impl From<MatrixLit> for Value {
 
 impl Value {
     pub fn call_method(&self, method_name: &str, args: Vec<Value>, env: Option<&mut Environment>, variable_name: Option<&str>) -> Result<Value, String> {
+        if method_name == "cast" {
+            return self.handle_cast(args);
+        }
+
         match self {
             Value::String(s) => Self::handle_string_method(s, method_name, args),
             Value::Array(arr) => Self::handle_array_method(arr, method_name, args, env, variable_name),
@@ -427,6 +438,58 @@ impl Value {
             Value::Int(n) => Self::handle_int_method(*n, method_name, args),
             Value::Float(n) => Self::handle_float_method(*n, method_name, args),
             _ => Err(format!("Type '{}' does not support methods", self.type_name())),
+        }
+    }
+
+    fn handle_cast(&self, args: Vec<Value>) -> Result<Value, String> {
+        if args.len() != 1 {
+            return Err("cast requires one string argument (target type)".to_string());
+        }
+
+        let target = match &args[0] {
+            Value::String(s) => s.trim().to_ascii_lowercase(),
+            _ => return Err("cast target type must be a string".to_string()),
+        };
+
+        match target.as_str() {
+            "string" => Ok(Value::String(self.to_string())),
+            "int" => match self {
+                Value::Int(i) => Ok(Value::Int(*i)),
+                Value::Float(f) => Ok(Value::Int(*f as i64)),
+                Value::Boolean(b) => Ok(Value::Int(if *b { 1 } else { 0 })),
+                Value::String(s) => s
+                    .trim()
+                    .parse::<i64>()
+                    .map(Value::Int)
+                    .map_err(|_| format!("Cannot cast string '{}' to int", s)),
+                _ => Err(format!("Cannot cast type '{}' to int", self.type_name())),
+            },
+            "float" => match self {
+                Value::Float(f) => Ok(Value::Float(*f)),
+                Value::Int(i) => Ok(Value::Float(*i as f64)),
+                Value::Boolean(b) => Ok(Value::Float(if *b { 1.0 } else { 0.0 })),
+                Value::String(s) => s
+                    .trim()
+                    .parse::<f64>()
+                    .map(Value::Float)
+                    .map_err(|_| format!("Cannot cast string '{}' to float", s)),
+                _ => Err(format!("Cannot cast type '{}' to float", self.type_name())),
+            },
+            "bool" => match self {
+                Value::Boolean(b) => Ok(Value::Boolean(*b)),
+                Value::Int(i) => Ok(Value::Boolean(*i != 0)),
+                Value::Float(f) => Ok(Value::Boolean(*f != 0.0)),
+                Value::String(s) => {
+                    let lower = s.trim().to_ascii_lowercase();
+                    match lower.as_str() {
+                        "true" | "1" => Ok(Value::Boolean(true)),
+                        "false" | "0" => Ok(Value::Boolean(false)),
+                        _ => Err(format!("Cannot cast string '{}' to bool", s)),
+                    }
+                }
+                _ => Err(format!("Cannot cast type '{}' to bool", self.type_name())),
+            },
+            _ => Err(format!("Unsupported cast target '{}'", target)),
         }
     }
 

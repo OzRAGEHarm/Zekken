@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Docs: Getting Started | Zekken</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/png" href="../../images/zekken_icon.png">
+  <link rel="stylesheet" href="../Docs/styles.css">
+  <script src="js/zekken_docs_highlighter.js" defer></script>
+</head>
+<body>
+  <div class="navbar">
+    <img src="../../images/zekken_icon.png" alt="Zekken Logo" class="logo-img">
+    <nav>
+      <a href="https://github.com/OzRAGEHarm/Zekken" class="github-btn" target="_blank" rel="noopener" title="View on GitHub">
+        <img src="../../images/github.png" alt="GitHub" class="github-icon">
+      </a>
+      <a href="../../index.html">Home</a>
+      <a href="../Demo/demo.html">Demo</a>
+      <a href="getting-started.html" class="active">Docs</a>
+      <a href="../Download/download.html">Download</a>
+    </nav>
+    <button class="hamburger" aria-label="Open menu" tabindex="0">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+
+  <div class="container">
+    <header class="docs-header">
+      <h1>Zekken Documentation</h1>
+      <p class="docs-lead">Official docs for writing, running, and exploring Zekken programs.</p>
+    </header>
+
+    <div class="docs-layout">
+      <aside class="docs-toc">
+        <h2>Contents</h2>
+        <a href="getting-started.html" class="current">Getting Started</a>
+        <a href="syntax-basics.html">Syntax Basics</a>
+        <a href="types.html">Types</a>
+        <a href="functions.html">Functions</a>
+        <a href="libraries.html">Libraries</a>
+        <a href="errors.html">Errors</a>
+        <a href="examples.html">Examples</a>
+        <a href="roadmap.html">Roadmap</a>
+      </aside>
+
+      <main class="docs-main">
+        <section class="docs-section">
+          <span class="docs-page-label">Section 1 of 8</span>
+          <h2>Getting Started</h2>
+          <p>There are two ways to run Zekken: the current source-based workflow and the upcoming installer workflow.</p>
+
+          <h3>Current: Build From Source</h3>
+          <p>Build and run from the repository root:</p>
+          <div class="platform-grid">
+            <article class="platform-card">
+              <h4>Windows</h4>
+<pre><code>.\scripts\build-cli.bat
+# or .\scripts\build.bat cli
+
+.\target\release\zekken.exe run main.zk
+# or cargo run --release run main.zk</code></pre>
+            </article>
+            <article class="platform-card">
+              <h4>Linux/macOS</h4>
+<pre><code>./scripts/build-cli.sh
+# or ./scripts/build.sh cli
+
+./target/release/zekken run main.zk
+# or cargo run --release run main.zk</code></pre>
+            </article>
+          </div>
+          <h3>Future: Installer-Based Setup</h3>
+          <p>
+            A planned installer will install Zekken globally and update your environment so you can run it directly from any terminal.
+          </p>
+<pre><code># Planned usage after installer setup
+zekken run main.zk
+zekken repl
+zekken --help</code></pre>
+          <p>
+            Goal: no manual full-path executable calls, just <code>zekken &lt;cmd&gt;</code> once installation is complete.
+          </p>
+
+          <h3>Run And Verify</h3>
+<pre><code># Verify command is visible in your shell (planned installer flow)
+zekken --version
+
+# Run a file
+zekken run main.zk</code></pre>
+          <p>You can also test programs in the <a href="../Demo/demo.html">website demo</a>.</p>
+
+          <div class="docs-pager">
+            <span class="disabled">Previous</span>
+            <a href="syntax-basics.html">Next: Syntax Basics</a>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    const hamburger = document.querySelector('.hamburger');
+    const navbar = document.querySelector('.navbar');
+    const nav = document.querySelector('.navbar nav');
+    hamburger.addEventListener('click', () => {
+      navbar.classList.toggle('menu-open');
+      hamburger.classList.toggle('active');
+    });
+    nav.querySelectorAll('a').forEach((link) => {
+      link.addEventListener('click', () => {
+        navbar.classList.remove('menu-open');
+        hamburger.classList.remove('active');
+      });
+    });
+  </script>
+</body>
+</html>

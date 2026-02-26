@@ -3,6 +3,7 @@
 use crate::ast::*;
 use crate::lexer::*;
 use crate::errors::{ZekkenError};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -29,13 +30,13 @@ impl Parser {
         }
 
         let tokens = tokenize(source_code);
-        let tokens_str = tokens
-        .iter()
-        .map(|t| format!("{:?}", t))
-        .collect::<Vec<String>>()
-        .join("\n");
         #[cfg(not(target_arch = "wasm32"))]
         {
+            let tokens_str = tokens
+                .iter()
+                .map(|t| format!("{:?}", t))
+                .collect::<Vec<String>>()
+                .join("\n");
             std::env::set_var("ZEKKEN_TOKENS", tokens_str);
         }
 
@@ -56,12 +57,12 @@ impl Parser {
                     self.consume();
                 },
                 TokenType::Use | TokenType::Include => {
-                    program.imports.push(self.parse_stmt());
+                    program.imports.push(self.parse_stmt_resilient());
                 },
                 TokenType::EOF => break,
                 _ => {
                     // Parse any other statements as program content
-                    program.content.push(Box::new(self.parse_stmt()));
+                    program.content.push(Box::new(self.parse_stmt_resilient()));
                 }
             }
         }
@@ -70,8 +71,50 @@ impl Parser {
     }
 
     fn skip_comments(&mut self) {
-        if matches!(self.at().kind, TokenType::SingleLineComment | TokenType::MultiLineComment) {
+        while self.not_eof() && matches!(self.at().kind, TokenType::SingleLineComment | TokenType::MultiLineComment) {
             self.consume();
+        }
+    }
+
+    fn synchronize_statement(&mut self) {
+        while self.not_eof() {
+            match self.at().kind {
+                TokenType::Semicolon => {
+                    self.consume();
+                    break;
+                }
+                TokenType::CloseBrace => break,
+                _ => self.consume(),
+            }
+        }
+    }
+
+    fn parse_stmt_resilient(&mut self) -> Content {
+        let start = self.at().clone();
+        let before = self.current;
+        let parsed = catch_unwind(AssertUnwindSafe(|| self.parse_stmt()));
+
+        match parsed {
+            Ok(content) => {
+                if self.current == before && self.not_eof() {
+                    self.consume();
+                }
+                content
+            }
+            Err(_) => {
+                self.errors.push(ZekkenError::syntax(
+                    "Parser panic recovered while parsing statement",
+                    start.line,
+                    start.column,
+                    Some("a valid statement"),
+                    Some(&format!("{:?} ({})", start.kind, start.value)),
+                ));
+                self.synchronize_statement();
+                Content::Statement(Box::new(Stmt::BlockStmt(BlockStmt {
+                    body: Vec::new(),
+                    location: start.location(),
+                })))
+            }
         }
     }
 
@@ -422,8 +465,8 @@ impl Parser {
     fn parse_block_stmt(&mut self) -> Vec<Box<Content>> {
         let mut body = Vec::new();
     
-        while self.at().kind != TokenType::CloseBrace {
-            body.push(Box::new(self.parse_stmt()));
+        while self.not_eof() && self.at().kind != TokenType::CloseBrace {
+            body.push(Box::new(self.parse_stmt_resilient()));
         }
         
         body
@@ -895,18 +938,30 @@ impl Parser {
     fn parse_prefix(&mut self) -> Content {
         // Handle unary minus
         if self.at().kind == TokenType::ArithOp(ArithOp::Sub) {
+            let minus_location = self.at().location();
             self.consume(); // consume the minus
             let expr = self.parse_prefix();
             match expr {
                 Content::Expression(e) => {
+                    match *e {
+                        Expr::IntLit(mut lit) => {
+                            lit.value = -lit.value;
+                            return Content::Expression(Box::new(Expr::IntLit(lit)));
+                        }
+                        Expr::FloatLit(mut lit) => {
+                            lit.value = -lit.value;
+                            return Content::Expression(Box::new(Expr::FloatLit(lit)));
+                        }
+                        _ => {}
+                    }
                     return Content::Expression(Box::new(Expr::Binary(BinaryExpr {
-                        left: Box::new(Expr::FloatLit(FloatLit { 
-                            value: 0.0, 
-                            location: self.at().location() 
+                        left: Box::new(Expr::IntLit(IntLit {
+                            value: 0,
+                            location: minus_location.clone(),
                         })),
                         operator: "-".to_string(),
                         right: e,
-                        location: self.at().location(),
+                        location: minus_location,
                     })));
                 },
                 _ => panic!("Expected expression after '-'"),
@@ -919,25 +974,31 @@ impl Parser {
             let ident_token = self.expect(TokenType::Identifier, "Expected identifier after '@'").unwrap();
             let ident = Identifier { name: ident_token.value.clone(), location: ident_token.location() };
             self.expect(TokenType::FatArrow, "Expected '=>' after native function identifier");
-            self.expect(TokenType::Pipe, "Expected '|' before native function arguments");
 
             let mut args = Vec::new();
-            if self.at().kind != TokenType::Pipe {
-                loop {
-                    let expr = self.parse_expression_until(&[TokenType::Comma, TokenType::Pipe]);
-                    match expr {
-                        Content::Expression(e) => args.push(e),
-                        _ => panic!("Expected expression in native function arguments"),
-                    }
-                    if self.at().kind == TokenType::Comma {
-                        self.consume();
-                    } else {
-                        break;
+            let empty_double_pipe = self.at().kind == TokenType::BinOp(BinOp::Or);
+            if empty_double_pipe {
+                // Support => || as a zero-argument call shorthand.
+                self.consume();
+            } else {
+                self.expect(TokenType::Pipe, "Expected '|' before native function arguments");
+
+                if self.at().kind != TokenType::Pipe {
+                    loop {
+                        let expr = self.parse_expression_until(&[TokenType::Comma, TokenType::Pipe]);
+                        match expr {
+                            Content::Expression(e) => args.push(e),
+                            _ => panic!("Expected expression in native function arguments"),
+                        }
+                        if self.at().kind == TokenType::Comma {
+                            self.consume();
+                        } else {
+                            break;
+                        }
                     }
                 }
+                self.expect(TokenType::Pipe, "Expected '|' after native function arguments");
             }
-
-            self.expect(TokenType::Pipe, "Expected '|' after native function arguments");
 
             return Content::Expression(Box::new(Expr::Call(CallExpr {
                 callee: Box::new(Expr::Identifier(ident)),
@@ -1056,30 +1117,37 @@ impl Parser {
         // Support fat arrow call on identifiers and member expressions
         if self.at().kind == TokenType::FatArrow {
             self.consume(); // consume '=>'
-            self.expect(TokenType::Pipe, "Expected '|' before function arguments");
             let mut args = Vec::new();
-            while self.at().kind != TokenType::Pipe {
-                let arg = self.parse_expression(0);
-                match arg {
-                    Content::Expression(e) => args.push(e),
-                    _ => panic!("Expected expression in call arguments"),
+            let empty_double_pipe = self.at().kind == TokenType::BinOp(BinOp::Or);
+            if empty_double_pipe {
+                // Support => || as a zero-argument call shorthand.
+                self.consume();
+            } else {
+                self.expect(TokenType::Pipe, "Expected '|' before function arguments");
+                while self.at().kind != TokenType::Pipe {
+                    let arg = self.parse_expression(0);
+                    match arg {
+                        Content::Expression(e) => args.push(e),
+                        _ => panic!("Expected expression in call arguments"),
+                    }
+                    if self.at().kind == TokenType::Comma {
+                        self.consume();
+                    } else {
+                        break;
+                    }
                 }
-                if self.at().kind == TokenType::Comma {
-                    self.consume();
-                } else {
-                    break;
-                }
+                self.expect(TokenType::Pipe, "Expected '|' after function arguments");
             }
-            self.expect(TokenType::Pipe, "Expected '|' after function arguments");
             let callee = match expr {
                 Content::Expression(e) => e,
                 _ => panic!("Expected expression as callee"),
             };
+            let call_location = Self::expr_location(&callee);
             return Content::Expression(Box::new(Expr::Call(CallExpr {
                 callee,
                 args,
                 is_native: false,
-                location: self.at().location(),
+                location: call_location,
             })));
         }
     
@@ -1198,5 +1266,22 @@ impl Parser {
             break;
         }
         expr
+    }
+
+    fn expr_location(expr: &Expr) -> Location {
+        match expr {
+            Expr::Assign(e) => e.location.clone(),
+            Expr::Member(e) => e.location.clone(),
+            Expr::Call(e) => e.location.clone(),
+            Expr::Binary(e) => e.location.clone(),
+            Expr::Identifier(e) => e.location.clone(),
+            Expr::Property(e) => e.location.clone(),
+            Expr::IntLit(e) => e.location.clone(),
+            Expr::FloatLit(e) => e.location.clone(),
+            Expr::StringLit(e) => e.location.clone(),
+            Expr::BoolLit(e) => e.location.clone(),
+            Expr::ArrayLit(e) => e.location.clone(),
+            Expr::ObjectLit(e) => e.location.clone(),
+        }
     }
 }

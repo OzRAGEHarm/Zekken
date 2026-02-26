@@ -1,2 +1,4 @@
 /target
 /package/*
+/scripts/server.py
+/scripts/__pycache__/*

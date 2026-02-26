@@ -62,17 +62,6 @@ pub fn evaluate_expression(expr: &Expr, env: &mut Environment) -> Result<Value, 
 fn evaluate_binary_expression(expr: &BinaryExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
     let left = evaluate_expression(&expr.left, env)?;
     let right = evaluate_expression(&expr.right, env)?;
-
-    if (matches!(left, Value::Int(_)) && matches!(right, Value::Float(_))) ||
-       (matches!(left, Value::Float(_)) && matches!(right, Value::Int(_))) {
-        return Err(ZekkenError::type_error(
-            &format!("Cannot perform '{}' operation between int and float", expr.operator),
-            "int or float",
-            "mixed types",
-            expr.location.line,
-            expr.location.column,
-        ));
-    }
     
     match expr.operator.as_str() {
         "+" => add_values(&left, &right)
@@ -154,7 +143,17 @@ fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Result<Va
             None
         }) {
             Ok(result) => return Ok(result),
-            Err(msg) => return Err(ZekkenError::runtime(&msg, call.location.line, call.location.column, None)),
+            Err(msg) => {
+                let (line, column, span_len) = call
+                    .args
+                    .first()
+                    .map(|arg| {
+                        let loc = expr_location(arg);
+                        (loc.line, loc.column, expr_span_len(arg))
+                    })
+                    .unwrap_or((call.location.line, call.location.column, 1));
+                return Err(ZekkenError::runtime_with_span(&msg, line, column, span_len, None));
+            }
         };
     }
 
@@ -224,8 +223,15 @@ fn evaluate_function_call(func: &Value, call: &CallExpr, env: &mut Environment) 
                     result = evaluate_expression(expr, &mut function_env)?;
                 },
                 Content::Statement(ref stmt) => {
-                    if let Ok(Some(val)) = evaluate_statement(stmt, &mut function_env) {
-                        result = val;
+                    match evaluate_statement(stmt, &mut function_env) {
+                        Ok(Some(val)) => {
+                            result = val;
+                            if matches!(**stmt, Stmt::Return(_)) {
+                                break;
+                            }
+                        }
+                        Ok(None) => {}
+                        Err(err) => return Err(err),
                     }
                 }
             }
@@ -250,7 +256,17 @@ fn evaluate_native_function_call(native_func: &Value, call: &CallExpr, env: &mut
         }
         match (native)(args) {
             Ok(val) => Ok(val),
-            Err(s) => Err(ZekkenError::runtime(&s, call.location.line, call.location.column, None))
+            Err(s) => {
+                let (line, column, span_len) = call
+                    .args
+                    .first()
+                    .map(|arg| {
+                        let loc = expr_location(arg);
+                        (loc.line, loc.column, expr_span_len(arg))
+                    })
+                    .unwrap_or((call.location.line, call.location.column, 1));
+                Err(ZekkenError::runtime_with_span(&s, line, column, span_len, None))
+            }
         }
     } else {
         Err(ZekkenError::type_error(
@@ -260,6 +276,36 @@ fn evaluate_native_function_call(native_func: &Value, call: &CallExpr, env: &mut
             call.location.line,
             call.location.column,
         ))
+    }
+}
+
+fn expr_location(expr: &Expr) -> Location {
+    match expr {
+        Expr::Assign(e) => e.location.clone(),
+        Expr::Member(e) => e.location.clone(),
+        Expr::Call(e) => e.location.clone(),
+        Expr::Binary(e) => e.location.clone(),
+        Expr::Identifier(e) => e.location.clone(),
+        Expr::Property(e) => e.location.clone(),
+        Expr::IntLit(e) => e.location.clone(),
+        Expr::FloatLit(e) => e.location.clone(),
+        Expr::StringLit(e) => e.location.clone(),
+        Expr::BoolLit(e) => e.location.clone(),
+        Expr::ArrayLit(e) => e.location.clone(),
+        Expr::ObjectLit(e) => e.location.clone(),
+    }
+}
+
+fn expr_span_len(expr: &Expr) -> usize {
+    match expr {
+        Expr::StringLit(lit) => lit.value.chars().count() + 2, // include quotes
+        Expr::Identifier(id) => id.name.chars().count().max(1),
+        Expr::IntLit(lit) => lit.value.to_string().chars().count().max(1),
+        Expr::FloatLit(lit) => lit.value.to_string().chars().count().max(1),
+        Expr::BoolLit(lit) => {
+            if lit.value { 4 } else { 5 }
+        }
+        _ => 1,
     }
 }
 
@@ -412,6 +458,8 @@ fn add_values(left: &Value, right: &Value) -> Result<Value, String> {
     match (left, right) {
         (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l + r)),
         (Value::Float(l), Value::Float(r)) => Ok(Value::Float(l + r)),
+        (Value::Int(l), Value::Float(r)) => Ok(Value::Float(*l as f64 + r)),
+        (Value::Float(l), Value::Int(r)) => Ok(Value::Float(l + *r as f64)),
         (Value::String(l), Value::String(r)) => Ok(Value::String(l.clone() + r)),
         (Value::String(l), other) => Ok(Value::String(l.clone() + &other.to_string())),
         (other, Value::String(r)) => Ok(Value::String(other.to_string() + r)),
@@ -428,6 +476,8 @@ fn subtract_values(left: &Value, right: &Value) -> Result<Value, String> {
     match (left, right) {
         (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l - r)),
         (Value::Float(l), Value::Float(r)) => Ok(Value::Float(l - r)),
+        (Value::Int(l), Value::Float(r)) => Ok(Value::Float(*l as f64 - r)),
+        (Value::Float(l), Value::Int(r)) => Ok(Value::Float(l - *r as f64)),
         _ => Err("Invalid operand types for subtraction".to_string())
     }
 }
@@ -436,6 +486,8 @@ fn multiply_values(left: &Value, right: &Value) -> Result<Value, String> {
     match (left, right) {
         (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l * r)),
         (Value::Float(l), Value::Float(r)) => Ok(Value::Float(l * r)),
+        (Value::Int(l), Value::Float(r)) => Ok(Value::Float(*l as f64 * r)),
+        (Value::Float(l), Value::Int(r)) => Ok(Value::Float(l * *r as f64)),
         _ => Err("Invalid operand types for multiplication".to_string())
     }
 }
@@ -456,6 +508,20 @@ fn divide_values(left: &Value, right: &Value) -> Result<Value, String> {
                 Ok(Value::Float(l / r))
             }
         },
+        (Value::Int(l), Value::Float(r)) => {
+            if *r == 0.0 {
+                Err("Division by zero".to_string())
+            } else {
+                Ok(Value::Float(*l as f64 / r))
+            }
+        }
+        (Value::Float(l), Value::Int(r)) => {
+            if *r == 0 {
+                Err("Division by zero".to_string())
+            } else {
+                Ok(Value::Float(l / *r as f64))
+            }
+        }
         _ => Err("Invalid operand types for division".to_string())
     }
 }
@@ -487,6 +553,8 @@ fn compare_less_than(left: Value, right: Value) -> Result<Value, String> {
     match (left, right) {
         (Value::Int(l), Value::Int(r)) => Ok(Value::Boolean(l < r)),
         (Value::Float(l), Value::Float(r)) => Ok(Value::Boolean(l < r)),
+        (Value::Int(l), Value::Float(r)) => Ok(Value::Boolean((l as f64) < r)),
+        (Value::Float(l), Value::Int(r)) => Ok(Value::Boolean(l < (r as f64))),
         _ => Err("Invalid comparison".to_string())
     }
 }
@@ -495,6 +563,8 @@ fn compare_greater_than(left: Value, right: Value) -> Result<Value, String> {
     match (left, right) {
         (Value::Int(l), Value::Int(r)) => Ok(Value::Boolean(l > r)),
         (Value::Float(l), Value::Float(r)) => Ok(Value::Boolean(l > r)),
+        (Value::Int(l), Value::Float(r)) => Ok(Value::Boolean((l as f64) > r)),
+        (Value::Float(l), Value::Int(r)) => Ok(Value::Boolean(l > (r as f64))),
         _ => Err("Invalid comparison".to_string())
     }
 }
@@ -503,6 +573,8 @@ fn compare_less_equal(left: Value, right: Value) -> Result<Value, String> {
     match (left, right) {
         (Value::Int(l), Value::Int(r)) => Ok(Value::Boolean(l <= r)),
         (Value::Float(l), Value::Float(r)) => Ok(Value::Boolean(l <= r)),
+        (Value::Int(l), Value::Float(r)) => Ok(Value::Boolean((l as f64) <= r)),
+        (Value::Float(l), Value::Int(r)) => Ok(Value::Boolean(l <= (r as f64))),
         _ => Err("Invalid comparison".to_string())
     }
 }
@@ -511,6 +583,8 @@ fn compare_greater_equal(left: Value, right: Value) -> Result<Value, String> {
     match (left, right) {
         (Value::Int(l), Value::Int(r)) => Ok(Value::Boolean(l >= r)),
         (Value::Float(l), Value::Float(r)) => Ok(Value::Boolean(l >= r)),
+        (Value::Int(l), Value::Float(r)) => Ok(Value::Boolean((l as f64) >= r)),
+        (Value::Float(l), Value::Int(r)) => Ok(Value::Boolean(l >= (r as f64))),
         _ => Err("Invalid comparison".to_string())
     }
 }

@@ -168,3 +168,19 @@
 - Fixed a ton of errors such as the `@input` native/built-in function would be called before anything else, even if it was placed at the very end of the code.
 - Fixed a bunch of the newly added linter functionality, because a lot of it was very buggy beforehand.
 - Made the `init` command create a `main.zk` file and a `Zekken.toml` file for the package manager that will be implemented soon.
+
+### Early Development Build #33 (2/25/26 - 2/26/26):
+- Improved parser stability with recovery/synchronization logic for malformed code.
+- Improved error handling with ordered error output and dynamic pointer spans (`^~~~~`) for clearer diagnostics.
+- Fixed multiple pointer location issues so runtime/type errors highlight the exact value/argument token.
+- Added universal value casting via `.cast => |"int"|`, `.cast => |"float"|`, `.cast => |"bool"|`, and `.cast => |"string"|`.
+- Fixed false reference errors from declarations inside control-flow blocks (`try/catch`, `if`, `while`) during linting.
+- Improved runtime behavior to fail fast on uncaught errors instead of continuing execution.
+- Fixed `os.exit` to behave as proper control flow across CLI/REPL/WASM instead of printing as a runtime error.
+- Improved loop support by allowing array iteration with one or two identifiers (`|value|` and `|index, value|`).
+- Added/updated testing files for casting, and arbitrary coverage.
+- Added build scripts for release CLI executables (user-facing) and website demo WASM assets (`build-cli.sh`, `build-wasm.sh`) plus selectable build mode in `build.sh` (and Windows `.bat` equivalents).
+- Fixed empty argument shorthand so zero-argument calls using `=> ||` now work (including nested calls inside another pipe argument block).
+- Expanded website demo/editor support with additional example programs and improved reset behavior for example selection state.
+- Improved website syntax highlighting consistency (including function declaration names and built-in call formatting to match the Zekken highlighter rules).
+- Reworked website documentation into multi-page docs with persistent sidebar navigation, previous/next section flow, responsive mobile layout fixes, and starter documentation content.
