@@ -184,3 +184,4 @@
 - Expanded website demo/editor support with additional example programs and improved reset behavior for example selection state.
 - Improved website syntax highlighting consistency (including function declaration names and built-in call formatting to match the Zekken highlighter rules).
 - Reworked website documentation into multi-page docs with persistent sidebar navigation, previous/next section flow, responsive mobile layout fixes, and starter documentation content.
+- Fixed `for |value| in array` / nested loop evaluation edge cases and improved dynamic array indexing (`arr[i]`, `arr[i][0]`) so matrix-style numeric code executes correctly.

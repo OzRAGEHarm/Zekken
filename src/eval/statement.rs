@@ -13,6 +13,7 @@ use super::lint::{lint_statement, lint_expression, lint_include, lint_use};
 // Check if the value type matches the expected type
 fn check_value_type(value: &Value, expected: &DataType) -> bool {
     match (value, expected) {
+        (_, DataType::Any) => true,
         (Value::Int(_), DataType::Int) => true,
         (Value::Float(_), DataType::Float) => true,
         (Value::String(_), DataType::String) => true,
@@ -140,9 +141,23 @@ fn process_statement_scope(stmt: &Stmt, env: &mut Environment) {
                     Content::Statement(_) => {}
                 }
             }
-            // Register variable with dummy value based on its type
-            let dummy_val = create_dummy_value(&var_decl.type_);
-            env.declare(var_decl.ident.clone(), dummy_val, var_decl.constant);
+            // Preserve inferred value for `Any` declarations so dependent expressions
+            // (e.g. nested for loops) don't collapse to `Void` during the first pass.
+            if var_decl.type_ == DataType::Any {
+                let inferred = match &var_decl.value {
+                    Some(Content::Expression(expr)) => evaluate_expression(expr, env).ok(),
+                    _ => None,
+                };
+                env.declare(
+                    var_decl.ident.clone(),
+                    inferred.unwrap_or(Value::Void),
+                    var_decl.constant,
+                );
+            } else {
+                // Register variable with dummy value based on its type
+                let dummy_val = create_dummy_value(&var_decl.type_);
+                env.declare(var_decl.ident.clone(), dummy_val, var_decl.constant);
+            }
         },
         Stmt::FuncDecl(func_decl) => {
             // First, register the function itself in the environment

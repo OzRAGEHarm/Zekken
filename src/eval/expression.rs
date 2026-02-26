@@ -312,7 +312,22 @@ fn expr_span_len(expr: &Expr) -> usize {
 fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
     let object = evaluate_expression(&member.object, env)?;
     let result = match &*member.property {
-        Expr::Identifier(ref ident) => evaluate_property_access(&object, &ident.name, member.location.line, member.location.column),
+        Expr::Identifier(ref ident) => {
+            // Support dynamic indexing like arr[i] / obj[i] when `i` resolves to a number.
+            if let Some(index_val) = env.lookup(&ident.name) {
+                match index_val {
+                    Value::Int(i) if i >= 0 => {
+                        evaluate_index_access(&object, i as usize, member.location.line, member.location.column)
+                    }
+                    Value::Float(f) if f >= 0.0 && f.fract() == 0.0 => {
+                        evaluate_index_access(&object, f as usize, member.location.line, member.location.column)
+                    }
+                    _ => evaluate_property_access(&object, &ident.name, member.location.line, member.location.column),
+                }
+            } else {
+                evaluate_property_access(&object, &ident.name, member.location.line, member.location.column)
+            }
+        }
         Expr::StringLit(ref lit) => evaluate_property_access(&object, &lit.value, member.location.line, member.location.column),
         Expr::IntLit(ref lit) => evaluate_index_access(&object, lit.value as usize, member.location.line, member.location.column),
         _ => Err(ZekkenError::type_error(
