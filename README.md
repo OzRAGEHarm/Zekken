@@ -39,6 +39,10 @@ Stay informed about the latest changes, improvements, and fixes to Zekken. Below
 
 ### Quick Start
 ```bash
+# Get source
+git clone https://github.com/OzRAGEHarm/Zekken.git
+cd Zekken
+
 # Build release CLI
 ./scripts/build-cli.sh
 
@@ -48,6 +52,9 @@ Stay informed about the latest changes, improvements, and fixes to Zekken. Below
 
 Windows:
 ```bat
+git clone https://github.com/OzRAGEHarm/Zekken.git
+cd Zekken
+
 .\scripts\build-cli.bat
 .\target\release\zekken.exe run main.zk
 ```
