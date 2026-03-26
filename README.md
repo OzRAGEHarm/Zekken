@@ -40,10 +40,10 @@ let h: float = hypotenuse => |x, y|;
 ## Development Logs ⚙
 Stay informed about the latest changes, improvements, and fixes to Zekken. Below is a summary of the development progress:
 
-### Early Development Log (Feb 2025 - Feb 14, 2026)
+### Early Development Log (Feb 2025 - Feb 26, 2026)
 - **[View Full Development Log](./dev-logs/early-development.md)**
 
-### Release Development Log (Feb 14, 2026 - Present)
+### Release Development Log (Feb 26, 2026 - Present)
 - **[View Full Development Log](./dev-logs/release-development.md)**
 
 ## Documentation 📖
