@@ -6,6 +6,10 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
 }
+
+html {dro
+  scroll-behavior: smooth;
+}
 * { box-sizing: border-box; }
 .navbar {
   background: #23283b;
@@ -185,6 +189,71 @@ h1 {
   color: #e5e7ef;
 }
 
+/* Anchorable headings/entries (manual ids + links in Docs pages) */
+.docs-section h2[id],
+.docs-section h3[id],
+.docs-section h4[id],
+.docs-section li[id] {
+  scroll-margin-top: 84px; /* account for sticky navbar */
+}
+
+.doc-anchor {
+  position: relative;
+}
+
+.doc-anchor-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.doc-anchor-link:hover,
+.doc-anchor-link:focus {
+  color: inherit;
+  text-decoration: none;
+  outline: none;
+}
+
+.doc-anchor-hash {
+  margin-left: 10px;
+  color: #bac0d0;
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease;
+}
+
+.doc-anchor:hover .doc-anchor-hash,
+.doc-anchor:focus-within .doc-anchor-hash {
+  opacity: 1;
+}
+
+.doc-anchor-hash:hover,
+.doc-anchor-hash:focus {
+  color: #e5e7ef;
+  outline: none;
+}
+
+.doc-anchor-hash[data-copied="1"]::after {
+  content: " copied";
+  margin-left: 6px;
+  font-size: 0.85em;
+  color: #50fa7b;
+}
+
+/* Targeted section outline (wraps only the heading text, not full width) */
+.docs-section .doc-anchor:target .doc-anchor-link {
+  display: inline-block;
+  outline: 2px solid rgba(186, 25, 35, 0.65);
+  outline-offset: 6px;
+  border-radius: 10px;
+}
+
+.docs-section li:target {
+  display: inline-block;
+  outline: 2px solid rgba(186, 25, 35, 0.65);
+  outline-offset: 6px;
+  border-radius: 10px;
+}
+
 .docs-section p,
 .docs-section li {
   line-height: 1.55;
@@ -198,8 +267,65 @@ h1 {
   overflow-x: auto;
 }
 
+.zk-codewrap {
+  position: relative;
+  padding-top: 38px; /* room for the overlay button */
+}
+
+.zk-run-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  font: inherit;
+  font-size: 0.92em;
+  color: #e5e7ef;
+  background: rgba(35, 40, 59, 0.92);
+  border: 1px solid #2d3449;
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 0.12s ease, transform 0.12s ease, background 0.12s ease;
+  pointer-events: none; /* enabled on hover/focus */
+}
+
+.zk-codewrap:hover .zk-run-btn,
+.zk-codewrap:focus-within .zk-run-btn {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.zk-codewrap.zk-resetting .zk-run-btn {
+  opacity: 0 !important;
+  transform: translateY(-2px) !important;
+  pointer-events: none !important;
+}
+
+.zk-run-btn:hover,
+.zk-run-btn:focus {
+  background: rgba(186, 25, 35, 0.92);
+  outline: none;
+}
+
 .docs-section code {
   color: #f2f2f2;
+  background: #121621;
+  border: 1px solid #2d3449;
+  border-radius: 6px;
+  padding: 1px 6px;
+  font-size: 0.95em;
+  box-shadow: inset 0 -1px 0 #0006;
+}
+
+.docs-section pre code {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
 }
 
 .platform-grid {
@@ -238,8 +364,32 @@ h1 {
 .docs-section pre code.zk-code .tok-type { color: #4EC9B0; }
 .docs-section pre code.zk-code .tok-number { color: #B5CEA8; }
 .docs-section pre code.zk-code .tok-string { color: #CE9178; }
+.docs-section pre code.zk-code .tok-escape { color: #D7BA7D; }
 .docs-section pre code.zk-code .tok-boolean { color: #569CD6; }
 .docs-section pre code.zk-code .tok-operator { color: #D4D4D4; }
+.docs-section pre code.zk-code .tok-property { color: #FFB86C; }
+
+/* Error Highlight Colors */
+.zk-code-error .tok-error-syntax-label { color: #ff5555; font-weight: bold; }
+.zk-code-error .tok-error-ref-label { color: #569CD6; font-weight: bold; }
+.zk-code-error .tok-error-type-label { color: #f1fa8c; font-weight: bold; }
+.zk-code-error .tok-error-runtime-label { color: #C678DD; font-weight: bold; }
+.zk-code-error .tok-error-internal-label { background-color: #ff5555; color: #fff; font-weight: bold; padding: 0 4px; }
+/* Error Message Body */
+.zk-code-error .tok-error-msg { color: #f8f8f2; }
+/* Location/File Path */
+.zk-code-error .tok-error-loc { color: #f8f8f2; font-weight: bold; }
+/* Code and Line Numbers inside Error Blocks */
+.zk-code-error .tok-error-line-num { color: #6272a4; }
+.zk-code-error .tok-error-line-code { color: #f8f8f2; }
+/* Error Pointer */
+.zk-code-error .tok-error-pointer { color: #ff5555; font-weight: bold; }
+/* Extra Info Labels */
+.zk-code-error .tok-error-meta-label { color: #6272a4; }
+.zk-code-error .tok-error-expected-val { color: #50fa7b; font-weight: bold; }
+.zk-code-error .tok-error-found-val { color: #ff5555; font-weight: bold; }
+.zk-code-error .tok-error-kind-val { color: #ff5555; font-weight: bold; }
+
 
 .placeholder-card {
   margin-top: 10px;
@@ -457,4 +607,50 @@ h1 {
     width: 100%;
     text-align: center;
   }
+}
+
+/* Container styling */
+.lib-dropdown {
+  margin-bottom: 1rem;
+  border: 1px solid #ba1923;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #384057;
+}
+
+/* Header/Toggle area */
+.lib-dropdown summary {
+  padding: 1rem;
+  cursor: pointer;
+  background: #384057;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  user-select: none; /* Prevents text highlighting on double-click */
+}
+
+.lib-dropdown summary h3 {
+  margin: 0;
+  display: inline-block;
+  color: #fff;
+}
+
+/* Add a custom arrow */
+.lib-dropdown summary::before {
+  content: "▶";
+  font-size: 0.8rem;
+  margin-right: 10px;
+  transition: transform 0.3s ease; /* Kept only the arrow rotation transition */
+  color: #ba1923;
+}
+
+.lib-dropdown[open] summary::before {
+  transform: rotate(90deg);
+}
+
+/* Content area */
+.lib-content {
+  padding: 1rem;
+  background: #181c24;
+  border-top: 1px solid #ba1923;
 }

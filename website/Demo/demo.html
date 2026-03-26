@@ -67,6 +67,7 @@
       <button id="runBtn">Run</button>
       <button id="resetBtn">Reset</button> 
     </div>
+    <div id="execTime" class="exec-time">Execution time: --</div>
     <pre id="output" class="output-area">(output will appear here)</pre>
   </div>
 
@@ -91,7 +92,23 @@
       }
     });
 
-    editor.setSize('100%', '180px');
+	    editor.setSize('100%', '180px');
+
+	    // If opened from Docs via "Run in Demo", load the snippet from localStorage.
+	    (function loadSnippetFromDocs() {
+	      try {
+	        const params = new URLSearchParams(window.location.search);
+	        const fromDocs = params.get("from") === "docs";
+	        if (!fromDocs) return;
+	        const src = localStorage.getItem("zekken.demo.code");
+	        if (src && src.trim().length > 0) {
+	          editor.setValue(src);
+	          document.getElementById('exampleSelect').value = "";
+	          showOutput("(output will appear here)");
+	          showExecTime(null);
+	        }
+	      } catch (_) {}
+	    })();
 
     // Convert ANSI color codes to HTML spans for error highlighting
     function ansiToHtml(text) {
@@ -139,14 +156,27 @@
       }
     }
 
-    document.getElementById('runBtn').onclick = () => {
-      if (!ready) {
-        showOutput("WASM not loaded yet!", true);
-        return;
+    function showExecTime(ms) {
+      const execTime = document.getElementById('execTime');
+      if (typeof ms === "number" && Number.isFinite(ms)) {
+        const seconds = ms / 1000;
+        execTime.textContent = `Execution time: ${seconds.toFixed(3)} s (${ms.toFixed(3)} ms)`;
+      } else {
+        execTime.textContent = "Execution time: --";
+      }
+    }
+
+	    document.getElementById('runBtn').onclick = () => {
+	      if (!ready) {
+	        showOutput("WASM not loaded yet!", true);
+	        showExecTime(null);
+	        return;
       }
       clear_errors(); // Clear all errors before running new code
       try {
+        const start = performance.now();
         const result = run_zekken(editor.getValue());
+        const elapsed = performance.now() - start;
         const isError = result && (
           result.includes("Error:") || 
           result.includes("Syntax Error") || 
@@ -154,16 +184,36 @@
           result.includes("Type Error")
         );
         showOutput(result || "(no output)", isError);
+        showExecTime(elapsed);
       } catch (e) {
         showOutput("Error: " + e.message || e, true);
+        showExecTime(null);
       }
-    };
+	    };
 
-    document.getElementById('resetBtn').onclick = () => {
-      clear_errors(); // Also clear errors on reset
-      editor.setValue("// Write Zekken code here\n@println => |\"Hello, Web!\"|");
+	    // Auto-run when opened from Docs with ?autorun=1.
+	    (function autorunIfRequested() {
+	      try {
+	        const params = new URLSearchParams(window.location.search);
+	        if (params.get("autorun") !== "1") return;
+	        let attempts = 0;
+	        const timer = setInterval(() => {
+	          attempts++;
+	          if (ready) {
+	            document.getElementById('runBtn').click();
+	            clearInterval(timer);
+	          }
+	          if (attempts > 200) clearInterval(timer); // ~5s
+	        }, 25);
+	      } catch (_) {}
+	    })();
+
+	    document.getElementById('resetBtn').onclick = () => {
+	      clear_errors(); // Also clear errors on reset
+	      editor.setValue("// Write Zekken code here\n@println => |\"Hello, Web!\"|");
       document.getElementById('exampleSelect').value = "";
       showOutput("(output will appear here)");
+      showExecTime(null);
     };
 
     // Example selection
@@ -238,6 +288,7 @@ let c: bool = "true".cast => |"bool"|;
       }
       editor.setValue(code);
       showOutput("(output will appear here)");
+      showExecTime(null);
     });
   </script>
 </body>

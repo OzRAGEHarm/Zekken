@@ -1,0 +1,89 @@
+
+use math;
+use os;
+
+let width: int = 80;
+let height: int = 22;
+let size: int = width * height;
+let shades: arr = [".", ",", "-", "~", ":", ";", "=", "!", "*", "#", "$", "@"];
+
+let a: float = 0.0;
+let b: float = 0.0;
+
+// Pre-allocate buffers outside the loop
+let zbuf: arr = [];
+let cbuf: arr = [];
+let fill: int = 0;
+while fill < size {
+  zbuf += [0.0]
+  cbuf += [" "]
+  fill += 1
+}
+
+while true {
+  let sin_a: float = math.sin => |a|;
+  let cos_a: float = math.cos => |a|;
+  let sin_b: float = math.sin => |b|;
+  let cos_b: float = math.cos => |b|;
+
+  // Reset buffers for the new frame
+  let reset: int = 0;
+  while reset < size {
+    zbuf[reset] = 0.0
+    cbuf[reset] = " "
+    reset += 1
+  }
+
+  let j: float = 0.0;
+  while j < 6.28 {
+    let i: float = 0.0;
+    let cos_j: float = math.cos => |j|;
+    let sin_j: float = math.sin => |j|;
+
+    while i < 6.28 {
+      let sin_i: float = math.sin => |i|;
+      let cos_i: float = math.cos => |i|;
+
+      let h: float = cos_j + 2.0;
+      let d: float = 1.0 / (sin_i * h * sin_a + sin_j * cos_a + 5.0);
+      let t: float = sin_i * h * cos_a - sin_j * sin_a;
+
+      let x: int = (40.0 + 30.0 * d * (cos_i * h * cos_b - t * sin_b)).cast => |"int"|;
+      let y: int = (12.0 + 15.0 * d * (cos_i * h * sin_b + t * cos_b)).cast => |"int"|;
+
+      if y > 0 && y < height && x > 0 && x < width {
+        let o: int = x + width * y;
+        let luminance: float = 8.0 * ((sin_j * sin_a - sin_i * cos_j * cos_a) * cos_b - sin_i * cos_j * sin_a - sin_j * cos_a - cos_i * cos_j * sin_b);
+
+        if d > zbuf[o] {
+          zbuf[o] = d
+          let s_idx: int = luminance.cast => |"int"|;
+          if s_idx < 0 { 
+            s_idx = 0 
+          } else if s_idx > 11 { s_idx = 11 }
+          cbuf[o] = shades[s_idx]
+        }
+      }
+      i += 0.08
+    }
+    j += 0.16
+  }
+
+  // Build the entire frame into one string to prevent "tearing"
+  let out: string = "";
+  let k: int = 0;
+  while k < size {
+    out = out + cbuf[k]
+    if (k + 1) % width == 0 {
+      out = out + "\n"
+    }
+    k += 1
+  }
+
+  // \x1b[2J = Clear screen, \x1b[H = Move cursor to home (0,0)
+  @println => |"\x1b[2J\x1b[H"|
+  @println => |out|
+
+  a += 0.07
+  b += 0.04
+}

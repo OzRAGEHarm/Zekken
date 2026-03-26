@@ -1,0 +1,35 @@
+use math;
+
+let ITERATIONS: int = 350000;
+
+func run |n: int| {
+  let i: int = 0;
+  let x: float = 0.713521;
+  let y: float = 1.381966;
+  let z: float = 0.577215;
+
+  while i < n {
+    let a: float = math.sin => |x|;
+    let b: float = math.cos => |y|;
+    let c: float = math.tan => |z * 0.1|;
+
+    x = (a + (b * 1.0000003)) + ((i % 13) * 0.000001)
+    y = (b + (c * 0.9999997)) + ((i % 17) * 0.000001)
+    z = (c + (a * 1.0000001)) + ((i % 19) * 0.000001)
+
+    if x > 10000.0 {
+      x = x / 10000.0
+    } else if x < -10000.0 {
+      x = x / -10000.0
+    }
+
+    i += 1
+  }
+
+  return x + y + z;
+}
+
+let checksum: float = run => |ITERATIONS|;
+@println => |"Benchmark: cpu_numeric"|
+@println => |"Operations: " + (ITERATIONS * 10)|
+@println => |"Checksum: " + checksum|

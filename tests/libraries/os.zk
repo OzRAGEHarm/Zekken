@@ -1,36 +1,109 @@
 use os;
 
-// Test current working directory
-let cwd: string = os.cwd => | |;
-@println => |"Current directory: " + cwd|
+// Platform/OS
+let plat: string = os.platform => ||;
+@println => |"platform: " + plat|
 
-// Test listing files in current directory
-let files: arr = os.ls => |"./images"|;
-@println => |"Files: " + files|
+// CWD / LS
+let cwd: string = os.cwd => ||;
+@println => |"cwd: " + cwd|
+let files: arr = os.ls => |"."|;
+@println => |"ls(.): " + files|
 
-// Test platform/OS
-let plat: string = os.platform => | |;
-@println => |"Platform: " + plat|
+// Args / Home / Temp
+let args: arr = os.args => ||;
+@println => |"args: " + args|
+let home: string = os.home_dir => ||;
+@println => |"home_dir: " + home|
+let temp: string = os.temp_dir => ||;
+@println => |"temp_dir: " + temp|
 
-// Test Process ID
-let pid: int = os.pid => | |;
-@println => |"Process ID: " + pid|
+// Host / User / Arch / CPU
+let host: string = os.hostname => ||;
+@println => |"hostname: " + host|
+let user: string = os.username => ||;
+@println => |"username: " + user|
+let arch: string = os.arch => ||;
+@println => |"arch: " + arch|
+let cpu_count: int = os.cpu_count => ||;
+@println => |"cpu_count: " + cpu_count|
 
-// Test sleep function
-@println => |"Sleeping for 2 seconds..."|
-os.sleep => |2000| // Sleep for 2 seconds
-@println => |"Slept for 2 seconds"| // Should print after 2 seconds
+// Uptime is Linux-only (reads /proc/uptime).
+if plat == "linux" {
+  let uptime: int = os.uptime_ms => ||;
+  @println => |"uptime_ms: " + uptime|
+} else {
+  @println => |"uptime_ms: (skipped on non-linux)"|
+}
 
-// Test environment variable set/get/remove
-os.set_env => |"ZK_TEST_VAR", "hello"| // Set env var
-let env_val: string = os.env => |"ZK_TEST_VAR"|; // Get env var
-@println => |"ZK_TEST_VAR: " + env_val|
-os.remove_env => |"ZK_TEST_VAR"| // Remove env var
-let env_val2: string = os.env => |"ZK_TEST_VAR"|; // Should be empty string if not set
-@println => |"ZK_TEST_VAR after remove: " + env_val2|
+// which
+let which_echo: string = os.which => |"echo"|;
+@println => |"which(echo): " + which_echo|
 
-// Test exit function
-@println => |"Exiting with code 0..."| // Should print before exit
+// PID
+let pid: int = os.pid => ||;
+@println => |"pid: " + pid|
 
-// Exit with code 0
+// env / set_env / remove_env
+os.set_env => |"ZK_TEST_VAR", "hello"|
+let env_val: string = os.env => |"ZK_TEST_VAR"|;
+@println => |"env(ZK_TEST_VAR): " + env_val|
+os.remove_env => |"ZK_TEST_VAR"|
+let env_val2: string = os.env => |"ZK_TEST_VAR"|;
+@println => |"env(ZK_TEST_VAR) after remove: " + env_val2|
+
+// sleep (short)
+@println => |"sleeping 50ms..."|
+os.sleep => |50|
+@println => |"slept"|
+
+// exec / system / spawn (skip if shell is disabled)
+let shell_flag: string = os.env => |"ZEKKEN_DISABLE_SHELL"|;
+let shell_disabled: bool = shell_flag == "1" || shell_flag == "true";
+
+if shell_disabled {
+  @println => |"shell execution disabled; skipping exec/system/spawn"|
+} else {
+  // Build a cross-platform echo command.
+  let cmd: string = "";
+  let cmd_args: arr = [];
+  if plat == "windows" {
+    cmd = "cmd"
+    cmd_args = ["/C", "echo", "ZK_OS_OK"]
+  } else {
+    if which_echo != "" {
+      cmd = which_echo
+      cmd_args = ["ZK_OS_OK"]
+	    } else {
+	      cmd = "sh"
+	      cmd_args = ["-lc", "echo ZK_OS_OK"]
+	    }
+	  }
+
+  let exec_result: obj = os.exec => |cmd, cmd_args|;
+  @println => |"exec.status: " + exec_result.status|
+  @println => |"exec.stdout: " + exec_result.stdout|
+  @println => |"exec.stderr: " + exec_result.stderr|
+
+  let system_status: int = os.system => |cmd, cmd_args|;
+  @println => |"system.status: " + system_status|
+
+  // Spawn a short-lived process.
+  let spawn_cmd: string = "";
+  let spawn_args: arr = [];
+	  if plat == "windows" {
+	    spawn_cmd = "cmd"
+	    spawn_args = ["/C", "ping", "127.0.0.1", "-n", "2", ">", "NUL"]
+	  } else {
+	    spawn_cmd = "sleep"
+	    spawn_args = ["0.1"]
+	  }
+
+  let spawn_pid: int = os.spawn => |spawn_cmd, spawn_args|;
+  @println => |"spawn.pid: " + spawn_pid|
+}
+
+@println => |"done (os library test)"|
+
+// exit
 os.exit => |0|

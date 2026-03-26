@@ -25,6 +25,49 @@ let cos_val: float = math.cos => |0.0|; // 1.0
 let tan_val: float = math.tan => |0.0|; // 0.0
 @println => |"tan(0): " + tan_val|
 
+// Additional scalar functions
+let log_val: float = math.log => |math.E|;
+@println => |"log(E): " + log_val|
+
+let log10_val: float = math.log => |1000.0, 10.0|;
+@println => |"log(1000, 10): " + log10_val|
+
+let exp_val: float = math.exp => |1.0|; 
+@println => |"exp(1): " + exp_val|
+
+let floor_val: float = math.floor => |3.9|;
+@println => |"floor(3.9): " + floor_val|
+
+let ceil_val: float = math.ceil => |3.1|;
+@println => |"ceil(3.1): " + ceil_val|
+
+let round_val: float = math.round => |3.6|;
+@println => |"round(3.6): " + round_val|
+
+let min_val: float = math.min => |7.5, 2.25|;
+@println => |"min(7.5, 2.25): " + min_val|
+
+let max_val: float = math.max => |7.5, 2.25|;
+@println => |"max(7.5, 2.25): " + max_val|
+
+let clamp_val: float = math.clamp => |12.0, 0.0, 10.0|;
+@println => |"clamp(12, 0, 10): " + clamp_val|
+
+let rand_val: float = math.random => ||;
+@println => |"random(): " + rand_val|
+
+let rand_int_val: int = math.rand_int => |1, 10|;
+@println => |"rand_int(1, 10): " + rand_int_val|
+
+let choice_val: int = math.rand_choice => |[10, 20, 30, 40]|;
+@println => |"rand_choice([10,20,30,40]): " + choice_val|
+
+let shuffled_vals: arr = math.shuffle => |[1, 2, 3, 4, 5]|;
+@println => |"shuffle([1,2,3,4,5]): " + shuffled_vals|
+
+let atan2_val: float = math.atan2 => |1.0, 1.0|;
+@println => |"atan2(1, 1): " + atan2_val|
+
 // Test vector operations
 let v1: arr = math.vector => |[1, 2, 3]|;
 let v2: arr = math.vector => |[4, 5, 6]|;
@@ -42,6 +85,5 @@ let m2: arr = math.matrix => |[[5, 6], [7, 8]]|;
 
 let m3: arr = math.matmul => |m1, m2|; // [[19, 22], [43, 50]]
 @println => |"m1 * m2: " + m3|
-
 
 @println => |"All tests for the math library complete!"|

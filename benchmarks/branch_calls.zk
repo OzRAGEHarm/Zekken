@@ -1,0 +1,65 @@
+let ITERATIONS: int = 450000;
+
+func mix_state |state: int, code: string, flip: bool| {
+  if code == "A" {
+    if flip {
+      return (state * 3 + 11) % 2147483647;
+    } else {
+      return (state * 5 + 7) % 2147483647;
+    }
+  } else if code == "B" {
+    if flip {
+      return (state * 7 + 13) % 2147483647;
+    } else {
+      return (state * 11 + 17) % 2147483647;
+    }
+  } else if code == "C" {
+    if flip {
+      return (state * 13 + 19) % 2147483647;
+    } else {
+      return (state * 17 + 23) % 2147483647;
+    }
+  } else {
+    if flip {
+      return (state * 19 + 29) % 2147483647;
+    } else {
+      return (state * 23 + 31) % 2147483647;
+    }
+  }
+}
+
+func run |n: int| {
+  let i: int = 0;
+  let state: int = 123456789;
+  let flip: bool = true;
+  let code: string = "A";
+
+  while i < n {
+    if state % 4 == 0 {
+      code = "A"
+    } else if state % 4 == 1 {
+      code = "B"
+    } else if state % 4 == 2 {
+      code = "C"
+    } else {
+      code = "D"
+    }
+
+    state = mix_state => |state, code, flip|
+
+    if flip {
+      flip = false
+    } else {
+      flip = true
+    }
+
+    i += 1
+  }
+
+  return state;
+}
+
+let checksum: int = run => |ITERATIONS|;
+@println => |"Benchmark: branch_calls"|
+@println => |"Operations: " + (ITERATIONS * 8)|
+@println => |"Checksum: " + checksum|

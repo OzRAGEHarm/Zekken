@@ -1,6 +1,8 @@
 use crate::environment::{Environment, Value}; 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::fs;
+use std::fs::OpenOptions;
+use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -34,6 +36,20 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
         }
     })));
 
+    fs_obj.insert("append_file".to_string(), Value::NativeFunction(Arc::new(|args| {
+        if let [Value::String(path), Value::String(content)] = args.as_slice() {
+            match OpenOptions::new().create(true).append(true).open(Path::new(path.as_str())) {
+                Ok(mut file) => match file.write_all(content.as_bytes()) {
+                    Ok(_) => Ok(Value::Void),
+                    Err(e) => Err(format!("Failed to append to file '{}': {}", path, e)),
+                },
+                Err(e) => Err(format!("Failed to open file '{}' for append: {}", path, e)),
+            }
+        } else {
+            Err("append_file expects path and content string arguments".to_string())
+        }
+    })));
+
     // Directory Operations
     fs_obj.insert("read_dir".to_string(), Value::NativeFunction(Arc::new(|args| {
         if let [Value::String(path)] = args.as_slice() {
@@ -49,6 +65,27 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
             }
         } else {
             Err("read_dir expects a string path argument".to_string())
+        }
+    })));
+
+    fs_obj.insert("read_lines".to_string(), Value::NativeFunction(Arc::new(|args| {
+        if let [Value::String(path)] = args.as_slice() {
+            match fs::File::open(Path::new(path.as_str())) {
+                Ok(file) => {
+                    let reader = BufReader::new(file);
+                    let mut lines: Vec<Value> = Vec::new();
+                    for line in reader.lines() {
+                        match line {
+                            Ok(text) => lines.push(Value::String(text)),
+                            Err(e) => return Err(format!("Failed reading line from '{}': {}", path, e)),
+                        }
+                    }
+                    Ok(Value::Array(lines))
+                }
+                Err(e) => Err(format!("Failed to open file '{}': {}", path, e)),
+            }
+        } else {
+            Err("read_lines expects a string path argument".to_string())
         }
     })));
 
@@ -110,7 +147,54 @@ pub fn register(env: &mut Environment) -> Result<(), String> {
         }
     })));
 
-    // Register our object in the environment
+    fs_obj.insert("copy_file".to_string(), Value::NativeFunction(Arc::new(|args| {
+        if let [Value::String(from), Value::String(to)] = args.as_slice() {
+            match fs::copy(Path::new(from.as_str()), Path::new(to.as_str())) {
+                Ok(bytes) => Ok(Value::Int(bytes as i64)),
+                Err(e) => Err(format!("Failed to copy file '{}' -> '{}': {}", from, to, e)),
+            }
+        } else {
+            Err("copy_file expects source and destination string paths".to_string())
+        }
+    })));
+
+    fs_obj.insert("rename".to_string(), Value::NativeFunction(Arc::new(|args| {
+        if let [Value::String(from), Value::String(to)] = args.as_slice() {
+            match fs::rename(Path::new(from.as_str()), Path::new(to.as_str())) {
+                Ok(_) => Ok(Value::Void),
+                Err(e) => Err(format!("Failed to rename '{}' -> '{}': {}", from, to, e)),
+            }
+        } else {
+            Err("rename expects source and destination string paths".to_string())
+        }
+    })));
+
+    fs_obj.insert("stat".to_string(), Value::NativeFunction(Arc::new(|args| {
+        if let [Value::String(path)] = args.as_slice() {
+            match fs::metadata(Path::new(path.as_str())) {
+                Ok(meta) => {
+                    let mut out = HashMap::new();
+                    out.insert("path".to_string(), Value::String(path.clone()));
+                    out.insert("size".to_string(), Value::Int(meta.len() as i64));
+                    out.insert("is_file".to_string(), Value::Boolean(meta.is_file()));
+                    out.insert("is_dir".to_string(), Value::Boolean(meta.is_dir()));
+                    out.insert("readonly".to_string(), Value::Boolean(meta.permissions().readonly()));
+                    let modified_epoch = meta
+                        .modified()
+                        .ok()
+                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(0);
+                    out.insert("modified_unix".to_string(), Value::Int(modified_epoch));
+                    Ok(Value::Object(out))
+                }
+                Err(e) => Err(format!("Failed to stat '{}': {}", path, e)),
+            }
+        } else {
+            Err("stat expects a string path argument".to_string())
+        }
+    })));
+
     env.declare("fs".to_string(), Value::Object(fs_obj), true);
 
     Ok(())

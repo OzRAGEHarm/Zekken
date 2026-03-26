@@ -36,6 +36,13 @@ CodeMirror.defineMode("zekken", function() {
         return null;
       }
 
+      // Dot accessor: mark next identifier as property/member name.
+      if (stream.peek() === ".") {
+        stream.next();
+        state.afterDot = true;
+        return "operator";
+      }
+
       // Identifier handling with context.
       if (stream.match(/[a-zA-Z_][a-zA-Z0-9_]*/)) {
         const ident = stream.current();
@@ -50,6 +57,14 @@ CodeMirror.defineMode("zekken", function() {
         if (state.afterAt) {
           state.afterAt = false;
           return "builtin";
+        }
+
+        // Member/property right after dot.
+        if (state.afterDot) {
+          state.afterDot = false;
+          if (stream.match(/\s*=>/, false)) return "function";
+          if (/^(PI|E|I)$/.test(ident)) return "constant";
+          return "property";
         }
 
         // Function/method call name before =>
@@ -92,6 +107,7 @@ CodeMirror.defineMode("zekken", function() {
       return {
         inComment: false,
         afterAt: false,
+        afterDot: false,
         expectFuncName: false
       };
     }

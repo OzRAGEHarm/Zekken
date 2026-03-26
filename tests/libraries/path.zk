@@ -1,0 +1,35 @@
+use path;
+
+let p1: string = path.join => |"tests", "libraries", "path.zk"|;
+@println => |"join: " + p1|
+
+let p2: string = path.normalize => |"tests/./libraries/../libraries/path.zk"|;
+@println => |"normalize: " + p2|
+
+let p3: string = path.resolve => |"tests", "libraries", "path.zk"|;
+@println => |"resolve: " + p3|
+
+let p4: string = path.basename => |"tests/libraries/path.zk"|;
+@println => |"basename: " + p4|
+
+let p5: string = path.dirname => |"tests/libraries/path.zk"|;
+@println => |"dirname: " + p5|
+
+let p6: string = path.extname => |"tests/libraries/path.zk"|;
+@println => |"extname: " + p6|
+
+let p7: string = path.stem => |"tests/libraries/path.zk"|;
+@println => |"stem: " + p7|
+
+let abs_1: bool = path.is_abs => |"/tmp"|;
+let abs_2: bool = path.is_abs => |"tests/libraries/path.zk"|;
+@println => |"is_abs('/tmp'): " + abs_1|
+@println => |"is_abs('tests/libraries/path.zk'): " + abs_2|
+
+let rel_1: string = path.relative => |"tests", "tests/libraries/path.zk"|;
+@println => |"relative(tests -> tests/libraries/path.zk): " + rel_1|
+
+let rel_2: string = path.relative => |"tests/libraries", "tests/math"|;
+@println => |"relative(tests/libraries -> tests/math): " + rel_2|
+
+@println => |"All tests for the path library complete!"|

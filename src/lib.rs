@@ -1,10 +1,11 @@
 mod ast;
 mod parser;
 mod environment;
-mod eval;
+mod bytecode;
 mod errors;
 mod lexer;
 mod libraries;
+mod eval;
 
 use wasm_bindgen::prelude::*;
 
@@ -41,12 +42,8 @@ pub fn run_zekken(input: &str) -> String {
                 "println".to_string(),
                 Value::NativeFunction(Arc::new(|args: Vec<Value>| -> Result<Value, String> {
                     let mut buf = WASM_OUTPUT.lock().unwrap();
-                    for (i, val) in args.iter().enumerate() {
-                        if i > 0 {
-                            buf.push_str(" ");
-                        }
-                        buf.push_str(&val.to_string());
-                    }
+                    let line = environment::format_print_values(&args);
+                    buf.push_str(&line);
                     buf.push('\n');
                     Ok(Value::Void)
                 })),
@@ -65,7 +62,7 @@ pub fn run_zekken(input: &str) -> String {
     }
 
     // Evaluate and print all runtime/type/reference errors
-    match eval::statement::evaluate_statement(&ast::Stmt::Program(ast), &mut env) {
+    match bytecode::execute_program(&ast, &mut env) {
         Ok(Some(val)) if !matches!(val, environment::Value::Void) => {
             output.push_str(&format!("{}\n", val));
         }

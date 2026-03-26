@@ -4,10 +4,11 @@
   <meta charset="UTF-8">
   <title>Docs: Libraries | Zekken</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" type="image/png" href="../../images/zekken_icon.png">
-  <link rel="stylesheet" href="../Docs/styles.css">
-  <script src="js/zekken_docs_highlighter.js" defer></script>
-</head>
+	  <link rel="icon" type="image/png" href="../../images/zekken_icon.png">
+	  <link rel="stylesheet" href="../Docs/styles.css?v=20260325">
+	  <script src="js/zekken_docs_highlighter.js?v=20260325" defer></script>
+	  <script src="js/script.js?v=20260326" defer></script>
+	</head>
 <body>
   <div class="navbar">
     <img src="../../images/zekken_icon.png" alt="Zekken Logo" class="logo-img">
@@ -28,7 +29,7 @@
   <div class="container">
     <header class="docs-header">
       <h1>Zekken Documentation</h1>
-      <p class="docs-lead">Official docs for writing, running, and exploring Zekken programs.</p>
+      <p class="docs-lead">Ready-to-use modules for the things scripts actually do: compute, move data, and interact with the system.</p>
     </header>
 
     <div class="docs-layout">
@@ -48,12 +49,591 @@
         <section class="docs-section">
           <span class="docs-page-label">Section 5 of 8</span>
           <h2>Libraries</h2>
-          <p>Standard library modules include <code>fs</code>, <code>os</code> and <code>math</code>.</p>
-<pre><code class="language-zekken">use fs;
-let content: string = fs.read_file => |"data.txt"|;</code></pre>
-          <div class="placeholder-card">
-            <strong>Coming soon:</strong> complete API lists for <code>fs</code>, <code>os</code>, <code>math</code>, and future modules.
-          </div>
+
+          <h3 id="import-forms" class="doc-anchor"><a class="doc-anchor-link" href="#import-forms">Import Forms</a><a class="doc-anchor-hash" href="#import-forms" aria-label="Link to this section">#</a></h3>
+<pre><code class="language-zekken">use os; // Import the whole library
+
+// Import only the functions you will need
+use { sqrt, pow } from math;
+use { read_file, write_file } from fs;</code></pre>
+
+<details class="lib-dropdown">
+  <summary><h3>Math Library</h3></summary>
+  <div class="lib-content">
+    <p><strong>Type notes</strong>: Most math functions accept <code>numeric</code> values (either <code>int</code> or <code>float</code>). When a function returns a float, it returns <code>float</code> even if you pass <code>int</code>.</p>
+    <p>Constants:</p>
+    <ul>
+      <li><code>math.PI</code>, <code>math.E</code>, <code>math.I</code></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+@println => |"PI: " + math.PI| // 3.141592653589793
+@println => |"E: " + math.E|   // 2.718281828459045
+@println => |"I: " + math.I|   // 0 + 1i</code></pre>
+    <p>Functions:</p>
+    <ul>
+      <li id="math-sqrt" class="doc-anchor"><a class="doc-anchor-link" href="#math-sqrt"><code>math.sqrt =&gt; |x: numeric| -&gt; float</code></a> - Square root. <a class="doc-anchor-hash" href="#math-sqrt" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let sqrt_val: float = math.sqrt => |16.0|; // 4.0
+@println => |"sqrt(16): " + sqrt_val|</code></pre>
+    <ul>
+      <li id="math-pow" class="doc-anchor"><a class="doc-anchor-link" href="#math-pow"><code>math.pow =&gt; |base: numeric, exp: numeric| -&gt; float</code></a> - Exponentiation. <a class="doc-anchor-hash" href="#math-pow" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let pow_val: float = math.pow => |2.0, 8.0|; // 256.0
+@println => |"pow(2, 8): " + pow_val|</code></pre>
+    <ul>
+      <li id="math-abs" class="doc-anchor"><a class="doc-anchor-link" href="#math-abs"><code>math.abs =&gt; |x: numeric| -&gt; numeric</code></a> - Absolute value. <a class="doc-anchor-hash" href="#math-abs" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let abs_val: float = math.abs => |-42.0|; // 42.0
+@println => |"abs(-42): " + abs_val|</code></pre>
+    <ul>
+      <li id="math-sin" class="doc-anchor"><a class="doc-anchor-link" href="#math-sin"><code>math.sin =&gt; |x: numeric| -&gt; float</code></a> - Sine (radians). <a class="doc-anchor-hash" href="#math-sin" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let out: float = math.sin => |math.PI / 2.0|; // 1.0
+@println => |out|</code></pre>
+    <ul>
+      <li id="math-cos" class="doc-anchor"><a class="doc-anchor-link" href="#math-cos"><code>math.cos =&gt; |x: numeric| -&gt; float</code></a> - Cosine (radians). <a class="doc-anchor-hash" href="#math-cos" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let out: float = math.cos => |0.0|; // 1.0
+@println => |out|</code></pre>
+    <ul>
+      <li id="math-tan" class="doc-anchor"><a class="doc-anchor-link" href="#math-tan"><code>math.tan =&gt; |x: numeric| -&gt; float</code></a> - Tangent (radians). <a class="doc-anchor-hash" href="#math-tan" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let out: float = math.tan => |0.0|; // 0.0
+@println => |out|</code></pre>
+    <ul>
+      <li id="math-log" class="doc-anchor"><a class="doc-anchor-link" href="#math-log"><code>math.log =&gt; |x: numeric| -&gt; float</code></a> - Natural log. <a class="doc-anchor-hash" href="#math-log" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let out: float = math.log => |math.E|; // 1.0
+@println => |out|</code></pre>
+    <ul>
+      <li id="math-log-base" class="doc-anchor"><a class="doc-anchor-link" href="#math-log-base"><code>math.log =&gt; |x: numeric, base: numeric| -&gt; float</code></a> - Log with base. <a class="doc-anchor-hash" href="#math-log-base" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let out: float = math.log => |1000.0, 10.0|;
+@println => |out|</code></pre>
+    <ul>
+      <li id="math-exp" class="doc-anchor"><a class="doc-anchor-link" href="#math-exp"><code>math.exp =&gt; |x: numeric| -&gt; float</code></a> - Exponential <code>e^x</code>. <a class="doc-anchor-hash" href="#math-exp" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let exp_val: float = math.exp => |1.0|; // 2.7182818284590455
+@println => |"exp(1): " + exp_val|</code></pre>
+    <ul>
+      <li id="math-floor" class="doc-anchor"><a class="doc-anchor-link" href="#math-floor"><code>math.floor =&gt; |x: numeric| -&gt; float</code></a> - Largest integer &lt;= x (returned as float). <a class="doc-anchor-hash" href="#math-floor" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let floor_val: float = math.floor => |3.9|; // 3.0
+@println => |"floor(3.9): " + floor_val|</code></pre>
+    <ul>
+      <li id="math-ceil" class="doc-anchor"><a class="doc-anchor-link" href="#math-ceil"><code>math.ceil =&gt; |x: numeric| -&gt; float</code></a> - Smallest integer &gt;= x (returned as float). <a class="doc-anchor-hash" href="#math-ceil" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let ceil_val: float = math.ceil => |3.1|; // 4.0
+@println => |"ceil(3.1): " + ceil_val|</code></pre>
+    <ul>
+      <li id="math-round" class="doc-anchor"><a class="doc-anchor-link" href="#math-round"><code>math.round =&gt; |x: numeric| -&gt; float</code></a> - Rounded value (returned as float). <a class="doc-anchor-hash" href="#math-round" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let round_val: float = math.round => |3.6|; // 4.0
+@println => |"round(3.6): " + round_val|</code></pre>
+    <ul>
+      <li id="math-min" class="doc-anchor"><a class="doc-anchor-link" href="#math-min"><code>math.min =&gt; |a: numeric, b: numeric| -&gt; numeric</code></a> - Minimum of two numbers. <a class="doc-anchor-hash" href="#math-min" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let min_val: float = math.min => |7.5, 2.25|; // 2.25
+@println => |"min(7.5, 2.25): " + min_val|</code></pre>
+    <ul>
+      <li id="math-max" class="doc-anchor"><a class="doc-anchor-link" href="#math-max"><code>math.max =&gt; |a: numeric, b: numeric| -&gt; numeric</code></a> - Maximum of two numbers. <a class="doc-anchor-hash" href="#math-max" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let max_val: float = math.max => |7.5, 2.25|; // 7.5
+@println => |"max(7.5, 2.25): " + max_val|</code></pre>
+    <ul>
+      <li id="math-clamp" class="doc-anchor"><a class="doc-anchor-link" href="#math-clamp"><code>math.clamp =&gt; |x: numeric, min: numeric, max: numeric| -&gt; numeric</code></a> - Clamp number to range. <a class="doc-anchor-hash" href="#math-clamp" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let clamp_val: float = math.clamp => |12.0, 0.0, 10.0|; // 10.0
+@println => |"clamp(12, 0, 10): " + clamp_val|
+
+let clamp_val: float = math.clamp => |-12.0, 0.0, 10.0|; // 0.0
+@println => |"clamp(-12, 0, 10): " + clamp_val|</code></pre>
+    <ul>
+      <li id="math-random" class="doc-anchor"><a class="doc-anchor-link" href="#math-random"><code>math.random =&gt; || -&gt; float</code></a> - Pseudo-random float in <code>[0.0, 1.0)</code>. <a class="doc-anchor-hash" href="#math-random" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let rand_val: float = math.random => ||;
+@println => |"random(): " + rand_val|</code></pre>
+    <ul>
+      <li id="math-rand-int" class="doc-anchor"><a class="doc-anchor-link" href="#math-rand-int"><code>math.rand_int =&gt; |min: int, max: int| -&gt; int</code></a> - Random integer in inclusive range. <a class="doc-anchor-hash" href="#math-rand-int" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let rand_int_val: int = math.rand_int => |1, 10|;
+@println => |"rand_int(1, 10): " + rand_int_val|</code></pre>
+    <ul>
+      <li id="math-rand-choice" class="doc-anchor"><a class="doc-anchor-link" href="#math-rand-choice"><code>math.rand_choice =&gt; |arr: arr| -&gt; any</code></a> - Random element from a non-empty array. <a class="doc-anchor-hash" href="#math-rand-choice" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let choice_val: int = math.rand_choice => |[10, 20, 30, 40]|;
+@println => |"rand_choice([10,20,30,40]): " + choice_val|</code></pre>
+    <ul>
+      <li id="math-shuffle" class="doc-anchor"><a class="doc-anchor-link" href="#math-shuffle"><code>math.shuffle =&gt; |arr: arr| -&gt; arr</code></a> - Returns a shuffled copy of an array. <a class="doc-anchor-hash" href="#math-shuffle" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let shuffled_vals: arr = math.shuffle => |[1, 2, 3, 4, 5]|;
+@println => |"shuffle([1,2,3,4,5]): " + shuffled_vals|</code></pre>
+    <ul>
+      <li id="math-atan2" class="doc-anchor"><a class="doc-anchor-link" href="#math-atan2"><code>math.atan2 =&gt; |y: numeric, x: numeric| -&gt; float</code></a> - Angle from X-axis to (x, y). <a class="doc-anchor-hash" href="#math-atan2" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let atan2_val: float = math.atan2 => |1.0, 1.0|;
+@println => |"atan2(1, 1): " + atan2_val|</code></pre>
+    <ul>
+      <li id="math-vector" class="doc-anchor"><a class="doc-anchor-link" href="#math-vector"><code>math.vector =&gt; |arr: arr| -&gt; arr</code></a> - Convert numeric array to a vector value. <a class="doc-anchor-hash" href="#math-vector" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let vector: arr = math.vector => |[1, 2, 3]|;
+@println => |"vector: " + vector|</code></pre>
+    <ul>
+      <li id="math-dot" class="doc-anchor"><a class="doc-anchor-link" href="#math-dot"><code>math.dot =&gt; |a: arr, b: arr| -&gt; float</code></a> - Dot product of vectors/arrays. <a class="doc-anchor-hash" href="#math-dot" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let v1: arr = math.vector => |[1, 2, 3]|;
+let v2: arr = math.vector => |[4, 5, 6]|;
+
+let dot_val: float = math.dot => |v1, v2|; // 1*4 + 2*5 + 3*6 = 32 all floats
+@println => |"dot(v1, v2): " + dot_val|</code></pre>
+    <ul>
+      <li id="math-matrix" class="doc-anchor"><a class="doc-anchor-link" href="#math-matrix"><code>math.matrix =&gt; |arr: arr| -&gt; arr</code></a> - Validate/create matrix-like array. <a class="doc-anchor-hash" href="#math-matrix" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let m1: arr = math.matrix => |[[1, 2], [3, 4]]|;
+let m2: arr = math.matrix => |[[5, 6], [7, 8]]|;
+@println => |"m1: " + m1|
+@println => |"m2: " + m2|</code></pre>
+    <ul>
+      <li id="math-matmul" class="doc-anchor"><a class="doc-anchor-link" href="#math-matmul"><code>math.matmul =&gt; |a: arr, b: arr| -&gt; arr</code></a> - Matrix multiplication. <a class="doc-anchor-hash" href="#math-matmul" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use math;
+let m1: arr = [[1.0, 2.0], [3.0, 4.0]];
+let m2: arr = [[5.0], [6.0]];
+let out: arr = math.matmul => |m1, m2|;</code></pre>
+  </div>
+</details>
+
+<details class="lib-dropdown">
+  <summary><h3>FS (File System) Library</h3></summary>
+  <div class="lib-content">
+    <p>All paths are <code>string</code>. Most functions throw a runtime error if the operation fails (missing file, permissions, invalid path, etc.).</p>
+    <p>Functions:</p>
+    <ul>
+      <li id="fs-read-file" class="doc-anchor"><a class="doc-anchor-link" href="#fs-read-file"><code>fs.read_file =&gt; |path: string| -&gt; string</code></a> - Read file contents as a string. <a class="doc-anchor-hash" href="#fs-read-file" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use fs;
+let file_path: string = "data.txt";
+
+let data: string = fs.read_file => |file_path|;
+@println => |"File data: " + data|</code></pre>
+    <ul>
+      <li id="fs-write-file" class="doc-anchor"><a class="doc-anchor-link" href="#fs-write-file"><code>fs.write_file =&gt; |path: string, content: string| -&gt; void</code></a> - Write a string to a file. <a class="doc-anchor-hash" href="#fs-write-file" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use fs;
+let file_path: string = "data.txt";
+
+fs.write_file => |file_path, "This is some text"|
+</code></pre>
+    <ul>
+      <li id="fs-append-file" class="doc-anchor"><a class="doc-anchor-link" href="#fs-append-file"><code>fs.append_file =&gt; |path: string, content: string| -&gt; void</code></a> - Append a string to a file. <a class="doc-anchor-hash" href="#fs-append-file" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use fs;
+fs.append_file => |file_path, "\nThis is some more text."|</code></pre>
+    <ul>
+      <li id="fs-read-dir" class="doc-anchor"><a class="doc-anchor-link" href="#fs-read-dir"><code>fs.read_dir =&gt; |path: string| -&gt; arr</code></a> - Read directory entries (file/dir names). <a class="doc-anchor-hash" href="#fs-read-dir" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use fs;
+let dir_entries: arr = fs.read_dir => |"tests"|;
+@println => |"Read dir entries: " + dir_entries|</code></pre>
+    <ul>
+      <li id="fs-read-lines" class="doc-anchor"><a class="doc-anchor-link" href="#fs-read-lines"><code>fs.read_lines =&gt; |path: string| -&gt; arr</code></a> - Read file line-by-line as a string array. <a class="doc-anchor-hash" href="#fs-read-lines" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use fs;
+let lines: arr = fs.read_lines => |file_path|;
+@println => |"Read lines: " + lines|</code></pre>
+    <ul>
+      <li id="fs-create-dir" class="doc-anchor"><a class="doc-anchor-link" href="#fs-create-dir"><code>fs.create_dir =&gt; |path: string| -&gt; void</code></a> - Create a directory tree. <a class="doc-anchor-hash" href="#fs-create-dir" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use fs;
+let dir_path: string = "test_dir";
+fs.create_dir => |dir_path|</code></pre>
+    <ul>
+      <li id="fs-remove-dir" class="doc-anchor"><a class="doc-anchor-link" href="#fs-remove-dir"><code>fs.remove_dir =&gt; |path: string| -&gt; void</code></a> - Remove a directory tree. <a class="doc-anchor-hash" href="#fs-remove-dir" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use fs;
+let dir_path: string = "test_dir";
+fs.remove_dir => |dir_path|</code></pre>
+    <ul>
+      <li id="fs-exists" class="doc-anchor"><a class="doc-anchor-link" href="#fs-exists"><code>fs.exists =&gt; |path: string| -&gt; bool</code></a> - Check whether a path exists. <a class="doc-anchor-hash" href="#fs-exists" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use fs;
+let dir_path: string = "test_dir";
+let dir_exists: bool = fs.exists => |dir_path|;
+@println => |"Dir exists: " + dir_exists|</code></pre>
+    <ul>
+      <li id="fs-is-file" class="doc-anchor"><a class="doc-anchor-link" href="#fs-is-file"><code>fs.is_file =&gt; |path: string| -&gt; bool</code></a> - Check whether a path is a file. <a class="doc-anchor-hash" href="#fs-is-file" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use fs;
+let file_path: string = "data.txt";
+let path_is_file: bool = fs.is_file => |file_path|;
+@println => |"Is file: " + path_is_file|</code></pre>
+    <ul>
+      <li id="fs-is-dir" class="doc-anchor"><a class="doc-anchor-link" href="#fs-is-dir"><code>fs.is_dir =&gt; |path: string| -&gt; bool</code></a> - Check whether a path is a directory. <a class="doc-anchor-hash" href="#fs-is-dir" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use fs;
+let dir_path: string = "test_dir";
+let path_is_dir: bool = fs.is_dir => |dir_path|;
+@println => |"Is dir: " + path_is_dir|</code></pre>
+    <ul>
+      <li id="fs-remove-file" class="doc-anchor"><a class="doc-anchor-link" href="#fs-remove-file"><code>fs.remove_file =&gt; |path: string| -&gt; void</code></a> - Delete a file. <a class="doc-anchor-hash" href="#fs-remove-file" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use fs;
+let file_path: string = "data.txt";
+fs.remove_file => |file_path|</code></pre>
+    <ul>
+      <li id="fs-copy-file" class="doc-anchor"><a class="doc-anchor-link" href="#fs-copy-file"><code>fs.copy_file =&gt; |src: string, dst: string| -&gt; int</code></a> - Copy a file and return bytes copied. <a class="doc-anchor-hash" href="#fs-copy-file" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use fs;
+let file_path: string = "data.txt";
+let copy_path: string = "data_copy.txt";
+let copied_bytes: int = fs.copy_file => |file_path, copy_path|;
+@println => |"Bytes copied: " + copied_bytes|</code></pre>
+    <ul>
+      <li id="fs-rename" class="doc-anchor"><a class="doc-anchor-link" href="#fs-rename"><code>fs.rename =&gt; |src: string, dst: string| -&gt; void</code></a> - Rename/move a path. <a class="doc-anchor-hash" href="#fs-rename" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use fs;
+let copy_path: string = "data_copy.txt";
+let moved_path: string = "data_moved.txt";
+fs.rename => |copy_path, moved_path|</code></pre>
+    <ul>
+      <li id="fs-stat" class="doc-anchor"><a class="doc-anchor-link" href="#fs-stat"><code>fs.stat =&gt; |path: string| -&gt; obj</code></a> - Metadata: size, type, readonly, modified time (unix ms). <a class="doc-anchor-hash" href="#fs-stat" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use fs;
+let file_path: string = "data.txt";
+let stats: obj = fs.stat => |file_path|;</code></pre>
+  </div>
+</details>
+
+<details class="lib-dropdown">
+  <summary><h3>OS (Operating System) Library</h3></summary>
+  <div class="lib-content">
+    <p>These functions expose OS/process info. Some features can be disabled at runtime (for example, command execution).</p>
+    <p>Functions:</p>
+    <ul>
+      <li id="os-cwd" class="doc-anchor"><a class="doc-anchor-link" href="#os-cwd"><code>os.cwd =&gt; || -&gt; string</code></a> - Current working directory. <a class="doc-anchor-hash" href="#os-cwd" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use os;
+let cwd: string = os.cwd => ||;
+@println => |"Current directory: " + cwd|</code></pre>
+    <ul>
+      <li id="os-ls" class="doc-anchor"><a class="doc-anchor-link" href="#os-ls"><code>os.ls =&gt; |path: string| -&gt; arr</code></a> - List directory entries (defaults to <code>"."</code>). <a class="doc-anchor-hash" href="#os-ls" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use os;
+let files: arr = os.ls => |"./images"|;
+@println => |"Files: " + files|</code></pre>
+    <ul>
+      <li id="os-env" class="doc-anchor"><a class="doc-anchor-link" href="#os-env"><code>os.env =&gt; |key: string| -&gt; string</code></a> - Read an environment variable (empty string if missing). <a class="doc-anchor-hash" href="#os-env" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use os;
+let env_val: string = os.env => |"ZK_TEST_VAR"|;
+@println => |"ZK_TEST_VAR: " + env_val|</code></pre>
+    <ul>
+      <li id="os-set-env" class="doc-anchor"><a class="doc-anchor-link" href="#os-set-env"><code>os.set_env =&gt; |key: string, value: string| -&gt; void</code></a> - Set an environment variable. <a class="doc-anchor-hash" href="#os-set-env" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use os;
+os.set_env => |"ZK_TEST_VAR", "hello"|</code></pre>
+    <ul>
+      <li id="os-remove-env" class="doc-anchor"><a class="doc-anchor-link" href="#os-remove-env"><code>os.remove_env =&gt; |key: string| -&gt; void</code></a> - Remove an environment variable. <a class="doc-anchor-hash" href="#os-remove-env" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use os;
+os.remove_env => |"ZK_TEST_VAR"|</code></pre>
+    <ul>
+      <li id="os-platform" class="doc-anchor"><a class="doc-anchor-link" href="#os-platform"><code>os.platform =&gt; || -&gt; string</code></a> - Platform string (<code>"linux"</code>, <code>"windows"</code>, etc.). <a class="doc-anchor-hash" href="#os-platform" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use os;
+let plat: string = os.platform => ||;
+@println => |"Platform: " + plat|</code></pre>
+    <ul>
+      <li id="os-args" class="doc-anchor"><a class="doc-anchor-link" href="#os-args"><code>os.args =&gt; || -&gt; arr</code></a> - Command-line argument array. <a class="doc-anchor-hash" href="#os-args" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use os;
+let args: arr = os.args => ||;
+@println => |"Args: " + args|</code></pre>
+    <ul>
+      <li id="os-home-dir" class="doc-anchor"><a class="doc-anchor-link" href="#os-home-dir"><code>os.home_dir =&gt; || -&gt; string</code></a> - User home directory path (empty string if unknown). <a class="doc-anchor-hash" href="#os-home-dir" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use os;
+let home: string = os.home_dir => ||;
+@println => |"Home directory: " + home|</code></pre>
+    <ul>
+      <li id="os-temp-dir" class="doc-anchor"><a class="doc-anchor-link" href="#os-temp-dir"><code>os.temp_dir =&gt; || -&gt; string</code></a> - System temporary directory path. <a class="doc-anchor-hash" href="#os-temp-dir" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use os;
+let temp: string = os.temp_dir => ||;
+@println => |"Temp directory: " + temp|</code></pre>
+    <ul>
+      <li id="os-hostname" class="doc-anchor"><a class="doc-anchor-link" href="#os-hostname"><code>os.hostname =&gt; || -&gt; string</code></a> - Host name (empty string if unavailable). <a class="doc-anchor-hash" href="#os-hostname" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use os;
+let host: string = os.hostname => ||;
+@println => |"Hostname: " + host|</code></pre>
+    <ul>
+      <li id="os-username" class="doc-anchor"><a class="doc-anchor-link" href="#os-username"><code>os.username =&gt; || -&gt; string</code></a> - Current user name (empty string if unavailable). <a class="doc-anchor-hash" href="#os-username" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use os;
+let user: string = os.username => ||;
+@println => |"Username: " + user|</code></pre>
+    <ul>
+      <li id="os-arch" class="doc-anchor"><a class="doc-anchor-link" href="#os-arch"><code>os.arch =&gt; || -&gt; string</code></a> - CPU architecture string. <a class="doc-anchor-hash" href="#os-arch" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use os;
+let arch: string = os.arch => ||;
+@println => |"Arch: " + arch|</code></pre>
+    <ul>
+      <li id="os-cpu-count" class="doc-anchor"><a class="doc-anchor-link" href="#os-cpu-count"><code>os.cpu_count =&gt; || -&gt; int</code></a> - Logical CPU count. <a class="doc-anchor-hash" href="#os-cpu-count" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use os;
+let cpu_count: int = os.cpu_count => ||;
+@println => |"CPU Count: " + cpu_count|</code></pre>
+    <ul>
+      <li id="os-uptime-ms" class="doc-anchor"><a class="doc-anchor-link" href="#os-uptime-ms"><code>os.uptime_ms =&gt; || -&gt; int</code></a> - Uptime in milliseconds (Linux only). <a class="doc-anchor-hash" href="#os-uptime-ms" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use os;
+let uptime: int = os.uptime_ms => ||;
+@println => |"Uptime (ms): " + uptime|</code></pre>
+    <ul>
+      <li id="os-which" class="doc-anchor"><a class="doc-anchor-link" href="#os-which"><code>os.which =&gt; |cmd: string| -&gt; string</code></a> - Resolve an executable path (empty string if not found). <a class="doc-anchor-hash" href="#os-which" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use os;
+let which_echo: string = os.which => |"echo"|;
+@println => |"which echo: " + which_echo|</code></pre>
+    <ul>
+      <li id="os-exit" class="doc-anchor"><a class="doc-anchor-link" href="#os-exit"><code>os.exit =&gt; |code: int| -&gt; never</code></a> - Exit the runtime with an optional code (CLI). <a class="doc-anchor-hash" href="#os-exit" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use os;
+os.exit => |0|</code></pre>
+    <ul>
+      <li id="os-pid" class="doc-anchor"><a class="doc-anchor-link" href="#os-pid"><code>os.pid =&gt; || -&gt; int</code></a> - Current process id. <a class="doc-anchor-hash" href="#os-pid" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use os;
+let pid: int = os.pid => ||;
+@println => |"Process ID: " + pid|</code></pre>
+    <ul>
+      <li id="os-sleep" class="doc-anchor"><a class="doc-anchor-link" href="#os-sleep"><code>os.sleep =&gt; |ms: int| -&gt; void</code></a> - Sleep for milliseconds. <a class="doc-anchor-hash" href="#os-sleep" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use os;
+@println => |"Sleeping for 2 seconds..."|
+os.sleep => |2000| // Sleep for 2 seconds
+@println => |"Slept for 2 seconds"|</code></pre>
+    <ul>
+      <li id="os-exec" class="doc-anchor"><a class="doc-anchor-link" href="#os-exec"><code>os.exec =&gt; |cmd: string, args: arr| -&gt; obj</code></a> - Execute a command and capture <code>{status, stdout, stderr}</code>. <a class="doc-anchor-hash" href="#os-exec" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use os;
+let exec_result: obj = os.exec => |"echo", ["Hello, World!"]|;
+@println => |"Exec status: " + exec_result.status|
+@println => |"Exec stdout: " + exec_result.stdout|
+@println => |"Exec stderr: " + exec_result.stderr|</code></pre>
+    <ul>
+      <li id="os-system" class="doc-anchor"><a class="doc-anchor-link" href="#os-system"><code>os.system =&gt; |cmd: string, args: arr| -&gt; int</code></a> - Execute a command inheriting stdio and return exit code. <a class="doc-anchor-hash" href="#os-system" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use os;
+let system_status: int = os.system => |"echo", ["Hello, World!"]|;
+@println => |"system.status: " + system_status|</code></pre>
+    <ul>
+      <li id="os-spawn" class="doc-anchor"><a class="doc-anchor-link" href="#os-spawn"><code>os.spawn =&gt; |cmd: string, args: arr| -&gt; int</code></a> - Spawn a process and return pid. <a class="doc-anchor-hash" href="#os-spawn" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use os;
+let spawn_pid: int = os.spawn => |"sleep", ["0.1"]|;
+@println => |"spawn.pid: " + spawn_pid|</code></pre>
+  </div>
+</details>
+
+<details class="lib-dropdown">
+  <summary><h3>Encoding Library</h3></summary>
+  <div class="lib-content">
+    <p>Encoding helpers operate on <code>string</code> input and return <code>string</code> output. Decode functions throw a runtime error on invalid input.</p>
+    <p>Functions:</p>
+    <ul>
+      <li id="encoding-base64-encode" class="doc-anchor"><a class="doc-anchor-link" href="#encoding-base64-encode"><code>encoding.base64_encode =&gt; |input: string| -&gt; string</code></a> - Base64-encode a string. <a class="doc-anchor-hash" href="#encoding-base64-encode" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use encoding;
+let out: string = encoding.base64_encode => |"Hello, Zekken!"|;
+@println => |out|</code></pre>
+    <ul>
+      <li id="encoding-base64-decode" class="doc-anchor"><a class="doc-anchor-link" href="#encoding-base64-decode"><code>encoding.base64_decode =&gt; |input: string| -&gt; string</code></a> - Base64-decode into a UTF-8 string. <a class="doc-anchor-hash" href="#encoding-base64-decode" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use encoding;
+let decoded: string = encoding.base64_decode => |"SGVsbG8sIFpla2tlbiE="|;
+@println => |decoded|</code></pre>
+    <ul>
+      <li id="encoding-hex-encode" class="doc-anchor"><a class="doc-anchor-link" href="#encoding-hex-encode"><code>encoding.hex_encode =&gt; |input: string| -&gt; string</code></a> - Hex-encode string bytes. <a class="doc-anchor-hash" href="#encoding-hex-encode" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use encoding;
+let out: string = encoding.hex_encode => |"ABC123"|;
+@println => |out|</code></pre>
+    <ul>
+      <li id="encoding-hex-decode" class="doc-anchor"><a class="doc-anchor-link" href="#encoding-hex-decode"><code>encoding.hex_decode =&gt; |input: string| -&gt; string</code></a> - Hex-decode into a UTF-8 string. <a class="doc-anchor-hash" href="#encoding-hex-decode" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use encoding;
+let decoded: string = encoding.hex_decode => |"414243313233"|;
+@println => |decoded|</code></pre>
+    <ul>
+      <li id="encoding-url-encode" class="doc-anchor"><a class="doc-anchor-link" href="#encoding-url-encode"><code>encoding.url_encode =&gt; |input: string| -&gt; string</code></a> - Percent-encode a string for URLs. <a class="doc-anchor-hash" href="#encoding-url-encode" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use encoding;
+let out: string = encoding.url_encode => |"hello world?x=1&y=2"|;
+@println => |out|</code></pre>
+    <ul>
+      <li id="encoding-url-decode" class="doc-anchor"><a class="doc-anchor-link" href="#encoding-url-decode"><code>encoding.url_decode =&gt; |input: string| -&gt; string</code></a> - Percent-decode a string. <a class="doc-anchor-hash" href="#encoding-url-decode" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use encoding;
+let decoded: string = encoding.url_decode => |"hello%20world%3Fx%3D1%26y%3D2"|;
+@println => |decoded|</code></pre>
+  </div>
+</details>
+
+<details class="lib-dropdown">
+  <summary><h3>Path Library</h3></summary>
+  <div class="lib-content">
+    <p>Cross-platform path helpers. All inputs and outputs are <code>string</code>.</p>
+    <p>Functions:</p>
+    <ul>
+      <li id="path-join" class="doc-anchor"><a class="doc-anchor-link" href="#path-join"><code>path.join =&gt; |...parts: string| -&gt; string</code></a> - Join path segments. You can pass multiple strings, or one array of strings. <a class="doc-anchor-hash" href="#path-join" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use path;
+let p: string = path.join => |"tests", "libraries", "os.zk"|;
+@println => |p|</code></pre>
+    <ul>
+      <li id="path-normalize" class="doc-anchor"><a class="doc-anchor-link" href="#path-normalize"><code>path.normalize =&gt; |path: string| -&gt; string</code></a> - Normalize <code>.</code> and <code>..</code> segments. <a class="doc-anchor-hash" href="#path-normalize" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use path;
+let out: string = path.normalize => |"a/./b/../c"|;
+@println => |out|</code></pre>
+    <ul>
+      <li id="path-resolve" class="doc-anchor"><a class="doc-anchor-link" href="#path-resolve"><code>path.resolve =&gt; |...parts: string| -&gt; string</code></a> - Resolve to an absolute normalized path. With no args, returns the current working directory. <a class="doc-anchor-hash" href="#path-resolve" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use path;
+let out: string = path.resolve => |"tests", ".."|;
+@println => |out|</code></pre>
+    <ul>
+      <li id="path-basename" class="doc-anchor"><a class="doc-anchor-link" href="#path-basename"><code>path.basename =&gt; |path: string| -&gt; string</code></a> - Final path component. <a class="doc-anchor-hash" href="#path-basename" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use path;
+let out: string = path.basename => |"tests/libraries/os.zk"|;
+@println => |out|</code></pre>
+    <ul>
+      <li id="path-dirname" class="doc-anchor"><a class="doc-anchor-link" href="#path-dirname"><code>path.dirname =&gt; |path: string| -&gt; string</code></a> - Parent directory (<code>"."</code> when unknown). <a class="doc-anchor-hash" href="#path-dirname" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use path;
+let out: string = path.dirname => |"tests/libraries/os.zk"|;
+@println => |out|</code></pre>
+    <ul>
+      <li id="path-extname" class="doc-anchor"><a class="doc-anchor-link" href="#path-extname"><code>path.extname =&gt; |path: string| -&gt; string</code></a> - File extension including leading dot (<code>".txt"</code>). <a class="doc-anchor-hash" href="#path-extname" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use path;
+let out: string = path.extname => |"tests/libraries/os.zk"|;
+@println => |out|</code></pre>
+    <ul>
+      <li id="path-stem" class="doc-anchor"><a class="doc-anchor-link" href="#path-stem"><code>path.stem =&gt; |path: string| -&gt; string</code></a> - File name without extension. <a class="doc-anchor-hash" href="#path-stem" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use path;
+let out: string = path.stem => |"tests/libraries/os.zk"|;
+@println => |out|</code></pre>
+    <ul>
+      <li id="path-is-abs" class="doc-anchor"><a class="doc-anchor-link" href="#path-is-abs"><code>path.is_abs =&gt; |path: string| -&gt; bool</code></a> - Whether the path is absolute. <a class="doc-anchor-hash" href="#path-is-abs" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use path;
+let out: bool = path.is_abs => |"/tmp"|;
+@println => |out|</code></pre>
+    <ul>
+      <li id="path-relative" class="doc-anchor"><a class="doc-anchor-link" href="#path-relative"><code>path.relative =&gt; |from: string, to: string| -&gt; string</code></a> - Relative path from <code>from</code> to <code>to</code>. <a class="doc-anchor-hash" href="#path-relative" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use path;
+let out: string = path.relative => |"tests", "tests/libraries/os.zk"|;
+@println => |out|</code></pre>
+  </div>
+</details>
+
+<details class="lib-dropdown">
+  <summary><h3>HTTP Library</h3></summary>
+  <div class="lib-content">
+    <p>HTTP client and server helpers. On WASM builds, HTTP is disabled. On native builds, you can disable it with <code>ZEKKEN_DISABLE_HTTP=1</code>.</p>
+
+    <p><strong>Client</strong></p>
+    <ul>
+      <li id="http-request" class="doc-anchor"><a class="doc-anchor-link" href="#http-request"><code>http.request =&gt; |method: string, url: string, headers: obj, body: any, timeout_ms: int| -&gt; obj</code></a> - Returns <code>{url, status, ok, headers, body}</code>. <a class="doc-anchor-hash" href="#http-request" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use http;
+// Native runtime only (HTTP is disabled in WASM builds).
+let resp: obj = http.request => |"GET", "https://example.com"|;
+@println => |resp.status|</code></pre>
+    <ul>
+      <li id="http-get" class="doc-anchor"><a class="doc-anchor-link" href="#http-get"><code>http.get =&gt; |url: string, headers: obj, timeout_ms: int| -&gt; obj</code></a> <a class="doc-anchor-hash" href="#http-get" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use http;
+// Native runtime only.
+let resp: obj = http.get => |"https://example.com"|;
+@println => |resp.ok|</code></pre>
+    <ul>
+      <li id="http-post" class="doc-anchor"><a class="doc-anchor-link" href="#http-post"><code>http.post =&gt; |url: string, body: any, headers: obj, timeout_ms: int| -&gt; obj</code></a> <a class="doc-anchor-hash" href="#http-post" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use http;
+// Native runtime only.
+let resp: obj = http.post => |"https://example.com", "hello"|;
+@println => |resp.status|</code></pre>
+    <ul>
+      <li id="http-get-json" class="doc-anchor"><a class="doc-anchor-link" href="#http-get-json"><code>http.get_json =&gt; |url: string, headers: obj, timeout_ms: int| -&gt; any</code></a> - GET + parse JSON response body. <a class="doc-anchor-hash" href="#http-get-json" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use http;
+// Native runtime only.
+let data: any = http.get_json => |"https://example.com/data.json"|;
+@println => |data|</code></pre>
+    <ul>
+      <li id="http-build-query" class="doc-anchor"><a class="doc-anchor-link" href="#http-build-query"><code>http.build_query =&gt; |params: obj| -&gt; string</code></a> - Build <code>k=v&amp;k2=v2</code> query strings. <a class="doc-anchor-hash" href="#http-build-query" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use http;
+let qs: string = http.build_query => |{ a: 1, b: "two" }|;
+@println => |qs|</code></pre>
+    <ul>
+      <li id="http-parse-query" class="doc-anchor"><a class="doc-anchor-link" href="#http-parse-query"><code>http.parse_query =&gt; |qs: string| -&gt; obj</code></a> - Parse a query string into an object of strings. <a class="doc-anchor-hash" href="#http-parse-query" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use http;
+let obj: obj = http.parse_query => |"a=1&b=two"|;
+@println => |obj|</code></pre>
+
+    <p><strong>Server</strong></p>
+    <ul>
+      <li id="http-serve" class="doc-anchor"><a class="doc-anchor-link" href="#http-serve"><code>http.serve =&gt; |addr: string, routes: obj| -&gt; void</code></a> - Simple static routing. Route keys can be <code>"/path"</code> or <code>"METHOD /path"</code>. Use <code>"__default__"</code> as a fallback. <a class="doc-anchor-hash" href="#http-serve" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use http;
+// Native runtime only.
+let html: string = "&lt;!doctype html&gt;&lt;h1&gt;Zekken HTTP&lt;/h1&gt;";
+let routes: obj = {
+  "/": { status: 200, headers: { "content-type": "text/html; charset=utf-8" }, body: html }
+};
+http.serve => |"127.0.0.1:8080", routes|</code></pre>
+    <ul>
+      <li id="http-listen" class="doc-anchor"><a class="doc-anchor-link" href="#http-listen"><code>http.listen =&gt; |addr: string| -&gt; obj</code></a> - Low-level server that returns an object with <code>accept</code>, <code>respond</code>, and <code>addr</code>. <a class="doc-anchor-hash" href="#http-listen" aria-label="Copy link to this function">#</a></li>
+    </ul>
+    <pre><code class="language-zekken">use http;
+// Native runtime only.
+let server: obj = http.listen => |"127.0.0.1:8080"|;
+@println => |"listening on: " + (server.addr => ||)|</code></pre>
+  </div>
+</details>
 
           <div class="docs-pager">
             <a href="functions.html">Previous: Functions</a>

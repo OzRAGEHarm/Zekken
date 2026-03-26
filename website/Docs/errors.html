@@ -4,10 +4,11 @@
   <meta charset="UTF-8">
   <title>Docs: Errors | Zekken</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" type="image/png" href="../../images/zekken_icon.png">
-  <link rel="stylesheet" href="../Docs/styles.css">
-  <script src="js/zekken_docs_highlighter.js" defer></script>
-</head>
+	  <link rel="icon" type="image/png" href="../../images/zekken_icon.png">
+	  <link rel="stylesheet" href="../Docs/styles.css?v=20260325">
+	  <script src="js/zekken_docs_highlighter.js?v=20260325" defer></script>
+	  <script src="js/script.js?v=20260326" defer></script>
+	</head>
 <body>
   <div class="navbar">
     <img src="../../images/zekken_icon.png" alt="Zekken Logo" class="logo-img">
@@ -28,7 +29,7 @@
   <div class="container">
     <header class="docs-header">
       <h1>Zekken Documentation</h1>
-      <p class="docs-lead">Official docs for writing, running, and exploring Zekken programs.</p>
+      <p class="docs-lead">Error categories, formatting, ordering, and execution behavior.</p>
     </header>
 
     <div class="docs-layout">
@@ -48,16 +49,128 @@
         <section class="docs-section">
           <span class="docs-page-label">Section 6 of 8</span>
           <h2>Errors</h2>
-          <p>Zekken reports syntax, reference, type, and runtime errors with line/column pointers.</p>
+
+          <h3 id="error-kinds" class="doc-anchor"><a class="doc-anchor-link" href="#error-kinds">Error Kinds</a><a class="doc-anchor-hash" href="#error-kinds" aria-label="Link to this section">#</a></h3>
+          <p>Zekken reports errors in a few consistent categories:</p>
           <ul>
-            <li>Syntax errors: parser expectations and token mismatch.</li>
-            <li>Reference errors: missing variables/functions.</li>
-            <li>Type errors: declaration and operation mismatches.</li>
-            <li>Runtime errors: execution failures, such as missing files.</li>
+            <li><code>Syntax Error</code> - source code cannot be parsed (unexpected/missing tokens).</li>
+            <li><code>Reference Error</code> - a name cannot be resolved (variable/function/library/member).</li>
+            <li><code>Type Error</code> - an operation or assignment has incompatible types.</li>
+            <li><code>Runtime Error</code> - execution-time failures (I/O, invalid casts, out-of-range, etc.).</li>
+            <li><code>Internal Error</code> - a compiler/interpreter bug or an internal stop-marker.</li>
           </ul>
-          <div class="placeholder-card">
-            <strong>Coming soon:</strong> full error catalog and troubleshooting guide.
-          </div>
+
+          <h3 id="error-output-layout" class="doc-anchor"><a class="doc-anchor-link" href="#error-output-layout">Error Output Layout</a><a class="doc-anchor-hash" href="#error-output-layout" aria-label="Link to this section">#</a></h3>
+          <p>Most CLI errors follow this layout:</p>
+          <ul>
+            <li><strong>Header</strong>: <code>&lt;Kind&gt; Error: &lt;message&gt;</code></li>
+            <li><strong>Location</strong>: file path + 1-based line/column</li>
+            <li><strong>Snippet</strong>: the source line that triggered the error</li>
+            <li><strong>Pointer</strong>: <code>^</code> marks the start column; <code>~</code> marks the span when known</li>
+            <li><strong>Details</strong> (optional): <code>expected</code>/<code>found</code>, or a <code>kind</code> tag</li>
+          </ul>
+
+          <h3 id="pointer-format" class="doc-anchor"><a class="doc-anchor-link" href="#pointer-format">Pointer Format</a><a class="doc-anchor-hash" href="#pointer-format" aria-label="Link to this section">#</a></h3>
+          <p>
+            Errors include line/column and a pointer. When Zekken can compute the token span, it draws a caret plus tildes (<code>^~~~</code>).
+            When the span is unknown, you may see a single caret (<code>^</code>).
+          </p>
+<pre><code class="language-zekken-error">Type Error: Type mismatch in variable declaration 'b'
+     | test.zk -> [Ln: 1, Col: 17]
+     |
+   1 | let b: string = 10;
+     |                 ^~
+  expected: String
+  found:    int</code></pre>
+
+          <h3 id="syntax-errors" class="doc-anchor"><a class="doc-anchor-link" href="#syntax-errors">Syntax Errors</a><a class="doc-anchor-hash" href="#syntax-errors" aria-label="Link to this section">#</a></h3>
+          <p>
+            Syntax errors happen before execution starts. They mean the parser could not build a valid AST from the source.
+            Fix the first syntax error first, since later syntax errors may be caused by the first one.
+          </p>
+<pre><code class="language-zekken-error">Syntax Error: Expected value after '='
+     | test.zk -> [Ln: 1, Col: 17]
+     |
+   1 | let a: string = ;
+     |                 ^
+  expected: a value
+  found:    empty assignment</code></pre>
+          <ul>
+            <li>Common causes: missing values, missing closing <code>|</code>/<code>]</code>/<code>}</code>, or malformed call syntax.</li>
+            <li>What to do: fix the token the pointer highlights, then re-run to see the next error.</li>
+          </ul>
+
+          <h3 id="reference-errors" class="doc-anchor"><a class="doc-anchor-link" href="#reference-errors">Reference Errors</a><a class="doc-anchor-hash" href="#reference-errors" aria-label="Link to this section">#</a></h3>
+          <p>
+            Reference errors mean a symbol could not be found in the current environment (or import scope).
+            Zekken prints a <code>kind</code> tag to clarify what was being resolved.
+          </p>
+<pre><code class="language-zekken-error">Reference Error: Function 'add' not found
+     | test.zk -> [Ln: 1, Col: 16]
+     |
+   1 | let sum: int = add =&gt; |2, 5|;
+     |                ^~~
+  kind: function</code></pre>
+          <ul>
+            <li>Common causes: typos, missing <code>func</code> declaration, missing <code>use</code>/<code>include</code>, or wrong export name.</li>
+            <li>What to do: declare the symbol earlier in the file, or import it from the correct module/file.</li>
+          </ul>
+
+          <h3 id="type-errors" class="doc-anchor"><a class="doc-anchor-link" href="#type-errors">Type Errors</a><a class="doc-anchor-hash" href="#type-errors" aria-label="Link to this section">#</a></h3>
+          <p>
+            Type errors occur when a declared type does not match the value, or when an operation is applied to incompatible types.
+            These are detected during evaluation when the value becomes known.
+          </p>
+<pre><code class="language-zekken-error">Type Error: Type mismatch in variable declaration 'b'
+     | test.zk -> [Ln: 1, Col: 17]
+     |
+   1 | let b: string = 10;
+     |                 ^~
+  expected: String
+  found:    int</code></pre>
+          <ul>
+            <li>Common causes: wrong annotation (<code>int</code> vs <code>float</code>), assigning a different type later, invalid cast targets.</li>
+            <li>What to do: change the declared type, change the value, or cast the value when appropriate.</li>
+          </ul>
+
+          <h3 id="runtime-errors" class="doc-anchor"><a class="doc-anchor-link" href="#runtime-errors">Runtime Errors</a><a class="doc-anchor-hash" href="#runtime-errors" aria-label="Link to this section">#</a></h3>
+          <p>
+            Runtime errors happen during program execution (after parsing succeeds). They typically come from I/O, library calls,
+            invalid casts, or invalid operations on values.
+          </p>
+<pre><code class="language-zekken-error">Runtime Error: Failed to read file 'test.txt': No such file or directory (os error 2)
+     | test.zk -> [Ln: 4, Col: 40]
+     |
+   4 | let content: string = fs.read_file =&gt; |"test.txt"|;
+     |                                        ^~~~~~~~~~</code></pre>
+          <ul>
+            <li>Common causes: missing files/paths, permissions, invalid arguments, unsupported operations.</li>
+            <li>What to do: verify external resources (files/dirs), validate inputs, and check library docs.</li>
+          </ul>
+
+          <h3 id="internal-errors" class="doc-anchor"><a class="doc-anchor-link" href="#internal-errors">Internal Errors</a><a class="doc-anchor-hash" href="#internal-errors" aria-label="Link to this section">#</a></h3>
+          <p>
+            Internal errors indicate a bug in Zekken itself (or a stop-marker used internally to abort execution after collecting errors).
+            If you see an internal error as a user-facing message, it is worth reporting with the smallest repro you can make.
+          </p>
+          <ul>
+            <li>What to do: try again with a minimized script; include the exact error output and Zekken version.</li>
+            <li>In development: run with <code>RUST_BACKTRACE=1</code> for additional details.</li>
+          </ul>
+
+          <h3 id="execution-behavior" class="doc-anchor"><a class="doc-anchor-link" href="#execution-behavior">Execution Behavior</a><a class="doc-anchor-hash" href="#execution-behavior" aria-label="Link to this section">#</a></h3>
+          <ul>
+            <li>Parser errors are collected and printed before execution.</li>
+            <li>Runtime/reference/type errors are reported with source context.</li>
+            <li>CLI <code>run</code> exits with non-zero status when errors exist.</li>
+            <li><code>os.exit =&gt; |code|</code> exits process using that code in CLI mode.</li>
+          </ul>
+
+          <h3 id="troubleshooting-tips" class="doc-anchor"><a class="doc-anchor-link" href="#troubleshooting-tips">Troubleshooting Tips</a><a class="doc-anchor-hash" href="#troubleshooting-tips" aria-label="Link to this section">#</a></h3>
+          <ul>
+            <li>If line/column seems off, verify nested call pipes are balanced: <code>|...|</code>.</li>
+            <li>If import/member access fails, verify module import form and method name case.</li>
+          </ul>
 
           <div class="docs-pager">
             <a href="libraries.html">Previous: Libraries</a>

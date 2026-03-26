@@ -24,8 +24,12 @@ const b: obj = { hello: "Hello", world: "World!" };
 export x, y, z, w, a, b;
 
 // Functions
-func add |a: int, b: int| {
-  return a + b;
+func add |a: int, b: int| -> float {
+  return a.cast => |"float"| + b.cast => |"float"|;
+}
+
+func e || {
+  return 1;
 }
 
 // Lambda Functions
@@ -34,7 +38,7 @@ let sub: fn -> |a: int, b: int| {
 };
 
 // Setting the value of a variable to the return value of a func
-let result_1: int = add => |1, 2|;
+let result_1: float = add => |1, 2|;
 let result_2: int = sub => |2, 1|;
 
 // Printing the result to the console

@@ -244,17 +244,14 @@ pub fn tokenize(source: String) -> Vec<Token> {
 
         // Get token
         if let Some((token, consumed)) = tokenize_char(&src, index, line, column) {
-            // Update line/column for multi-line tokens
-            //let mut lines = token.value.lines();
-            //let first_line = lines.next();
-            let num_newlines = token.value.matches('\n').count();
-            if num_newlines > 0 {
-                line += num_newlines;
-                // Set column to the length of the last line + 1
-                let last_line_len = token.value.rsplit('\n').next().unwrap_or("").len();
-                column = last_line_len + 1;
-            } else {
-                column += consumed;
+            // Track position using consumed source chars, not token value formatting.
+            for ch in &src[index..index + consumed] {
+                if *ch == '\n' {
+                    line += 1;
+                    column = 1;
+                } else {
+                    column += 1;
+                }
             }
             tokens.push(token);
             index += consumed;
@@ -268,7 +265,7 @@ pub fn tokenize(source: String) -> Vec<Token> {
     tokens
 }
 
-fn tokenize_char(src: &Vec<char>, start: usize, line: usize, column: usize) -> Option<(Token, usize)> {
+fn tokenize_char(src: &[char], start: usize, line: usize, column: usize) -> Option<(Token, usize)> {
     let len = src.len();
     if start >= len {
         return None;
@@ -310,17 +307,27 @@ fn tokenize_char(src: &Vec<char>, start: usize, line: usize, column: usize) -> O
         }
     }
 
-    // Check for multi-character tokens like '=>' and '->'
+    // Multi-character operators.
     if start + 1 < len {
-        let two_chars = format!("{}{}", cur, src[start + 1]);
-        if two_chars == "//" || two_chars == "/*" {
-            // Already handled above
-        } else {
-            for &(ch, ref token_type) in TOKEN_CHAR.iter() {
-                if ch == two_chars {
-                    return Some((Token::new(ch.to_string(), *token_type, line, column), 2));
-                }
-            }
+        let next = src[start + 1];
+        let tk = match (cur, next) {
+            ('-', '>') => Some(TokenType::ThinArrow),
+            ('=', '>') => Some(TokenType::FatArrow),
+            ('+', '=') => Some(TokenType::AssignOp(AssignOp::AddAssign)),
+            ('-', '=') => Some(TokenType::AssignOp(AssignOp::SubAssign)),
+            ('*', '=') => Some(TokenType::AssignOp(AssignOp::MulAssign)),
+            ('/', '=') => Some(TokenType::AssignOp(AssignOp::DivAssign)),
+            ('%', '=') => Some(TokenType::AssignOp(AssignOp::ModAssign)),
+            ('|', '|') => Some(TokenType::BinOp(BinOp::Or)),
+            ('&', '&') => Some(TokenType::BinOp(BinOp::And)),
+            ('=', '=') => Some(TokenType::BinOp(BinOp::Eq)),
+            ('!', '=') => Some(TokenType::BinOp(BinOp::Neq)),
+            ('>', '=') => Some(TokenType::BinOp(BinOp::GreaterEq)),
+            ('<', '=') => Some(TokenType::BinOp(BinOp::LessEq)),
+            _ => None,
+        };
+        if let Some(kind) = tk {
+            return Some((Token::new(format!("{}{}", cur, next), kind, line, column), 2));
         }
     }
 
@@ -331,21 +338,8 @@ fn tokenize_char(src: &Vec<char>, start: usize, line: usize, column: usize) -> O
         return Some((token, consumed));
     }
 
-    // Check for operators
-    if let Some(token) = parse_operators(src, start, line, column, cur) {
-        // Only return '/' as ArithOp(Div) if not followed by '/' or '*'
-        if cur == '/' && start + 1 < len {
-            let next_char = src[start + 1];
-            if next_char == '/' || next_char == '*' {
-                // Already handled above
-                return None;
-            }
-        }
-        return Some((token, 1));
-    }
-
     // Check for numbers
-    if cur.is_digit(10) || (cur == '-' && start + 1 < len && src[start + 1].is_digit(10)) {
+    if cur.is_ascii_digit() {
         let token = parse_number(src, start, line, column);
         let consumed = token.value.len();
         return Some((token, consumed));
@@ -357,28 +351,49 @@ fn tokenize_char(src: &Vec<char>, start: usize, line: usize, column: usize) -> O
         return Some((token.clone(), token.length));
     }
 
-    // Check for single character tokens like colon, comma, semicolon, etc.
-    for &(ch, ref token_type) in TOKEN_CHAR.iter() {
-        if ch.len() == 1 && ch.chars().next().unwrap() == cur {
-            return Some((Token::new(ch.to_string(), *token_type, line, column), 1));
-        }
+    // Single-char tokens.
+    let single = match cur {
+        '@' => Some(TokenType::At),
+        '(' => Some(TokenType::OpenParen),
+        ')' => Some(TokenType::CloseParen),
+        '{' => Some(TokenType::OpenBrace),
+        '}' => Some(TokenType::CloseBrace),
+        '[' => Some(TokenType::OpenBracket),
+        ']' => Some(TokenType::CloseBracket),
+        '.' => Some(TokenType::Dot),
+        ';' => Some(TokenType::Semicolon),
+        ':' => Some(TokenType::Colon),
+        ',' => Some(TokenType::Comma),
+        '|' => Some(TokenType::Pipe),
+        '&' => Some(TokenType::Ampersand),
+        '\'' => Some(TokenType::SingleQuote),
+        '"' => Some(TokenType::DoubleQuote),
+        '+' => Some(TokenType::ArithOp(ArithOp::Add)),
+        '-' => Some(TokenType::ArithOp(ArithOp::Sub)),
+        '*' => Some(TokenType::ArithOp(ArithOp::Mul)),
+        '/' => Some(TokenType::ArithOp(ArithOp::Div)),
+        '%' => Some(TokenType::ArithOp(ArithOp::Mod)),
+        '=' => Some(TokenType::AssignOp(AssignOp::Assign)),
+        '!' => Some(TokenType::BinOp(BinOp::Not)),
+        '>' => Some(TokenType::BinOp(BinOp::Greater)),
+        '<' => Some(TokenType::BinOp(BinOp::Less)),
+        _ => None,
+    };
+    if let Some(kind) = single {
+        return Some((Token::new(cur.to_string(), kind, line, column), 1));
     }
 
     None
 }
 
-fn parse_number(src: &Vec<char>, start: usize, line: usize, column: usize) -> Token {
+fn parse_number(src: &[char], start: usize, line: usize, column: usize) -> Token {
     let mut num = String::new();
     let mut idx = start;
     let len = src.len();
     let mut is_integer = true;
-    if src[idx] == '-' {
-        num.push('-');
-        idx += 1;
-    }
     while idx < len {
         let c = src[idx];
-        if c.is_digit(10) {
+        if c.is_ascii_digit() {
             num.push(c);
             idx += 1;
         } else if c == '.' && is_integer {
@@ -393,7 +408,7 @@ fn parse_number(src: &Vec<char>, start: usize, line: usize, column: usize) -> To
     Token::new(num, token_type, line, column)
 }
 
-fn parse_string(src: &Vec<char>, start: usize, line: usize, column: usize) -> Token {
+fn parse_string(src: &[char], start: usize, line: usize, column: usize) -> Token {
     let quote = src[start];
     let mut content = String::new();
     let mut escaped = false;
@@ -407,9 +422,28 @@ fn parse_string(src: &Vec<char>, start: usize, line: usize, column: usize) -> To
                 'n' => content.push('\n'),
                 't' => content.push('\t'),
                 'r' => content.push('\r'),
+                '0' => content.push('\0'),
+                'e' => content.push('\x1b'),
                 '\\' => content.push('\\'),
                 '"' => content.push('"'),
                 '\'' => content.push('\''),
+                'x' => {
+                    // Hex escape: \xNN
+                    if idx + 2 < len {
+                        let h1 = src[idx + 1];
+                        let h2 = src[idx + 2];
+                        let hex = [h1, h2].iter().collect::<String>();
+                        if let Ok(v) = u8::from_str_radix(&hex, 16) {
+                            content.push(v as char);
+                            idx += 2; // Consume both hex digits.
+                        } else {
+                            // Keep behavior resilient for malformed escapes.
+                            content.push('x');
+                        }
+                    } else {
+                        content.push('x');
+                    }
+                }
                 _ => content.push(c),
             }
             escaped = false;
@@ -427,7 +461,37 @@ fn parse_string(src: &Vec<char>, start: usize, line: usize, column: usize) -> To
     Token::new(content, TokenType::String, line, column).with_length(length)
 }
 
-fn parse_identifier(src: &Vec<char>, start: usize, line: usize, column: usize) -> Token {
+fn keyword_token(ident: &str) -> TokenType {
+    match ident {
+        "let" => TokenType::Let,
+        "const" => TokenType::Const,
+        "func" => TokenType::Func,
+        "if" => TokenType::If,
+        "else" => TokenType::Else,
+        "for" => TokenType::For,
+        "while" => TokenType::While,
+        "use" => TokenType::Use,
+        "include" => TokenType::Include,
+        "export" => TokenType::Export,
+        "in" => TokenType::In,
+        "from" => TokenType::From,
+        "return" => TokenType::Return,
+        "try" => TokenType::Try,
+        "catch" => TokenType::Catch,
+        "int" => TokenType::DataType(DataType::Int),
+        "float" => TokenType::DataType(DataType::Float),
+        "string" => TokenType::DataType(DataType::String),
+        "bool" => TokenType::DataType(DataType::Bool),
+        "obj" => TokenType::DataType(DataType::Object),
+        "arr" => TokenType::DataType(DataType::Array),
+        "fn" => TokenType::DataType(DataType::Fn),
+        "true" => TokenType::Boolean(true),
+        "false" => TokenType::Boolean(false),
+        _ => TokenType::Identifier,
+    }
+}
+
+fn parse_identifier(src: &[char], start: usize, line: usize, column: usize) -> Token {
     let mut ident = String::new();
     let mut idx = start;
     let len = src.len();
@@ -440,26 +504,6 @@ fn parse_identifier(src: &Vec<char>, start: usize, line: usize, column: usize) -
             break;
         }
     }
-    let token_type = KEYWORDS
-        .iter()
-        .find_map(|&(kw, ref tt)| if kw == ident { Some(*tt) } else { None })
-        .unwrap_or(TokenType::Identifier);
+    let token_type = keyword_token(&ident);
     Token::new(ident, token_type, line, column)
-}
-
-fn parse_operators(_src: &Vec<char>, _start: usize, line: usize, column: usize, cur: char) -> Option<Token> {
-    match cur {
-        '=' => Some(Token::new("=".to_string(), TokenType::AssignOp(AssignOp::Assign), line, column)),
-        '!' => Some(Token::new("!".to_string(), TokenType::BinOp(BinOp::Not), line, column)),
-        '&' => Some(Token::new("&".to_string(), TokenType::Ampersand, line, column)),
-        '|' => Some(Token::new("|".to_string(), TokenType::Pipe, line, column)),
-        '+' => Some(Token::new("+".to_string(), TokenType::ArithOp(ArithOp::Add), line, column)),
-        '-' => Some(Token::new("-".to_string(), TokenType::ArithOp(ArithOp::Sub), line, column)),
-        '*' => Some(Token::new("*".to_string(), TokenType::ArithOp(ArithOp::Mul), line, column)),
-        '/' => Some(Token::new("/".to_string(), TokenType::ArithOp(ArithOp::Div), line, column)),
-        '%' => Some(Token::new("%".to_string(), TokenType::ArithOp(ArithOp::Mod), line, column)),
-        '<' => Some(Token::new("<".to_string(), TokenType::BinOp(BinOp::Less), line, column)),
-        '>' => Some(Token::new(">".to_string(), TokenType::BinOp(BinOp::Greater), line, column)),
-        _ => None,
-    }
 }

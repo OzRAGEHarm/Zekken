@@ -1,6 +1,6 @@
 [package]
 name = "zekken"
-version = "0.2.0"
+version = "1.0.0"
 edition = "2021"
 
 [dependencies]
@@ -11,9 +11,15 @@ clap = { version = "4.5", features = ["derive"] }
 lazy_static = "1.4"
 wasm-bindgen = "0.2.113"
 console_error_panic_hook = "0.1.7"
+hashbrown = "0.15"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Native-only HTTP support (client + server). WASM builds keep working by omitting these deps.
+tiny_http = "0.12"
+ureq = "2.12"
 
 [profile.dev]
-opt-level = "z"
+opt-level = 3
 lto = true
 codegen-units = 1
 panic = "abort"
@@ -22,7 +28,7 @@ debug = false
 incremental = false
 
 [profile.release]
-opt-level = "z"
+opt-level = 3
 lto = true
 codegen-units = 1
 panic = "abort"

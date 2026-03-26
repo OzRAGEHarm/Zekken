@@ -4,10 +4,11 @@
   <meta charset="UTF-8">
   <title>Docs: Types | Zekken</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" type="image/png" href="../../images/zekken_icon.png">
-  <link rel="stylesheet" href="../Docs/styles.css">
-  <script src="js/zekken_docs_highlighter.js" defer></script>
-</head>
+	  <link rel="icon" type="image/png" href="../../images/zekken_icon.png">
+	  <link rel="stylesheet" href="../Docs/styles.css?v=20260325">
+	  <script src="js/zekken_docs_highlighter.js?v=20260325" defer></script>
+	  <script src="js/script.js?v=20260326" defer></script>
+	</head>
 <body>
   <div class="navbar">
     <img src="../../images/zekken_icon.png" alt="Zekken Logo" class="logo-img">
@@ -28,7 +29,7 @@
   <div class="container">
     <header class="docs-header">
       <h1>Zekken Documentation</h1>
-      <p class="docs-lead">Official docs for writing, running, and exploring Zekken programs.</p>
+      <p class="docs-lead">Type system, runtime values, and method/cast behavior.</p>
     </header>
 
     <div class="docs-layout">
@@ -48,17 +49,175 @@
         <section class="docs-section">
           <span class="docs-page-label">Section 3 of 8</span>
           <h2>Types</h2>
-          <p>Current core types include:</p>
+
+          <h3 id="declared-types" class="doc-anchor"><a class="doc-anchor-link" href="#declared-types">Declared Types</a><a class="doc-anchor-hash" href="#declared-types" aria-label="Link to this section">#</a></h3>
+          <p>These are the types you can write in annotations:</p>
           <ul>
-            <li><code>int</code></li>
-            <li><code>float</code></li>
-            <li><code>string</code></li>
-            <li><code>bool</code></li>
-            <li><code>arr</code></li>
+            <li><code>int</code> - 64-bit integer</li>
+            <li><code>float</code> - 64-bit floating point</li>
+            <li><code>string</code> - UTF-8 text</li>
+            <li><code>bool</code> - true/false</li>
+            <li><code>arr</code> - ordered array</li>
+            <li><code>obj</code> - key/value object</li>
+            <li><code>fn</code> - function/lambda value type in declarations</li>
           </ul>
-          <div class="placeholder-card">
-            <strong>Coming soon:</strong> full type method reference, cast behavior table, and edge-case notes.
-          </div>
+
+          <h3 id="how-the-type-system-works" class="doc-anchor"><a class="doc-anchor-link" href="#how-the-type-system-works">How The Type System Works</a><a class="doc-anchor-hash" href="#how-the-type-system-works" aria-label="Link to this section">#</a></h3>
+          <p>
+            Zekken is <strong>explicitly typed</strong>: declarations require a type annotation, and values are checked against that type
+            during execution. This is different from traditional compile-time static typing.
+          </p>
+          <ul>
+            <li><strong>No inferred typing</strong>: <code>let x = 10</code> is a syntax error.</li>
+            <li><strong>Declaration checks</strong>: the initializer value must match the declared type.</li>
+            <li><strong>Assignment checks</strong>: reassigning a variable must keep the same declared type.</li>
+            <li><strong>Function parameter checks</strong>: argument values are validated against parameter types at call time.</li>
+            <li><strong>Containers are not generic</strong>: <code>arr</code> and <code>obj</code> can hold mixed runtime values.</li>
+          </ul>
+
+<pre><code class="language-zekken">// 1) Declaration type check
+let n: int = 10;
+let bad: int = 3.14; // Type Error (int &lt;- float)
+
+// 2) Assignment type check
+let x: string = "ABC123";
+x = 123 // Type Error (string &lt;- int)
+
+// 3) Mixed containers (no generics like arr&lt;int&gt;)
+let mixed: arr = [1, "two", true, {a: 3}];
+@println =&gt; |mixed|</code></pre>
+
+          <h3 id="runtime-value-variants" class="doc-anchor"><a class="doc-anchor-link" href="#runtime-value-variants">Runtime Value Variants</a><a class="doc-anchor-hash" href="#runtime-value-variants" aria-label="Link to this section">#</a></h3>
+          <p>Runtime also includes internal/native values:</p>
+          <ul>
+            <li><code>Function</code>, <code>NativeFunction</code></li>
+            <li><code>Complex</code>, <code>Vector</code>, <code>Matrix</code> runtime values</li>
+            <li><code>void</code></li>
+          </ul>
+
+		          <h3 id="type-methods" class="doc-anchor"><a class="doc-anchor-link" href="#type-methods">Type Methods</a><a class="doc-anchor-hash" href="#type-methods" aria-label="Link to this section">#</a></h3>
+		          <p>
+		            Methods are called with <code>value.method =&gt; |args|</code>. Some methods return a new value, while others mutate the receiver
+		            (noted below).
+		          </p>
+		          <p>
+		            In the signatures below, <code>value</code> means “an arbitrary runtime value” (it is <em>not</em> a declared type you can use in annotations).
+		          </p>
+
+		          <h4 id="universal-methods" class="doc-anchor"><a class="doc-anchor-link" href="#universal-methods">Universal Methods</a><a class="doc-anchor-hash" href="#universal-methods" aria-label="Link to this section">#</a></h4>
+		          <p>
+		            These methods exist on every runtime value.
+		          </p>
+		          <ul>
+		            <li><code>value.format =&gt; || -&gt; string</code> - Pretty-print a value (multi-line for arrays/objects) for debugging/logging.</li>
+		          </ul>
+		          <p>
+		            <code>format</code> is intended for readable output. If you need a compact single-line representation, cast to string instead
+		            (<code>.cast =&gt; |"string"|</code>).
+		          </p>
+<pre><code class="language-zekken">let a: arr = ["hi"];
+let compact: string = a.cast => |"string"|;
+let pretty: string = a.format => ||;
+@println => |compact|
+@println => |pretty|</code></pre>
+
+		          <h4 id="string-methods" class="doc-anchor"><a class="doc-anchor-link" href="#string-methods">String Methods</a><a class="doc-anchor-hash" href="#string-methods" aria-label="Link to this section">#</a></h4>
+		          <p>
+		            String methods never mutate the original string (strings are values). Most return a new string.
+		          </p>
+		          <ul>
+		            <li><code>s.length =&gt; || -&gt; int</code> - Character count.</li>
+		            <li><code>s.toUpper =&gt; || -&gt; string</code> - Uppercase conversion.</li>
+		            <li><code>s.toLower =&gt; || -&gt; string</code> - Lowercase conversion.</li>
+		            <li><code>s.trim =&gt; || -&gt; string</code> - Remove leading and trailing whitespace.</li>
+		            <li><code>s.split =&gt; |delimiter: string| -&gt; arr</code> - Split into an array of strings.</li>
+		          </ul>
+<pre><code class="language-zekken">let s: string = "  Hello World  ";
+let n: int = s.length => ||;
+let upper: string = s.toUpper => ||;
+let lower: string = s.toLower => ||;
+let trimmed: string = s.trim => ||;
+let parts: arr = s.split => |" "|;</code></pre>
+
+	          <h4 id="array-methods" class="doc-anchor"><a class="doc-anchor-link" href="#array-methods">Array Methods</a><a class="doc-anchor-hash" href="#array-methods" aria-label="Link to this section">#</a></h4>
+	          <p>
+	            Array methods are a mix of read-only queries and mutating operations. Mutating methods change the array in-place.
+	          </p>
+	          <ul>
+	            <li><code>a.length =&gt; || -&gt; int</code> - Number of elements.</li>
+	            <li><code>a.first =&gt; || -&gt; value</code> - First element (runtime error if empty).</li>
+	            <li><code>a.last =&gt; || -&gt; value</code> - Last element (runtime error if empty).</li>
+	            <li><code>a.join =&gt; |sep: string| -&gt; string</code> - Join elements with a separator (elements are stringified).</li>
+	            <li><code>a.push =&gt; |value: value| -&gt; void</code> - Append (mutates).</li>
+	            <li><code>a.pop =&gt; || -&gt; value</code> - Remove last (mutates, runtime error if empty).</li>
+	            <li><code>a.unshift =&gt; |value: value| -&gt; void</code> - Insert at front (mutates).</li>
+	            <li><code>a.shift =&gt; || -&gt; value</code> - Remove first (mutates, runtime error if empty).</li>
+	          </ul>
+<pre><code class="language-zekken">let nums: arr = [2, 4, 6];
+let len: int = nums.length => ||;
+let first: int = nums.first => ||;
+let last: int = nums.last => ||;
+nums.push => |8|
+let removed: int = nums.pop => ||;
+let front: int = nums.shift => ||;
+nums.unshift => |1|
+let joined: string = nums.join => |"-"|;</code></pre>
+	          <p>
+	            Note: <code>push</code>, <code>pop</code>, <code>shift</code>, and <code>unshift</code> mutate the array variable in-place, so call them on a named array (not a temporary expression).
+	          </p>
+	          <p>Because arrays can contain mixed runtime values, you should annotate based on what you expect at runtime:</p>
+<pre><code class="language-zekken">let a: arr = [1, "two"];
+let v: int = a.first => ||; // OK (first is 1)
+let w: int = a.last => ||;  // Type Error (last is "two")</code></pre>
+
+	          <h4 id="object-methods" class="doc-anchor"><a class="doc-anchor-link" href="#object-methods">Object Methods</a><a class="doc-anchor-hash" href="#object-methods" aria-label="Link to this section">#</a></h4>
+	          <p>
+	            Objects map string keys to values. These methods help you inspect and safely read fields.
+	          </p>
+	          <ul>
+	            <li><code>o.keys =&gt; || -&gt; arr</code> - Array of keys.</li>
+	            <li><code>o.values =&gt; || -&gt; arr</code> - Array of values.</li>
+	            <li><code>o.entries =&gt; || -&gt; arr</code> - Array of <code>[key, value]</code> pairs.</li>
+	            <li><code>o.hasKey =&gt; |key: string| -&gt; bool</code> - Whether a key exists.</li>
+	            <li><code>o.get =&gt; |key: string, default: value| -&gt; value</code> - Get a key, or return <code>default</code> if missing.</li>
+	          </ul>
+<pre><code class="language-zekken">let user: obj = { name: "RAGE", score: 10 };
+let keys: arr = user.keys => ||;
+let values: arr = user.values => ||;
+let entries: arr = user.entries => ||;
+let has_name: bool = user.hasKey => |"name"|;
+let title: string = user.get => |"title", "Untitled"|;</code></pre>
+	          <p><code>entries</code> returns an array of <code>[key, value]</code> pairs.</p>
+
+	          <h4 id="number-methods" class="doc-anchor"><a class="doc-anchor-link" href="#number-methods">Number Methods</a><a class="doc-anchor-hash" href="#number-methods" aria-label="Link to this section">#</a></h4>
+	          <p>
+	            Number methods apply to <code>int</code> and <code>float</code>. Rounding methods return an <code>int</code>.
+	          </p>
+	          <ul>
+	            <li><code>n.isOdd =&gt; || -&gt; bool</code> - True if the value is odd.</li>
+	            <li><code>n.isEven =&gt; || -&gt; bool</code> - True if the value is even.</li>
+	            <li><code>f.round =&gt; || -&gt; int</code> - Round to nearest integer.</li>
+	            <li><code>f.floor =&gt; || -&gt; int</code> - Round down.</li>
+	            <li><code>f.ceil =&gt; || -&gt; int</code> - Round up.</li>
+	          </ul>
+<pre><code class="language-zekken">let a: int = 5;
+let odd: bool = a.isOdd => ||;
+let even: bool = a.isEven => ||;
+
+let b: float = 7.9;
+let r: int = b.round => ||;
+let f: int = b.floor => ||;
+let c: int = b.ceil => ||;</code></pre>
+	          <p><code>float</code> also supports <code>isOdd</code> and <code>isEven</code> (based on the numeric value).</p>
+
+          <h3 id="casting" class="doc-anchor"><a class="doc-anchor-link" href="#casting">Casting</a><a class="doc-anchor-hash" href="#casting" aria-label="Link to this section">#</a></h3>
+          <p>All values support <code>.cast =&gt; |"type"|</code> for supported conversions.</p>
+<pre><code class="language-zekken">let i: int = "42".cast => |"int"|;
+let f: float = "3.14".cast => |"float"|;
+let b: bool = "true".cast => |"bool"|;
+let s: string = 99.cast => |"string"|;</code></pre>
+          <p>Supported cast targets: <code>"int"</code>, <code>"float"</code>, <code>"bool"</code>, <code>"string"</code>.</p>
+          <p>Note: casting from <code>string</code> to a numeric/bool type only works for valid values (e.g. <code>"10"</code>, <code>"3.14"</code>, <code>"true"</code>).</p>
 
           <div class="docs-pager">
             <a href="syntax-basics.html">Previous: Syntax Basics</a>

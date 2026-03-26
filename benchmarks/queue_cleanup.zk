@@ -1,0 +1,32 @@
+let ENQUEUE_TOTAL: int = 90000;
+
+func run |total: int| {
+  let q: obj = @queue => ||;
+  let i: int = 0;
+  let checksum: int = 0;
+
+  while i < total {
+    q.enqueue => |((i * 31) + 7) % 1000003|
+
+    if i % 2 == 0 {
+      if q.is_empty => || == false {
+        let v: int = q.dequeue => ||;
+        checksum += v
+      }
+    }
+
+    i += 1
+  }
+
+  while q.is_empty => || == false {
+    let v: int = q.dequeue => ||;
+    checksum += v
+  }
+
+  return checksum;
+}
+
+let checksum: int = run => |ENQUEUE_TOTAL|;
+@println => |"Benchmark: queue_cleanup"|
+@println => |"Operations: " + (ENQUEUE_TOTAL * 6)|
+@println => |"Checksum: " + checksum|

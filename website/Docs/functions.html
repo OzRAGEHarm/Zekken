@@ -4,10 +4,11 @@
   <meta charset="UTF-8">
   <title>Docs: Functions | Zekken</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" type="image/png" href="../../images/zekken_icon.png">
-  <link rel="stylesheet" href="../Docs/styles.css">
-  <script src="js/zekken_docs_highlighter.js" defer></script>
-</head>
+	  <link rel="icon" type="image/png" href="../../images/zekken_icon.png">
+	  <link rel="stylesheet" href="../Docs/styles.css?v=20260325">
+	  <script src="js/zekken_docs_highlighter.js?v=20260325" defer></script>
+	  <script src="js/script.js?v=20260326" defer></script>
+	</head>
 <body>
   <div class="navbar">
     <img src="../../images/zekken_icon.png" alt="Zekken Logo" class="logo-img">
@@ -28,7 +29,7 @@
   <div class="container">
     <header class="docs-header">
       <h1>Zekken Documentation</h1>
-      <p class="docs-lead">Official docs for writing, running, and exploring Zekken programs.</p>
+      <p class="docs-lead">Function declarations, lambda values, and call semantics.</p>
     </header>
 
     <div class="docs-layout">
@@ -42,21 +43,137 @@
         <a href="errors.html">Errors</a>
         <a href="examples.html">Examples</a>
         <a href="roadmap.html">Roadmap</a>
-      </aside>
+	      </aside>
 
-      <main class="docs-main">
-        <section class="docs-section">
-          <span class="docs-page-label">Section 4 of 8</span>
-          <h2>Functions</h2>
-          <p>User functions and built-ins both use call blocks wrapped by pipe arguments.</p>
-          <div class="placeholder-card">
-            <strong>Coming soon:</strong> declaration syntax, return rules, recursion, and parameter type examples.
-          </div>
+	      <main class="docs-main">
+	        <section class="docs-section">
+	          <span class="docs-page-label">Section 4 of 8</span>
+	          <h2>Functions</h2>
 
-          <div class="docs-pager">
-            <a href="types.html">Previous: Types</a>
-            <a href="libraries.html">Next: Libraries</a>
-          </div>
+	          <h3 id="declaring-functions" class="doc-anchor"><a class="doc-anchor-link" href="#declaring-functions">Declaring Functions</a><a class="doc-anchor-hash" href="#declaring-functions" aria-label="Link to this section">#</a></h3>
+	          <p>
+	            Zekken declares named functions with <code>func</code>. Parameters are written inside pipes and must include types.
+	            Use <code>return</code> to return a value. If a function finishes without a return, it evaluates to <code>void</code>.
+	          </p>
+<pre><code class="language-zekken">func add |a: int, b: int| {
+  return a + b;
+}
+
+func greet |name: string| {
+  @println => |"Hello, " + name|
+  // no return => void
+}</code></pre>
+
+	          <h3 id="calling-functions" class="doc-anchor"><a class="doc-anchor-link" href="#calling-functions">Calling Functions</a><a class="doc-anchor-hash" href="#calling-functions" aria-label="Link to this section">#</a></h3>
+	          <p>
+	            All calls use the same shape: <code>callee => |arg1, arg2|</code>. Zero-argument calls use <code>||</code>.
+	          </p>
+<pre><code class="language-zekken">let sum: int = add => |1, 2|;
+@println => |sum|
+
+let nums: arr = [1, 2, 3];
+let first: int = nums.first => ||;
+@println => |first|</code></pre>
+
+	          <h3 id="return-values-and-types" class="doc-anchor"><a class="doc-anchor-link" href="#return-values-and-types">Return Values And Types</a><a class="doc-anchor-hash" href="#return-values-and-types" aria-label="Link to this section">#</a></h3>
+	          <p>
+	            Zekken checks argument values against parameter types at call time, and checks <code>return</code> values against the
+	            receiving variable's declared type.
+	          </p>
+<pre><code class="language-zekken">func half |n: float| {
+  return n / 2.0;
+}
+
+let ok: float = half => |9.0|;
+// let bad: int = half => |9.0|; // Type Error (int <- float)</code></pre>
+
+	          <h3 id="lambda-values" class="doc-anchor"><a class="doc-anchor-link" href="#lambda-values">Lambda Values (Anonymous Functions)</a><a class="doc-anchor-hash" href="#lambda-values" aria-label="Link to this section">#</a></h3>
+	          <p>
+	            Lambdas are values. The syntax uses <code>fn -></code> followed by a normal parameter list and block body.
+	            Because the lambda is assigned to a variable, the <code>let</code> statement ends with <code>;</code>.
+	          </p>
+<pre><code class="language-zekken">let sub: fn -> |a: int, b: int| {
+  return a - b;
+};
+
+let out: int = sub => |5, 3|;
+@println => |out|</code></pre>
+
+	          <h3 id="passing-functions-around" class="doc-anchor"><a class="doc-anchor-link" href="#passing-functions-around">Passing Functions Around</a><a class="doc-anchor-hash" href="#passing-functions-around" aria-label="Link to this section">#</a></h3>
+	          <p>
+	            The type annotation for function values is <code>fn</code>. Zekken currently does not encode full function signatures
+	            in the type annotation, so you should document expected arguments in your API design and tests.
+	          </p>
+<pre><code class="language-zekken">func apply_twice |f: fn, x: int| {
+  let a: int = f => |x|;
+  let b: int = f => |a|;
+  return b;
+}
+
+let inc: fn -> |n: int| { return n + 1; };
+let y: int = apply_twice => |inc, 10|;
+@println => |y| // 12</code></pre>
+
+		          <h3 id="built-ins-and-native-functions" class="doc-anchor"><a class="doc-anchor-link" href="#built-ins-and-native-functions">Built-Ins And Native Functions</a><a class="doc-anchor-hash" href="#built-ins-and-native-functions" aria-label="Link to this section">#</a></h3>
+		          <p>
+		            Built-ins are native functions. The only difference is that built-ins use the <code>@</code> prefix (for example,
+		            <code>@println</code> and <code>@input</code>). Native functions exposed by libraries are stored as members on library objects
+		            and are called via member access (for example, <code>math.sqrt</code>) without the <code>@</code> prefix. If you import a
+		            library function directly (for example, <code>use { hex_encode } from encoding;</code>), you call it like a normal function
+		            (<code>hex_encode => |...|</code>) with no <code>@</code> prefix. Both forms use the same call operator: <code>=> |...|</code>.
+		          </p>
+<pre><code class="language-zekken">use math;
+use { hex_encode } from encoding;
+
+@println => |"Type something:"|
+let name: string = @input => |"Name: "|;
+@println => |"hi " + name|
+
+let encoded: string = hex_encode => |"Hello World!"|; // 48656C6C6F20576F726C6421
+@println => |encoded|
+
+let root: float = math.sqrt => |9.0|; // 3.0
+@println => |root|</code></pre>
+
+	          <h3 id="nested-calls" class="doc-anchor"><a class="doc-anchor-link" href="#nested-calls">Nested Calls</a><a class="doc-anchor-hash" href="#nested-calls" aria-label="Link to this section">#</a></h3>
+	          <p>
+	            You can nest calls inside argument lists. Because calls also use pipes, nested calls look like "extra" pipe characters.
+	            If you find this hard to read, assign the inner call to a variable first.
+	          </p>
+<pre><code class="language-zekken">// Nested
+@println => |add => |1, 2|||
+
+// Often clearer
+let s: int = add => |1, 2|;
+@println => |s|</code></pre>
+
+	          <h3 id="notes-on-terminators" class="doc-anchor"><a class="doc-anchor-link" href="#notes-on-terminators">Notes On Terminators</a><a class="doc-anchor-hash" href="#notes-on-terminators" aria-label="Link to this section">#</a></h3>
+	          <ul>
+	            <li><code>let</code>/<code>const</code> declarations end with <code>;</code>.</li>
+	            <li>Named function declarations (<code>func name ... { ... }</code>) do not use a trailing semicolon.</li>
+	            <li>Many other statements (like <code>@println</code> calls) do not use semicolons.</li>
+	          </ul>
+
+	          <h3 id="optional-explicit-return-types" class="doc-anchor"><a class="doc-anchor-link" href="#optional-explicit-return-types">Optional Explicit Return Types</a><a class="doc-anchor-hash" href="#optional-explicit-return-types" aria-label="Link to this section">#</a></h3>
+	          <p>
+	            You can optionally annotate a function's return type using <code>-></code>. If present, Zekken enforces that the returned
+	            value matches the annotation at runtime.
+	          </p>
+<pre><code class="language-zekken">func add |a: int, b: int| -> int { // Type error (int <- float)
+  return "This is a string";
+}
+
+func half |n: float| {
+  return n / 2.0;
+}
+
+@println => |add => |1, 2||
+@println => |half => |9.0||</code></pre>
+
+	          <div class="docs-pager">
+	            <a href="types.html">Previous: Types</a>
+	            <a href="libraries.html">Next: Libraries</a>
+	          </div>
         </section>
       </main>
     </div>

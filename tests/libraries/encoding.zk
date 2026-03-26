@@ -1,0 +1,25 @@
+use encoding;
+
+let raw: string = "Hello, Zekken!";
+@println => |"raw: " + raw|
+
+let b64: string = encoding.base64_encode => |raw|;
+@println => |"base64: " + b64|
+
+let b64_decoded: string = encoding.base64_decode => |b64|;
+@println => |"base64 decoded: " + b64_decoded|
+
+let hex_val: string = encoding.hex_encode => |raw|;
+@println => |"hex: " + hex_val|
+
+let hex_decoded: string = encoding.hex_decode => |hex_val|;
+@println => |"hex decoded: " + hex_decoded|
+
+let url_raw: string = "https://example.com/a b?x=1&y=2";
+let url_encoded: string = encoding.url_encode => |url_raw|;
+@println => |"url encoded: " + url_encoded|
+
+let url_decoded: string = encoding.url_decode => |url_encoded|;
+@println => |"url decoded: " + url_decoded|
+
+@println => |"All tests for the encoding library complete!"|

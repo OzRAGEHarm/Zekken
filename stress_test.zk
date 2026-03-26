@@ -1,0 +1,95 @@
+use math;
+
+let SIZE: int = 24;
+let ROUNDS: int = 6;
+
+func build_matrix |n: int, seed: float| {
+  let m: arr = [];
+  let i: int = 0;
+  while i < n {
+    let row: arr = [];
+    let j: int = 0;
+    while j < n {
+      let x: float = (i * 0.137) + (j * 0.271) + seed;
+      let v: float = (math.sin => |x|) + (math.cos => |x / 2.0|);
+      row += [v]
+      j += 1
+    }
+    m += [row]
+    i += 1
+  }
+  return m;
+}
+
+func matmul_square |a: arr, b: arr, n: int| {
+  let out: arr = [];
+  let i: int = 0;
+  while i < n {
+    let row: arr = [];
+    let j: int = 0;
+    while j < n {
+      let sum: float = 0.0;
+      let k: int = 0;
+      while k < n {
+        sum += a[i][k] * b[k][j]
+        k += 1
+      }
+      row += [sum]
+      j += 1
+    }
+    out += [row]
+    i += 1
+  }
+  return out;
+}
+
+func stabilize |m: arr, n: int| {
+  let out: arr = [];
+  let i: int = 0;
+  while i < n {
+    let row: arr = [];
+    let j: int = 0;
+    while j < n {
+      let v: float = m[i][j];
+      if v < 0.0 {
+        row += [(-v) * 0.01]
+      } else {
+        row += [v * 0.01]
+      }
+      j += 1
+    }
+    out += [row]
+    i += 1
+  }
+  return out;
+}
+
+func checksum |m: arr, n: int| {
+  let total: float = 0.0;
+  let i: int = 0;
+  while i < n {
+    let j: int = 0;
+    while j < n {
+      total += m[i][j]
+      j += 1
+    }
+    i += 1
+  }
+  return total;
+}
+
+let a: arr = build_matrix => |SIZE, 0.35|;
+let b: arr = build_matrix => |SIZE, 1.75|;
+
+let round: int = 0;
+while round < ROUNDS {
+  let c: arr = matmul_square => |a, b, SIZE|;
+  a = stabilize => |c, SIZE|
+  b = matmul_square => |b, a, SIZE|
+  round += 1
+}
+
+let final_sum: float = checksum => |a, SIZE|;
+@println => |"Stress test complete."|
+@println => |"SIZE: " + SIZE + " ROUNDS: " + ROUNDS|
+@println => |"Checksum: " + final_sum|

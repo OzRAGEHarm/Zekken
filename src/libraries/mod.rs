@@ -3,8 +3,11 @@
 pub mod math;
 pub mod fs;
 pub mod os;
+pub mod path;
+pub mod encoding;
+pub mod http;
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::OnceLock;
 use crate::environment::Environment;
 use crate::errors::ZekkenError;
@@ -23,6 +26,9 @@ fn init_libraries() -> HashMap<&'static str, LibraryFunction> {
     map.insert("math", math::register);
     map.insert("fs", fs::register);
     map.insert("os", os::register);
+    map.insert("path", path::register);
+    map.insert("encoding", encoding::register);
+    map.insert("http", http::register);
     
     map
 }

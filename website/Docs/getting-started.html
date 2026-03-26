@@ -4,10 +4,11 @@
   <meta charset="UTF-8">
   <title>Docs: Getting Started | Zekken</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" type="image/png" href="../../images/zekken_icon.png">
-  <link rel="stylesheet" href="../Docs/styles.css">
-  <script src="js/zekken_docs_highlighter.js" defer></script>
-</head>
+	  <link rel="icon" type="image/png" href="../../images/zekken_icon.png">
+	  <link rel="stylesheet" href="../Docs/styles.css?v=20260325">
+	  <script src="js/zekken_docs_highlighter.js?v=20260325" defer></script>
+	  <script src="js/script.js?v=20260326" defer></script>
+	</head>
 <body>
   <div class="navbar">
     <img src="../../images/zekken_icon.png" alt="Zekken Logo" class="logo-img">
@@ -28,7 +29,7 @@
   <div class="container">
     <header class="docs-header">
       <h1>Zekken Documentation</h1>
-      <p class="docs-lead">Official docs for writing, running, and exploring Zekken programs.</p>
+      <p class="docs-lead">Current-version reference for CLI setup, running scripts, and workflow.</p>
     </header>
 
     <div class="docs-layout">
@@ -44,57 +45,54 @@
         <a href="roadmap.html">Roadmap</a>
       </aside>
 
-      <main class="docs-main">
-        <section class="docs-section">
-          <span class="docs-page-label">Section 1 of 8</span>
-          <h2>Getting Started</h2>
-          <p>There are two ways to run Zekken: the current source-based workflow and the upcoming installer workflow.</p>
+	      <main class="docs-main">
+	        <section class="docs-section">
+	          <span class="docs-page-label">Section 1 of 8</span>
+	          <h2>Getting Started</h2>
+	          <p>
+	            You can download the latest version of Zekken from the
+	            <a href="../Download/download.html">Download page</a>, or build from source below.
+	          </p>
 
-          <h3>Current: Build From Source</h3>
-          <p>Build and run from the repository root:</p>
+	          <h3 id="prerequisites" class="doc-anchor"><a class="doc-anchor-link" href="#prerequisites">Prerequisites</a><a class="doc-anchor-hash" href="#prerequisites" aria-label="Link to this section">#</a></h3>
+	          <ul>
+	            <li>Rust toolchain installed (<code>rustc</code>, <code>cargo</code>)</li>
+            <li>Git installed</li>
+          </ul>
+
+          <h3 id="get-source" class="doc-anchor"><a class="doc-anchor-link" href="#get-source">1. Get Source</a><a class="doc-anchor-hash" href="#get-source" aria-label="Link to this section">#</a></h3>
+<pre><code>git clone https://github.com/OzRAGEHarm/Zekken.git
+cd Zekken</code></pre>
+
+          <h3 id="build-cli" class="doc-anchor"><a class="doc-anchor-link" href="#build-cli">2. Build CLI</a><a class="doc-anchor-hash" href="#build-cli" aria-label="Link to this section">#</a></h3>
           <div class="platform-grid">
             <article class="platform-card">
-              <h4>Windows</h4>
-<pre><code>git clone https://github.com/OzRAGEHarm/Zekken.git
-cd Zekken
-
-.\scripts\build-cli.bat
-# or .\scripts\build.bat cli
-
-.\target\release\zekken.exe run main.zk
-# or cargo run --release run main.zk</code></pre>
+              <h4>Linux / macOS</h4>
+<pre><code>./scripts/build-cli.sh
+# or selectable script:
+./scripts/build.sh cli</code></pre>
             </article>
             <article class="platform-card">
-              <h4>Linux/macOS</h4>
-<pre><code>git clone https://github.com/OzRAGEHarm/Zekken.git
-cd Zekken
-
-./scripts/build-cli.sh
-# or ./scripts/build.sh cli
-
-./target/release/zekken run main.zk
-# or cargo run --release run main.zk</code></pre>
+              <h4>Windows</h4>
+<pre><code>.\scripts\build-cli.bat
+# or selectable script:
+.\scripts\build.bat cli</code></pre>
             </article>
           </div>
-          <h3>Future: Installer-Based Setup</h3>
-          <p>
-            A planned installer will install Zekken globally and update your environment so you can run it directly from any terminal.
-          </p>
-<pre><code># Planned usage after installer setup
-zekken run main.zk
-zekken repl
-zekken --help</code></pre>
-          <p>
-            Goal: no manual full-path executable calls, just <code>zekken &lt;cmd&gt;</code> once installation is complete.
-          </p>
 
-          <h3>Run And Verify</h3>
-<pre><code># Verify command is visible in your shell (planned installer flow)
-zekken --version
+          <h3 id="run-script" class="doc-anchor"><a class="doc-anchor-link" href="#run-script">3. Run Script</a><a class="doc-anchor-hash" href="#run-script" aria-label="Link to this section">#</a></h3>
+<pre><code>./target/release/zekken run main.zk
+# or:
+cargo run --release run main.zk</code></pre>
 
-# Run a file
-zekken run main.zk</code></pre>
-          <p>You can also test programs in the <a href="../Demo/demo.html">website demo</a>.</p>
+          <h3 id="cli-command-reference" class="doc-anchor"><a class="doc-anchor-link" href="#cli-command-reference">CLI Command Reference</a><a class="doc-anchor-hash" href="#cli-command-reference" aria-label="Link to this section">#</a></h3>
+          <p>The current CLI subcommands are:</p>
+          <ul>
+            <li><code>zekken run &lt;file&gt;</code> - Run a script.</li>
+            <li><code>zekken repl</code> - Interactive REPL session.</li>
+            <li><code>zekken help</code> - View help for all commands or a specific subcommand.</li>
+            <li><code>zekken debug &lt;ast/tokens&gt; &lt;file&gt;</code> - Dumps either the Abstract Syntax Tree (AST) or token stream from the lexer for a given file.</li>
+          </ul>
 
           <div class="docs-pager">
             <span class="disabled">Previous</span>

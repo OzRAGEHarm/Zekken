@@ -1,42 +1,55 @@
-// use fs (file system) library
-use fs;
+use fs; // file system library
 
-// create a file
-let user_input: string = @input => |"Enter some text: "|;
-fs.write_file => |"data.txt", user_input|
+let file_path: string = "data.txt";
+let copy_path: string = "data_copy.txt";
+let moved_path: string = "data_moved.txt";
+let dir_path: string = "test_dir";
 
-// read file content
-let data: string = fs.read_file => |"data.txt"|; // read the file
+// Write + append
+fs.write_file => |file_path, "line1\nline2"|
+fs.append_file => |file_path, "\nline3"|
 
-// print the content of the file
-@println => |"Data.txt: " + data|
+let data: string = fs.read_file => |file_path|;
+@println => |"File data: " + data|
 
-// read directory content
-data = fs.read_dir => |"tests"| // read the directory
+let lines: arr = fs.read_lines => |file_path|;
+@println => |"Read lines: " + lines|
 
-// print the contents of the directory
-@println => |"Read Directory: " + data|
+// Copy + stat + rename
+let copied_bytes: int = fs.copy_file => |file_path, copy_path|;
+@println => |"Bytes copied: " + copied_bytes|
 
-// create directory
-fs.create_dir => |"test_dir"| // create a test directory
-data = fs.exists => |"test_dir"| // check if the directory exists
-@println => |"Directory exists: " + data| // true
+let stats: obj = fs.stat => |copy_path|;
+@println => |"Stat size: " + stats.size|
+@println => |"Stat is_file: " + stats.is_file|
+@println => |"Stat readonly: " + stats.readonly|
+@println => |"Stat modified_unix: " + stats.modified_unix|
 
-// is file and is directory
-data = fs.is_file => |"data.txt"| // check if the path is a file
-@println => |"Is file: " + data| // true
+fs.rename => |copy_path, moved_path|
+let moved_exists: bool = fs.exists => |moved_path|;
+@println => |"Moved exists: " + moved_exists|
 
-data = fs.is_dir => |"test_dir"| // check if the path is a directory
-@println => |"Is directory: " + data| // true
+// Directory + path checks
+fs.create_dir => |dir_path|
+let dir_exists: bool = fs.exists => |dir_path|;
+let path_is_file: bool = fs.is_file => |file_path|;
+let path_is_dir: bool = fs.is_dir => |dir_path|;
+@println => |"Dir exists: " + dir_exists|
+@println => |"Is file: " + path_is_file|
+@println => |"Is dir: " + path_is_dir|
 
-// remove file and directory and check if they exist afterwards
-fs.remove_dir => |"test_dir"| // remove the test directory
-data = fs.exists => |"test_dir"| // check if the directory exists
-@println => |"Directory exists after removal: " + data| // false
+let dir_entries: arr = fs.read_dir => |"tests"|;
+@println => |"Read dir entries: " + dir_entries|
 
-fs.remove_file => |"data.txt"| // remove the file
-data = fs.exists => |"data.txt"| // check if the file exists
-@println => |"File exists after removal: " + data| // false
+// Cleanup
+fs.remove_file => |file_path|
+fs.remove_file => |moved_path|
+fs.remove_dir => |dir_path|
 
-
-@println => |"All tests for the fs (file system) library complete!"|
+let file_exists_after: bool = fs.exists => |file_path|;
+let moved_exists_after: bool = fs.exists => |moved_path|;
+let dir_exists_after: bool = fs.exists => |dir_path|;
+@println => |"File exists after cleanup: " + file_exists_after|
+@println => |"Moved file exists after cleanup: " + moved_exists_after|
+@println => |"Dir exists after cleanup: " + dir_exists_after|
+@println => |"All tests for the fs library complete!"|

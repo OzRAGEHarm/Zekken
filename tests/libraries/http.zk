@@ -1,0 +1,63 @@
+use http;
+
+// Full HTTP library test:
+// - Offline helpers: build_query / parse_query
+// - Server: listen / accept / respond
+//
+// Run:
+//   zekken run tests/libraries/http.zk
+//
+// Then open:
+//   http://127.0.0.1:8080
+//
+// Stop with Ctrl+C.
+
+// Offline helpers (no network).
+let params: obj = {a: "hi there", b: 45, c: "100%"};
+let qs: string = http.build_query => |params|;
+let parsed: obj = http.parse_query => |qs|;
+@println => |qs|
+@println => |parsed.format => |||
+
+// Interactive server test.
+let html: string = "<!doctype html>\n<html>\n  <head>\n    <meta charset=\"utf-8\"/>\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>\n    <title>Zekken HTTP Counter</title>\n    <style>\n      body { font-family: system-ui, sans-serif; padding: 24px; }\n      #count { font-weight: 700; }\n      button { padding: 10px 14px; font-size: 16px; }\n      .card { max-width: 520px; border: 1px solid #ddd; border-radius: 10px; padding: 18px; }\n    </style>\n  </head>\n  <body>\n    <div class=\"card\">\n      <h1>Zekken HTTP</h1>\n      <p>Server-side counter: <span id=\"count\">?</span></p>\n      <button id=\"btn\">Click me</button>\n      <p style=\"color:#666\">This page calls <code>/api/incr</code> on each click.</p>\n    </div>\n    <script>\n      async function refresh() {\n        const r = await fetch('/api/count');\n        const j = await r.json();\n        document.getElementById('count').textContent = String(j.count);\n      }\n      async function incr() {\n        const r = await fetch('/api/incr', { method: 'POST' });\n        const j = await r.json();\n        document.getElementById('count').textContent = String(j.count);\n      }\n      document.getElementById('btn').addEventListener('click', incr);\n      refresh();\n    </script>\n  </body>\n</html>\n";
+
+let html_headers: obj = {"content-type": "text/html; charset=utf-8"};
+let cors_headers: obj = {"access-control-allow-origin": "*", "access-control-allow-methods": "GET, POST, OPTIONS", "access-control-allow-headers": "content-type"};
+let json_headers: obj = {"content-type": "application/json; charset=utf-8", "access-control-allow-origin": "*"};
+
+let server: obj = http.listen => |"127.0.0.1:8080"|;
+@println => |"HTTP server running: http://127.0.0.1:8080"|
+@println => |"Endpoints: GET /  GET /api/count  POST /api/incr"|
+
+let counter: int = 0;
+
+while true {
+  let req: obj = server.accept => ||;
+
+  let id: int = req.id;
+  let method: string = req.method;
+  let path: string = req.path;
+
+  if path == "/" {
+    server.respond => |id, {status: 200, headers: html_headers, body: html}|
+  } else if path == "/api/count" {
+    if method == "OPTIONS" {
+      server.respond => |id, {status: 204, headers: cors_headers, body: ""}|
+    } else {
+      server.respond => |id, {status: 200, headers: json_headers, body: "{\"count\": " + counter.cast => |"string"| + "}"}|
+    }
+  } else if path == "/api/incr" {
+    if method == "OPTIONS" {
+      server.respond => |id, {status: 204, headers: cors_headers, body: ""}|
+    } else if method == "POST" {
+      counter += 1
+      server.respond => |id, {status: 200, headers: json_headers, body: "{\"count\": " + counter.cast => |"string"| + "}"}|
+    } else {
+      server.respond => |id, {status: 405, body: "Method Not Allowed"}|
+    }
+  } else {
+    server.respond => |id, {status: 404, body: "Not Found"}|
+  }
+}
+

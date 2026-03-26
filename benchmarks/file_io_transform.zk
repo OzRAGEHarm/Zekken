@@ -1,0 +1,35 @@
+use fs;
+
+let PATH: string = "bench_io_temp.txt";
+let ROUNDS: int = 450;
+
+func build_blob |round: int| {
+  let i: int = 0;
+  let s: string = "";
+  while i < 40 {
+    s += "line-" + round + "-" + i + "\n"
+    i += 1
+  }
+  return s;
+}
+
+func run |path: string, rounds: int| {
+  let i: int = 0;
+  let checksum: int = 0;
+
+  while i < rounds {
+    let payload: string = build_blob => |i|;
+    fs.write_file => |path, payload|
+    let data: string = fs.read_file => |path|;
+    checksum += data.length => ||
+    i += 1
+  }
+
+  fs.remove_file => |path|
+  return checksum;
+}
+
+let checksum: int = run => |PATH, ROUNDS|;
+@println => |"Benchmark: file_io_transform"|
+@println => |"Operations: " + (ROUNDS * 3)|
+@println => |"Checksum: " + checksum|

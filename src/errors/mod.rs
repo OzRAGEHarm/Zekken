@@ -210,7 +210,17 @@ impl ZekkenError {
         }
     }
     pub fn runtime(msg: &str, line: usize, column: usize, details: Option<&str>) -> Self {
-        let ctx = ErrorContext::from_env(line, column);
+        Self::runtime_with_span(msg, line, column, 1, details)
+    }
+
+    pub fn runtime_with_span(
+        msg: &str,
+        line: usize,
+        column: usize,
+        span_len: usize,
+        details: Option<&str>,
+    ) -> Self {
+        let ctx = ErrorContext::from_env_with_span(line, column, Some(span_len));
         Self {
             kind: ErrorKind::Runtime,
             message: msg.to_string(),
@@ -218,30 +228,25 @@ impl ZekkenError {
             extra: details.map(|d| d.to_string()),
         }
     }
-    pub fn runtime_with_span(msg: &str, line: usize, column: usize, span_len: usize, details: Option<&str>) -> Self {
-        let ctx = ErrorContext::from_env_with_span(line, column, Some(span_len.max(1)));
-        Self {
-            kind: ErrorKind::Runtime,
-            message: msg.to_string(),
-            context: ctx,
-            extra: details.map(|d| d.to_string()),
-        }
-    }
-    pub fn type_error(msg: &str, expected: &str, found: &str, line: usize, column: usize) -> Self {
-        let ctx = ErrorContext::from_env(line, column);
-        
-        
+
+    pub fn type_error_with_span(
+        msg: &str,
+        expected: &str,
+        found: &str,
+        line: usize,
+        column: usize,
+        span_len: usize,
+    ) -> Self {
+        let ctx = ErrorContext::from_env_with_span(line, column, Some(span_len));
         let extra = format!(
             "{} {}{}\n{} {}{}\n",
             colorize("  expected:", "\x1b[1;90m"),
             colorize(expected, "\x1b[1;32m"),
-            colorize("", "\x1b[0m"),        
+            colorize("", "\x1b[0m"),
             colorize("  found:   ", "\x1b[1;90m"),
-            colorize(found, "\x1b[1;31m"),   
-            colorize("", "\x1b[0m")    
+            colorize(found, "\x1b[1;31m"),
+            colorize("", "\x1b[0m")
         );
-        
-
         Self {
             kind: ErrorKind::Type,
             message: msg.to_string(),
@@ -249,21 +254,43 @@ impl ZekkenError {
             extra: Some(extra),
         }
     }
-    pub fn reference(msg: &str, kind: &str, line: usize, column: usize) -> Self {
-        let ctx = ErrorContext::from_env(line, column);
-        
+
+    pub fn reference_with_span(
+        msg: &str,
+        kind: &str,
+        line: usize,
+        column: usize,
+        span_len: usize,
+    ) -> Self {
+        let ctx = ErrorContext::from_env_with_span(line, column, Some(span_len));
         let extra = format!(
             "{} {}{}\n",
             colorize("  kind:", "\x1b[1;90m"),
             colorize(kind, "\x1b[1;31m"),
             colorize("", "\x1b[0m")
         );
-        
         Self {
             kind: ErrorKind::Reference,
             message: msg.to_string(),
             context: ctx,
             extra: Some(extra),
+        }
+    }
+
+    pub fn type_error(msg: &str, expected: &str, found: &str, line: usize, column: usize) -> Self {
+        Self::type_error_with_span(msg, expected, found, line, column, 1)
+    }
+    #[allow(dead_code)]
+    pub fn reference(msg: &str, kind: &str, line: usize, column: usize) -> Self {
+        Self::reference_with_span(msg, kind, line, column, 1)
+    }
+    pub fn _legacy_runtime_no_span(msg: &str, line: usize, column: usize, details: Option<&str>) -> Self {
+        let ctx = ErrorContext::from_env(line, column);
+        Self {
+            kind: ErrorKind::Runtime,
+            message: msg.to_string(),
+            context: ctx,
+            extra: details.map(|d| d.to_string()),
         }
     }
     pub fn internal(msg: &str) -> Self {

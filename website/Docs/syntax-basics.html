@@ -4,10 +4,11 @@
   <meta charset="UTF-8">
   <title>Docs: Syntax Basics | Zekken</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" type="image/png" href="../../images/zekken_icon.png">
-  <link rel="stylesheet" href="../Docs/styles.css">
-  <script src="js/zekken_docs_highlighter.js" defer></script>
-</head>
+	  <link rel="icon" type="image/png" href="../../images/zekken_icon.png">
+	  <link rel="stylesheet" href="../Docs/styles.css?v=20260325">
+	  <script src="js/zekken_docs_highlighter.js?v=20260325" defer></script>
+	  <script src="js/script.js?v=20260326" defer></script>
+	</head>
 <body>
   <div class="navbar">
     <img src="../../images/zekken_icon.png" alt="Zekken Logo" class="logo-img">
@@ -28,7 +29,7 @@
   <div class="container">
     <header class="docs-header">
       <h1>Zekken Documentation</h1>
-      <p class="docs-lead">Official docs for writing, running, and exploring Zekken programs.</p>
+      <p class="docs-lead">Core syntax reference for declarations, control flow, modules, and calls.</p>
     </header>
 
     <div class="docs-layout">
@@ -47,15 +48,181 @@
       <main class="docs-main">
         <section class="docs-section">
           <span class="docs-page-label">Section 2 of 8</span>
-          <h2>Syntax Basics</h2>
-          <p>Variables, calls, and arrays use a compact syntax:</p>
-<pre><code class="language-zekken">let name: string = "RAGE";
-let nums: arr = [2, 4, 6];
-nums.push => |8|
+	          <h2>Syntax Basics</h2>
 
-@println => |"Hello, " + name|
-@println => |"first: " + nums.first => |||</code></pre>
-          <p>Zero-argument calls are valid with <code>=&gt; ||</code>, including nested calls.</p>
+	          <h3 id="quick-rules" class="doc-anchor"><a class="doc-anchor-link" href="#quick-rules">Quick Rules</a><a class="doc-anchor-hash" href="#quick-rules" aria-label="Link to this section">#</a></h3>
+	          <ul>
+	            <li><strong>No inferred typing</strong>: <code>let</code>/<code>const</code> require an explicit type annotation.</li>
+	            <li><strong>Blocks use braces</strong>: <code>{ ... }</code> for <code>if</code>, <code>while</code>, <code>for</code>, <code>try</code>, <code>catch</code>, and functions.</li>
+	            <li><strong>Calls use pipes</strong>: <code>callee =&gt; |arg1, arg2|</code> and zero-arg calls use <code>||</code>.</li>
+	            <li><strong>Declarations end with <code>;</code></strong>: variable declarations and some import/export forms require semicolons.</li>
+	            <li><strong>Most other statements</strong> do not use semicolons (assignments, updates, <code>@println</code>, loops).</li>
+	          </ul>
+	          <p>
+	            Zekken is intentionally small and consistent: you write typed declarations up front, then use expression-style statements inside blocks.
+	            Whitespace and newlines are flexible; the main “hard” separators are braces for blocks and semicolons for declarations (and <code>return</code>).
+	          </p>
+
+	          <h3 id="comments" class="doc-anchor"><a class="doc-anchor-link" href="#comments">Comments</a><a class="doc-anchor-hash" href="#comments" aria-label="Link to this section">#</a></h3>
+	          <p>
+	            Comments are ignored by the runtime and are useful for documenting intent. Use <code>//</code> for single-line notes and
+	            <code>/* ... */</code> to comment out larger regions.
+	          </p>
+<pre><code class="language-zekken">// Single-line comment
+
+/*
+  Multi-line comment
+*/</code></pre>
+
+	          <h3 id="variables-and-constants" class="doc-anchor"><a class="doc-anchor-link" href="#variables-and-constants">Variables And Constants</a><a class="doc-anchor-hash" href="#variables-and-constants" aria-label="Link to this section">#</a></h3>
+	          <p>
+	            Zekken requires explicit types for variables and constants. Use <code>let</code> for mutable bindings and <code>const</code> for values
+	            that should never be reassigned. Reassignments must keep the same declared type.
+	          </p>
+<pre><code class="language-zekken">let x: int = 45;
+const pi: float = 3.14;
+let name: string = "RAGE";
+let ok: bool = true;
+
+let nums: arr = [1, 2, 3];
+let profile: obj = { name: "RAGE", level: 5 };</code></pre>
+	          <p>Invalid (inferred typing is not supported):</p>
+<pre><code class="language-zekken">let y = 10</code></pre>
+
+	          <h3 id="literals" class="doc-anchor"><a class="doc-anchor-link" href="#literals">Literals</a><a class="doc-anchor-hash" href="#literals" aria-label="Link to this section">#</a></h3>
+	          <p>
+	            Literals are the simplest values in the language: numbers, booleans, strings, arrays, and objects.
+	            Arrays and objects can be nested to represent structured data.
+	          </p>
+<pre><code class="language-zekken">let i: int = 123;
+let f: float = 3.14;
+let b: bool = false;
+let s: string = "hello";
+
+let a: arr = [1, 2, 3];
+let o: obj = { hello: "world" };
+
+// Object keys can be identifiers or strings.
+let headers: obj = { "content-type": "text/plain" };</code></pre>
+	          <p>
+	            Strings support escape sequences such as <code>\n</code> (newline), <code>\t</code> (tab), <code>\xNN</code> (byte), and <code>\e</code> (escape).
+	          </p>
+
+	          <h3 id="member-access-and-indexing" class="doc-anchor"><a class="doc-anchor-link" href="#member-access-and-indexing">Member Access And Indexing</a><a class="doc-anchor-hash" href="#member-access-and-indexing" aria-label="Link to this section">#</a></h3>
+	          <p>
+	            Use dot access (<code>obj.key</code>) for identifier keys, and bracket access (<code>obj["key"]</code>) for string keys.
+	            Arrays are indexed with brackets starting at <code>0</code>.
+	          </p>
+<pre><code class="language-zekken">use math;
+
+@println => |math.PI|
+
+let arr: arr = [10, 20, 30];
+@println => |arr[0]|
+
+let obj: obj = { a: 1, "b-key": 2 };
+@println => |obj.a|
+@println => |obj["b-key"]|</code></pre>
+	          <p>
+	            Note: object indexing with an identifier (e.g. <code>obj[key]</code>) treats <code>key</code> as a literal property name,
+	            not a dynamic lookup using the value of a variable.
+	          </p>
+<pre><code class="language-zekken">let obj: obj = { a: 1 };
+let key: string = "a";
+
+@println => |obj["a"]|   // 1
+@println => |obj[key]|   // looks up property literally named "key"</code></pre>
+
+	          <h3 id="imports" class="doc-anchor"><a class="doc-anchor-link" href="#imports">Imports</a><a class="doc-anchor-hash" href="#imports" aria-label="Link to this section">#</a></h3>
+	          <p>
+	            Use <code>use</code> to bring a standard library module into scope as an object. You can also import specific members for convenience.
+	            Use <code>include</code> to pull in another Zekken file (and optionally import only its exported values).
+	          </p>
+<pre><code class="language-zekken">use math;
+use fs;
+use { read_file, write_file } from fs;
+
+include "other.zk";
+include { some_value, helper } from "other.zk";</code></pre>
+	          <p>
+	            Imported members are called like normal functions. Built-ins are native functions prefixed with <code>@</code>.
+	          </p>
+
+	          <h3 id="export" class="doc-anchor"><a class="doc-anchor-link" href="#export">Export</a><a class="doc-anchor-hash" href="#export" aria-label="Link to this section">#</a></h3>
+	          <p>
+	            Export makes values available to other files via <code>include { ... } from "file.zk"</code>.
+	            It’s common to export constants and helper functions from a module-style file.
+	          </p>
+<pre><code class="language-zekken">export x, name, nums;</code></pre>
+
+	          <h3 id="functions" class="doc-anchor"><a class="doc-anchor-link" href="#functions">Functions</a><a class="doc-anchor-hash" href="#functions" aria-label="Link to this section">#</a></h3>
+	          <p>
+	            Functions declare typed parameters and use <code>return</code> to produce a value. The <code>return</code> statement ends with a semicolon.
+	            Functions are values: you can store them in variables, pass them around, and call them with <code>=&gt; |...|</code>.
+	          </p>
+<pre><code class="language-zekken">func add |a: int, b: int| {
+  return a + b;
+}
+
+let sum: int = add =&gt; |1, 2|;</code></pre>
+
+	          <h3 id="control-flow" class="doc-anchor"><a class="doc-anchor-link" href="#control-flow">Control Flow</a><a class="doc-anchor-hash" href="#control-flow" aria-label="Link to this section">#</a></h3>
+	          <p>
+	            Conditionals use <code>if</code>/<code>else</code>. Loops use <code>while</code> for repetition and <code>for</code> for iterating arrays/objects.
+	            In a <code>for</code> loop, you can bind one variable (value/item) or two variables (index+value for arrays, key+value for objects).
+	            Use <code>_</code> to ignore a binding.
+	          </p>
+<pre><code class="language-zekken">if x == 45 {
+  @println => |"x matched"|
+} else {
+  @println => |"no match"|
+}
+
+while x > 0 {
+  x -= 1
+}
+
+for |key, value| in profile {
+  @println => |key|
+  @println => |value|
+}
+
+for |item| in nums {
+  @println => |item|
+}</code></pre>
+	          <p>Array loops can also capture the index:</p>
+<pre><code class="language-zekken">for |i, _| in nums {
+  @println => |nums[i]|
+}</code></pre>
+
+	          <h3 id="errors-with-try-catch" class="doc-anchor"><a class="doc-anchor-link" href="#errors-with-try-catch">Errors With Try/Catch</a><a class="doc-anchor-hash" href="#errors-with-try-catch" aria-label="Link to this section">#</a></h3>
+	          <p>
+	            <code>try</code>/<code>catch</code> is for handling runtime errors (for example, file IO failures).
+	            The catch binding receives an error message you can log or format.
+	          </p>
+<pre><code class="language-zekken">try {
+  let content: string = fs.read_file => |"missing.txt"|;
+} catch |e| {
+  @println => |"caught: " + e|
+}</code></pre>
+
+	          <h3 id="call-syntax" class="doc-anchor"><a class="doc-anchor-link" href="#call-syntax">Call Syntax</a><a class="doc-anchor-hash" href="#call-syntax" aria-label="Link to this section">#</a></h3>
+	          <p>
+	            Zekken calls use <code>=&gt; |...|</code>. Zero-arg calls use <code>||</code>.
+	            For readability, it’s common to assign intermediate results instead of heavily nesting call syntax.
+	          </p>
+<pre><code class="language-zekken">@println => |"hello"|
+let sum: int = add => |1, 2|;
+let first: int = nums.first => ||;
+@println => |sum|</code></pre>
+
+	          <h3 id="statement-terminators" class="doc-anchor"><a class="doc-anchor-link" href="#statement-terminators">Statement Terminators</a><a class="doc-anchor-hash" href="#statement-terminators" aria-label="Link to this section">#</a></h3>
+	          <ul>
+	            <li><code>let</code>/<code>const</code> declarations end with <code>;</code>.</li>
+	            <li><code>use</code>/<code>include</code>/<code>export</code> statements end with <code>;</code>.</li>
+	            <li><code>return</code> ends with <code>;</code>.</li>
+	            <li>Assignments, updates, calls, and control-flow blocks typically do <em>not</em> use semicolons.</li>
+	          </ul>
 
           <div class="docs-pager">
             <a href="getting-started.html">Previous: Getting Started</a>

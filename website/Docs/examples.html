@@ -4,10 +4,11 @@
   <meta charset="UTF-8">
   <title>Docs: Examples | Zekken</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" type="image/png" href="../../images/zekken_icon.png">
-  <link rel="stylesheet" href="../Docs/styles.css">
-  <script src="js/zekken_docs_highlighter.js" defer></script>
-</head>
+	  <link rel="icon" type="image/png" href="../../images/zekken_icon.png">
+	  <link rel="stylesheet" href="../Docs/styles.css?v=20260325">
+	  <script src="js/zekken_docs_highlighter.js?v=20260325" defer></script>
+	  <script src="js/script.js?v=20260326" defer></script>
+	</head>
 <body>
   <div class="navbar">
     <img src="../../images/zekken_icon.png" alt="Zekken Logo" class="logo-img">
@@ -28,7 +29,7 @@
   <div class="container">
     <header class="docs-header">
       <h1>Zekken Documentation</h1>
-      <p class="docs-lead">Official docs for writing, running, and exploring Zekken programs.</p>
+      <p class="docs-lead">Runnable scripts in the repository to learn syntax and runtime behavior.</p>
     </header>
 
     <div class="docs-layout">
@@ -48,15 +49,41 @@
         <section class="docs-section">
           <span class="docs-page-label">Section 7 of 8</span>
           <h2>Examples</h2>
-          <p>Check repository examples for real scripts:</p>
+
+          <h3 id="core-examples" class="doc-anchor"><a class="doc-anchor-link" href="#core-examples">Core Examples</a><a class="doc-anchor-hash" href="#core-examples" aria-label="Link to this section">#</a></h3>
           <ul>
-            <li><a href="https://github.com/OzRAGEHarm/Zekken/blob/main/examples/syntax.zk" target="_blank" rel="noopener"><code>examples/syntax.zk</code></a></li>
-            <li><a href="https://github.com/OzRAGEHarm/Zekken/blob/main/examples/fibonacci.zk" target="_blank" rel="noopener"><code>examples/fibonacci.zk</code></a></li>
-            <li><a href="https://github.com/OzRAGEHarm/Zekken/blob/main/tests/type_methods.zk" target="_blank" rel="noopener"><code>tests/type_methods.zk</code></a></li>
+            <li><a href="https://github.com/OzRAGEHarm/Zekken/blob/main/examples/syntax.zk" target="_blank" rel="noopener"><code>examples/syntax.zk</code></a> - language walkthrough (declarations, control flow, calls, casts, modules).</li>
+            <li><a href="https://github.com/OzRAGEHarm/Zekken/blob/main/examples/file.zk" target="_blank" rel="noopener"><code>examples/file.zk</code></a> - file read/write example.</li>
+            <li><a href="https://github.com/OzRAGEHarm/Zekken/blob/main/examples/donut.zk" target="_blank" rel="noopener"><code>examples/donut.zk</code></a> - ASCII spinning donut animation.</li>
+            <li><a href="https://github.com/OzRAGEHarm/Zekken/blob/main/examples/fibonacci.zk" target="_blank" rel="noopener"><code>examples/fibonacci.zk</code></a> - recursive Fibonacci.</li>
+            <li><a href="https://github.com/OzRAGEHarm/Zekken/blob/main/examples/bmi_calc.zk" target="_blank" rel="noopener"><code>examples/bmi_calc.zk</code></a> - input + numeric calculation.</li>
           </ul>
-          <div class="placeholder-card">
-            <strong>Coming soon:</strong> per-example walkthroughs and output snapshots.
-          </div>
+
+          <h3 id="test-scripts" class="doc-anchor"><a class="doc-anchor-link" href="#test-scripts">Test Scripts</a><a class="doc-anchor-hash" href="#test-scripts" aria-label="Link to this section">#</a></h3>
+          <ul>
+            <li><a href="https://github.com/OzRAGEHarm/Zekken/blob/main/tests/type_methods.zk" target="_blank" rel="noopener"><code>tests/type_methods.zk</code></a> - method and cast coverage.</li>
+            <li><a href="https://github.com/OzRAGEHarm/Zekken/blob/main/tests/errors.zk" target="_blank" rel="noopener"><code>tests/errors.zk</code></a> - syntax/type/reference/runtime failures.</li>
+            <li><a href="https://github.com/OzRAGEHarm/Zekken/blob/main/tests/test.zk" target="_blank" rel="noopener"><code>tests/test.zk</code></a> - general runtime test script.</li>
+            <li><a href="https://github.com/OzRAGEHarm/Zekken/blob/main/tests/input.zk" target="_blank" rel="noopener"><code>tests/input.zk</code></a> - input handling.</li>
+            <li><a href="https://github.com/OzRAGEHarm/Zekken/blob/main/tests/json_data.zk" target="_blank" rel="noopener"><code>tests/json_data.zk</code></a> - JSON parsing via <code>@parse_json</code>.</li>
+            <li><a href="https://github.com/OzRAGEHarm/Zekken/blob/main/tests/include/main.zk" target="_blank" rel="noopener"><code>tests/include/main.zk</code></a> - include/export usage (pairs with <code>tests/include/export.zk</code>).</li>
+          </ul>
+
+          <h3 id="benchmarks" class="doc-anchor"><a class="doc-anchor-link" href="#benchmarks">Benchmarks</a><a class="doc-anchor-hash" href="#benchmarks" aria-label="Link to this section">#</a></h3>
+          <p>These are runnable, repeatable scripts used to track performance over time:</p>
+          <ul>
+            <li><a href="https://github.com/OzRAGEHarm/Zekken/blob/main/benchmarks/cpu_numeric.zk" target="_blank" rel="noopener"><code>benchmarks/cpu_numeric.zk</code></a> - numeric CPU loop throughput.</li>
+            <li><a href="https://github.com/OzRAGEHarm/Zekken/blob/main/benchmarks/branch_calls.zk" target="_blank" rel="noopener"><code>benchmarks/branch_calls.zk</code></a> - branch-heavy logic + calls.</li>
+            <li><a href="https://github.com/OzRAGEHarm/Zekken/blob/main/benchmarks/queue_cleanup.zk" target="_blank" rel="noopener"><code>benchmarks/queue_cleanup.zk</code></a> - queue growth + cleanup behavior.</li>
+            <li><a href="https://github.com/OzRAGEHarm/Zekken/blob/main/benchmarks/file_io_transform.zk" target="_blank" rel="noopener"><code>benchmarks/file_io_transform.zk</code></a> - file I/O + transformations.</li>
+            <li><a href="https://github.com/OzRAGEHarm/Zekken/blob/main/benchmarks/matrix_mixed.zk" target="_blank" rel="noopener"><code>benchmarks/matrix_mixed.zk</code></a> - mixed numeric + loop workload.</li>
+          </ul>
+
+          <h3 id="run-any-example" class="doc-anchor"><a class="doc-anchor-link" href="#run-any-example">Run Any Example</a><a class="doc-anchor-hash" href="#run-any-example" aria-label="Link to this section">#</a></h3>
+<pre><code>zekken run examples/syntax.zk
+zekken run tests/type_methods.zk
+zekken run tests/include/main.zk
+zekken run benchmarks/cpu_numeric.zk</code></pre>
 
           <div class="docs-pager">
             <a href="errors.html">Previous: Errors</a>

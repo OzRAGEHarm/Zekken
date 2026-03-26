@@ -220,7 +220,7 @@ pub fn lint_include(include: &IncludeStmt) -> Result<(), ZekkenError> {
 pub fn lint_use(use_stmt: &UseStmt) -> Result<(), ZekkenError> {
     // First check if library exists
     match use_stmt.module.as_str() {
-        "math" | "fs" | "os" => {
+        "math" | "fs" | "os" | "path" | "encoding" | "http" => {
             // If specific methods are requested, validate they exist in the library
             if let Some(methods) = &use_stmt.methods {
                 // Create a temporary environment to load the library

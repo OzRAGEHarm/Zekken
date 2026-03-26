@@ -69,6 +69,7 @@ pub struct VarDecl {
 pub struct Param {
     pub ident: String,
     pub type_: DataType,
+    pub default_value: Option<Box<Expr>>,
     pub location: Location,
 }
 
@@ -76,6 +77,7 @@ pub struct Param {
 pub struct FuncDecl {
     pub params: Vec<Param>,
     pub ident: String,
+    pub return_type: Option<DataType>,
     pub body: Vec<Box<Content>>,
     pub location: Location,
 }
@@ -155,6 +157,7 @@ pub struct LambdaDecl {
     pub constant: bool,
     pub ident: String,
     pub params: Vec<Param>,
+    pub return_type: Option<DataType>,
     pub body: Vec<Box<Content>>,
     pub location: Location,
 }
