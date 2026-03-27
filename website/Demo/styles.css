@@ -208,7 +208,7 @@ button:hover {
 .error-output .ansi-red { color: #FF5555; font-weight: bold; }
 .error-output .ansi-magenta { color: #FF79C6; font-weight: bold; }
 .error-output .ansi-yellow { color: #F1FA8C; font-weight: bold; }
-.error-output .ansi-blue { color: #6272A4; font-weight: bold; }
+.error-output .ansi-blue { color: #569CD6; font-weight: bold; }
 .error-output .ansi-gray { color: #6272A4; font-weight: bold; }
 .error-output .ansi-green { color: #50FA7B; font-weight: bold; }
 .error-output .ansi-location { color: #F8F8F2; font-weight: bold; }

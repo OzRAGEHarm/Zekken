@@ -61,6 +61,16 @@
             <li><code>obj</code> - key/value object</li>
             <li><code>fn</code> - function/lambda value type in declarations</li>
           </ul>
+          <p>
+            Note: these type names are reserved keywords. You cannot use a type name as a variable identifier
+            (for example <code>let obj: obj = ...</code>) because the lexer will treat <code>obj</code> as a type token,
+            not an identifier.
+          </p>
+<pre><code class="language-zekken">// Bad (variable name collides with the obj type keyword)
+let obj: obj = { b: 1 };
+
+// Good
+let headers: obj = { b: 1 };</code></pre>
 
           <h3 id="how-the-type-system-works" class="doc-anchor"><a class="doc-anchor-link" href="#how-the-type-system-works">How The Type System Works</a><a class="doc-anchor-hash" href="#how-the-type-system-works" aria-label="Link to this section">#</a></h3>
           <p>

@@ -23,20 +23,6 @@
 ## Status
 Zekken is under active development and the language/standard library may change. If you hit a crash or confusing error, please open an issue with a minimal repro.
 
-## Language Snapshot
-```zekken
-use math;
-
-func hypotenuse |a: float, b: float| -> float {
-  return math.sqrt => |a * a + b * b|;
-}
-
-let x: float = 3.0;
-let y: float = 4.0;
-let h: float = hypotenuse => |x, y|;
-@println => |"hypotenuse: " + h|
-```
-
 ## Development Logs ⚙
 Stay informed about the latest changes, improvements, and fixes to Zekken. Below is a summary of the development progress:
 
@@ -44,7 +30,7 @@ Stay informed about the latest changes, improvements, and fixes to Zekken. Below
 - **[View Full Development Log](./dev-logs/early-development.md)**
 
 ### Release Development Log (Feb 26, 2026 - Present)
-- **[View Full Development Log](./dev-logs/release-development.md)**
+- **[View Full Development Log](./dev-logs/release-dev)**
 
 ## Documentation 📖
 ### Website Docs
@@ -117,13 +103,6 @@ cd Zekken
 ## Benchmarks
 There is a small benchmark suite under [`benchmarks/`](./benchmarks) with a runner and Python comparisons.
 See [`benchmarks/README.md`](./benchmarks/README.md).
-
-## Repo Layout (High-Level)
-- `src/lexer`, `src/parser`, `src/ast`: front-end
-- `src/eval`: evaluator (default `zekken run`)
-- `src/bytecode`: register bytecode VM (`zekken run --vm`)
-- `src/libraries`: standard library modules
-- `website/`: website + docs + demo (WASM build)
 
 ## License 🏛
 This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.

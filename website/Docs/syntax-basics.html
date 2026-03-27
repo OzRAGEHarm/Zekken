@@ -110,28 +110,22 @@ let headers: obj = { "content-type": "text/plain" };</code></pre>
 
 	          <h3 id="member-access-and-indexing" class="doc-anchor"><a class="doc-anchor-link" href="#member-access-and-indexing">Member Access And Indexing</a><a class="doc-anchor-hash" href="#member-access-and-indexing" aria-label="Link to this section">#</a></h3>
 	          <p>
-	            Use dot access (<code>obj.key</code>) for identifier keys, and bracket access (<code>obj["key"]</code>) for string keys.
+	            Use dot access (<code>obj.key</code>) for identifier keys, and bracket access (<code>obj["key"]</code>) for string keys. Brackets also allow dynamic access via variables or indices.
 	            Arrays are indexed with brackets starting at <code>0</code>.
 	          </p>
 <pre><code class="language-zekken">use math;
 
 @println => |math.PI|
 
-let arr: arr = [10, 20, 30];
-@println => |arr[0]|
+let array: arr = [10, 20, 30];
+@println => |array[0]|
 
-let obj: obj = { a: 1, "b-key": 2 };
-@println => |obj.a|
-@println => |obj["b-key"]|</code></pre>
-	          <p>
-	            Note: object indexing with an identifier (e.g. <code>obj[key]</code>) treats <code>key</code> as a literal property name,
-	            not a dynamic lookup using the value of a variable.
-	          </p>
-<pre><code class="language-zekken">let obj: obj = { a: 1 };
-let key: string = "a";
+let object: obj = { a: 1, "b-key": 2, c: 3 };
+let key: string = "c";
 
-@println => |obj["a"]|   // 1
-@println => |obj[key]|   // looks up property literally named "key"</code></pre>
+@println => |object.a|
+@println => |object["b-key"]|
+@println => |object[key]|</code></pre>
 
 	          <h3 id="imports" class="doc-anchor"><a class="doc-anchor-link" href="#imports">Imports</a><a class="doc-anchor-hash" href="#imports" aria-label="Link to this section">#</a></h3>
 	          <p>

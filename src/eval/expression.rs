@@ -518,6 +518,11 @@ fn interpolate_string(template: &str, env: &Environment) -> String {
 
 fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
     #[inline]
+    fn builtin_requires_at(name: &str) -> bool {
+        matches!(name, "println" | "input" | "parse_json" | "queue")
+    }
+
+    #[inline]
     fn eval_arg_hot(expr: &Expr, env: &mut Environment) -> Result<Value, ZekkenError> {
         match expr {
             Expr::IntLit(i) => Ok(Value::Int(i.value)),
@@ -819,9 +824,9 @@ fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Result<Va
             );
         }
         if let Some(Value::NativeFunction(native)) = env.variables.get(&ident.name) {
-            if ident.name == "queue" && !call.is_native {
+            if builtin_requires_at(&ident.name) && !call.is_native {
                 return Err(ZekkenError::runtime(
-                    "queue is a native constructor; call it with '@queue => ||'",
+                    &format!("{} is a built-in; call it with '@{} => |...|'", ident.name, ident.name),
                     call.location.line,
                     call.location.column,
                     None,
@@ -844,9 +849,9 @@ fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Result<Va
             );
         }
         if let Some(Value::NativeFunction(native)) = env.constants.get(&ident.name) {
-            if ident.name == "queue" && !call.is_native {
+            if builtin_requires_at(&ident.name) && !call.is_native {
                 return Err(ZekkenError::runtime(
-                    "queue is a native constructor; call it with '@queue => ||'",
+                    &format!("{} is a built-in; call it with '@{} => |...|'", ident.name, ident.name),
                     call.location.line,
                     call.location.column,
                     None,
@@ -869,9 +874,9 @@ fn evaluate_call_expression(call: &CallExpr, env: &mut Environment) -> Result<Va
                 call.location.column,
             ),
             Some(Value::NativeFunction(native)) => {
-                if ident.name == "queue" && !call.is_native {
+                if builtin_requires_at(&ident.name) && !call.is_native {
                     return Err(ZekkenError::runtime(
-                        "queue is a native constructor; call it with '@queue => ||'",
+                        &format!("{} is a built-in; call it with '@{} => |...|'", ident.name, ident.name),
                         call.location.line,
                         call.location.column,
                         None,
@@ -1128,6 +1133,15 @@ fn evaluate_function_value_call_with_args(
         Environment::take_pooled_scope(func_def.params.len())
     };
 
+    // If we didn't clone the parent environment, make sure the function body can still
+    // resolve globals/built-ins (and maintain expected lexical behavior).
+    //
+    // Note: This prevents returning the env to the pool (parent != None), but fixes
+    // correctness issues where function bodies can't see global names.
+    if !func_def.needs_parent {
+        function_env.parent = Some(Box::new(env.clone()));
+    }
+
     if !func_def.needs_parent && !func_def.captures.is_empty() {
         for name in func_def.captures.iter() {
             if let Some(val) = env.lookup_ref(name) {
@@ -1241,16 +1255,23 @@ fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Res
     let object = evaluate_expression(&member.object, env)?;
     let result = match &*member.property {
         Expr::Identifier(ref ident) => {
-            // Only arrays use dynamic index lookup for identifier properties (arr[i]).
-            // Objects always treat identifier properties as named keys (obj.key).
-            if matches!(object, Value::Array(_)) {
-                if let Some(index_val) = env.lookup_ref(&ident.name) {
-                    match index_val {
+            if member.is_method {
+                // Bracket indexing: obj[expr] / arr[expr]
+                //
+                // For identifier keys inside brackets, prefer runtime lookup:
+                // - int/float-as-int => numeric indexing (arrays, and objects via __keys__)
+                // - string => object property lookup by that string
+                // - otherwise fall back to literal property name (obj[foo] -> "foo")
+                if let Some(v) = env.lookup_ref(&ident.name) {
+                    match v {
                         Value::Int(i) if *i >= 0 => {
                             evaluate_index_access(&object, *i as usize, member.location.line, member.location.column)
                         }
                         Value::Float(f) if *f >= 0.0 && f.fract() == 0.0 => {
                             evaluate_index_access(&object, *f as usize, member.location.line, member.location.column)
+                        }
+                        Value::String(s) => {
+                            evaluate_property_access(&object, s, member.location.line, member.location.column)
                         }
                         _ => evaluate_property_access(&object, &ident.name, member.location.line, member.location.column),
                     }
@@ -1258,13 +1279,15 @@ fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Res
                     evaluate_property_access(&object, &ident.name, member.location.line, member.location.column)
                 }
             } else {
+                // Dot access: obj.key
                 evaluate_property_access(&object, &ident.name, member.location.line, member.location.column)
             }
         }
         Expr::StringLit(ref lit) => evaluate_property_access(&object, &lit.value, member.location.line, member.location.column),
         Expr::IntLit(ref lit) => evaluate_index_access(&object, lit.value as usize, member.location.line, member.location.column),
         _ => {
-            if matches!(object, Value::Array(_)) {
+            if member.is_method {
+                // Bracket indexing supports dynamic expressions.
                 match evaluate_expression(&member.property, env)? {
                     Value::Int(i) if i >= 0 => {
                         evaluate_index_access(&object, i as usize, member.location.line, member.location.column)
@@ -1272,9 +1295,12 @@ fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Res
                     Value::Float(f) if f >= 0.0 && f.fract() == 0.0 => {
                         evaluate_index_access(&object, f as usize, member.location.line, member.location.column)
                     }
+                    Value::String(s) => {
+                        evaluate_property_access(&object, &s, member.location.line, member.location.column)
+                    }
                     _ => Err(ZekkenError::type_error(
                         "Invalid property access",
-                        "string/int/identifier",
+                        "string/int",
                         "other",
                         member.location.line,
                         member.location.column,
@@ -1283,7 +1309,7 @@ fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Res
             } else {
                 Err(ZekkenError::type_error(
                     "Invalid property access",
-                    "string/int/identifier",
+                    "identifier",
                     "other",
                     member.location.line,
                     member.location.column,
@@ -1295,11 +1321,11 @@ fn evaluate_member_expression(member: &MemberExpr, env: &mut Environment) -> Res
 }
 
 fn evaluate_member_expression_chain(member: &MemberExpr, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
-    fn collect_chain<'a>(expr: &'a Expr, out: &mut Vec<&'a Expr>) -> Option<&'a Identifier> {
+    fn collect_chain<'a>(expr: &'a Expr, out: &mut Vec<(&'a Expr, bool)>) -> Option<&'a Identifier> {
         match expr {
             Expr::Member(m) => {
                 let root = collect_chain(m.object.as_ref(), out)?;
-                out.push(m.property.as_ref());
+                out.push((m.property.as_ref(), m.is_method));
                 Some(root)
             }
             Expr::Identifier(id) => Some(id),
@@ -1307,14 +1333,14 @@ fn evaluate_member_expression_chain(member: &MemberExpr, env: &mut Environment) 
         }
     }
 
-    let mut chain = Vec::new();
+    let mut chain: Vec<(&Expr, bool)> = Vec::new();
     let root_ident = match collect_chain(member.object.as_ref(), &mut chain) {
         Some(id) => id,
         None => return Ok(None),
     };
-    chain.push(member.property.as_ref());
+    chain.push((member.property.as_ref(), member.is_method));
 
-    let supports_fast_chain = chain.iter().all(|prop| {
+    let supports_fast_chain = chain.iter().all(|(prop, _)| {
         matches!(
             prop,
             Expr::IntLit(_) | Expr::FloatLit(_) | Expr::Identifier(_) | Expr::StringLit(_)
@@ -1333,17 +1359,23 @@ fn evaluate_member_expression_chain(member: &MemberExpr, env: &mut Environment) 
         )
     })?;
 
-    for prop in chain {
+    for (prop, computed) in chain {
         current = match current {
             Value::Array(arr) => {
                 let idx = match prop {
                     Expr::IntLit(lit) if lit.value >= 0 => Some(lit.value as usize),
                     Expr::FloatLit(lit) if lit.value >= 0.0 && lit.value.fract() == 0.0 => Some(lit.value as usize),
-                    Expr::Identifier(ident) => match env.lookup_ref(&ident.name) {
-                        Some(Value::Int(i)) if *i >= 0 => Some(*i as usize),
-                        Some(Value::Float(f)) if *f >= 0.0 && f.fract() == 0.0 => Some(*f as usize),
-                        _ => None,
-                    },
+                    Expr::Identifier(ident) => {
+                        if computed {
+                            match env.lookup_ref(&ident.name) {
+                                Some(Value::Int(i)) if *i >= 0 => Some(*i as usize),
+                                Some(Value::Float(f)) if *f >= 0.0 && f.fract() == 0.0 => Some(*f as usize),
+                                _ => None,
+                            }
+                        } else {
+                            None
+                        }
+                    }
                     _ => None,
                 };
 
@@ -1367,14 +1399,113 @@ fn evaluate_member_expression_chain(member: &MemberExpr, env: &mut Environment) 
                 }
             }
             Value::Object(map) => match prop {
-                Expr::Identifier(ident) => map.get(&ident.name).ok_or_else(|| {
-                    ZekkenError::reference(
-                        &format!("Property '{}' not found", ident.name),
-                        &ident.name,
-                        member.location.line,
-                        member.location.column,
-                    )
-                })?,
+                Expr::Identifier(ident) => {
+                    if computed {
+                        // Bracket indexing: allow obj[a] where `a` is an int/float-as-int/string at runtime.
+                        if let Some(v) = env.lookup_ref(&ident.name) {
+                            match v {
+                                Value::String(s) => map.get(s).ok_or_else(|| {
+                                    ZekkenError::reference(
+                                        &format!("Property '{}' not found", s),
+                                        s,
+                                        member.location.line,
+                                        member.location.column,
+                                    )
+                                })?,
+                                Value::Int(i) if *i >= 0 => {
+                                    let idx = *i as usize;
+                                    let key = match map.get("__keys__") {
+                                        Some(Value::Array(keys)) => match keys.get(idx) {
+                                            Some(Value::String(key)) => key,
+                                            _ => {
+                                                return Err(ZekkenError::runtime(
+                                                    &format!("Object index {} out of bounds", idx),
+                                                    member.location.line,
+                                                    member.location.column,
+                                                    None,
+                                                ));
+                                            }
+                                        },
+                                        _ => {
+                                            return Err(ZekkenError::runtime(
+                                                "Object does not support numeric indexing",
+                                                member.location.line,
+                                                member.location.column,
+                                                None,
+                                            ));
+                                        }
+                                    };
+                                    map.get(key).ok_or_else(|| {
+                                        ZekkenError::reference(
+                                            &format!("Property '{}' not found", key),
+                                            key,
+                                            member.location.line,
+                                            member.location.column,
+                                        )
+                                    })?
+                                }
+                                Value::Float(f) if *f >= 0.0 && f.fract() == 0.0 => {
+                                    let idx = *f as usize;
+                                    let key = match map.get("__keys__") {
+                                        Some(Value::Array(keys)) => match keys.get(idx) {
+                                            Some(Value::String(key)) => key,
+                                            _ => {
+                                                return Err(ZekkenError::runtime(
+                                                    &format!("Object index {} out of bounds", idx),
+                                                    member.location.line,
+                                                    member.location.column,
+                                                    None,
+                                                ));
+                                            }
+                                        },
+                                        _ => {
+                                            return Err(ZekkenError::runtime(
+                                                "Object does not support numeric indexing",
+                                                member.location.line,
+                                                member.location.column,
+                                                None,
+                                            ));
+                                        }
+                                    };
+                                    map.get(key).ok_or_else(|| {
+                                        ZekkenError::reference(
+                                            &format!("Property '{}' not found", key),
+                                            key,
+                                            member.location.line,
+                                            member.location.column,
+                                        )
+                                    })?
+                                }
+                                _ => map.get(&ident.name).ok_or_else(|| {
+                                    ZekkenError::reference(
+                                        &format!("Property '{}' not found", ident.name),
+                                        &ident.name,
+                                        member.location.line,
+                                        member.location.column,
+                                    )
+                                })?,
+                            }
+                        } else {
+                            map.get(&ident.name).ok_or_else(|| {
+                                ZekkenError::reference(
+                                    &format!("Property '{}' not found", ident.name),
+                                    &ident.name,
+                                    member.location.line,
+                                    member.location.column,
+                                )
+                            })?
+                        }
+                    } else {
+                        map.get(&ident.name).ok_or_else(|| {
+                            ZekkenError::reference(
+                                &format!("Property '{}' not found", ident.name),
+                                &ident.name,
+                                member.location.line,
+                                member.location.column,
+                            )
+                        })?
+                    }
+                }
                 Expr::StringLit(lit) => map.get(&lit.value).ok_or_else(|| {
                     ZekkenError::reference(
                         &format!("Property '{}' not found", lit.value),

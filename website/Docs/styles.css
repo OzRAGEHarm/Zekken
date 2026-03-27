@@ -7,7 +7,7 @@ body {
   overflow-x: hidden;
 }
 
-html {dro
+html {
   scroll-behavior: smooth;
 }
 * { box-sizing: border-box; }

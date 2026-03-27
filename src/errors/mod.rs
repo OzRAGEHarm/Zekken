@@ -330,7 +330,7 @@ lazy_static::lazy_static! {
     pub static ref ERROR_LIST: Mutex<Vec<ZekkenError>> = Mutex::new(Vec::new());
     static ref NO_COLOR: Mutex<bool> = Mutex::new({
         #[cfg(target_arch = "wasm32")]
-        { false } // Always allow color in WASM
+        { false } // Web demo converts ANSI escape codes to HTML spans for highlighting.
         #[cfg(not(target_arch = "wasm32"))]
         {
             std::env::var("NO_COLOR").is_ok() ||

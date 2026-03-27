@@ -75,13 +75,12 @@
             Errors include line/column and a pointer. When Zekken can compute the token span, it draws a caret plus tildes (<code>^~~~</code>).
             When the span is unknown, you may see a single caret (<code>^</code>).
           </p>
-<pre><code class="language-zekken-error">Type Error: Type mismatch in variable declaration 'b'
-     | test.zk -> [Ln: 1, Col: 17]
+<pre><code class="language-zekken-error">Reference Error: Variable 'numTerm' not found
+     | main.zk -> [Ln: 16, Col: 20]
      |
-   1 | let b: string = 10;
-     |                 ^~
-  expected: String
-  found:    int</code></pre>
+  16 | startFibonacci => |numTerm|
+     |                    ^~~~~~~
+  kind: variable</code></pre>
 
           <h3 id="syntax-errors" class="doc-anchor"><a class="doc-anchor-link" href="#syntax-errors">Syntax Errors</a><a class="doc-anchor-hash" href="#syntax-errors" aria-label="Link to this section">#</a></h3>
           <p>
@@ -161,7 +160,7 @@
           <h3 id="execution-behavior" class="doc-anchor"><a class="doc-anchor-link" href="#execution-behavior">Execution Behavior</a><a class="doc-anchor-hash" href="#execution-behavior" aria-label="Link to this section">#</a></h3>
           <ul>
             <li>Parser errors are collected and printed before execution.</li>
-            <li>Runtime/reference/type errors are reported with source context.</li>
+            <li>All error types (except internal) are reported with source context.</li>
             <li>CLI <code>run</code> exits with non-zero status when errors exist.</li>
             <li><code>os.exit =&gt; |code|</code> exits process using that code in CLI mode.</li>
           </ul>

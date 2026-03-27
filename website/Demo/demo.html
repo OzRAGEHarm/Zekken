@@ -178,10 +178,12 @@
         const result = run_zekken(editor.getValue());
         const elapsed = performance.now() - start;
         const isError = result && (
-          result.includes("Error:") || 
-          result.includes("Syntax Error") || 
-          result.includes("Runtime Error") || 
-          result.includes("Type Error")
+          result.includes("Error:") ||
+          result.includes("Syntax Error") ||
+          result.includes("Runtime Error") ||
+          result.includes("Type Error") ||
+          result.includes("Reference Error") ||
+          result.includes("Internal Error")
         );
         showOutput(result || "(no output)", isError);
         showExecTime(elapsed);

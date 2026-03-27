@@ -1,8 +1,35 @@
 use crate::ast::*;
-use crate::environment::{Environment, Value};
+use crate::environment::{Environment, FunctionValue, Value};
 use crate::errors::ZekkenError;
+use crate::lexer::DataType;
 use crate::libraries::load_library;
+use hashbrown::HashMap;
 use std::path::Path;
+use std::sync::Arc;
+
+#[inline]
+fn builtin_requires_at(name: &str) -> bool {
+    matches!(name, "println" | "input" | "parse_json" | "queue")
+}
+
+fn dummy_value_for_type(ty: &DataType) -> Value {
+    match ty {
+        DataType::Int => Value::Int(0),
+        DataType::Float => Value::Float(0.0),
+        DataType::String => Value::String(String::new()),
+        DataType::Bool => Value::Boolean(false),
+        DataType::Object => Value::Object(HashMap::new()),
+        DataType::Array => Value::Array(Vec::new()),
+        DataType::Fn => Value::Function(FunctionValue {
+            params: Arc::new(Vec::new()),
+            body: Arc::new(Vec::new()),
+            return_type: None,
+            needs_parent: false,
+            captures: Arc::new(Vec::new()),
+        }),
+        DataType::Any => Value::Void,
+    }
+}
 
 pub fn lint_expression(expr: &Expr, env: &Environment) -> Result<(), ZekkenError> {
     match expr {
@@ -17,66 +44,55 @@ pub fn lint_expression(expr: &Expr, env: &Environment) -> Result<(), ZekkenError
                 ));
             }
         },
+        Expr::Binary(binary) => {
+            lint_expression(&binary.left, env)?;
+            lint_expression(&binary.right, env)?;
+        }
         Expr::Call(call) => {
-            match *call.callee {
-                Expr::Identifier(ref ident) => {
-                    match env.lookup(&ident.name) {
-                        Some(Value::NativeFunction(_)) => {
-                            // Special validation for @input
-                            if ident.name == "@input" && call.args.len() != 1 {
-                                return Err(ZekkenError::type_error(
-                                    "@input expects exactly one argument (prompt string)",
-                                    "one argument",
-                                    &format!("{} arguments", call.args.len()),
-                                    call.location.line,
-                                    call.location.column,
-                                ));
-                            }
-                            // Skip evaluating arguments for native functions during linting
-                            return Ok(());
-                        },
-                        Some(Value::Function(_)) => {
-                            // Regular function found, continue with argument linting
-                        },
-                        Some(_) => {
-                            return Err(ZekkenError::type_error(
-                                "Cannot call non-function value",
-                                "function",
-                                "non-function",
-                                call.location.line,
-                                call.location.column,
-                            ));
-                        },
-                        None => {
-                            // Check for native function with '@' prefix as fallback
-                            let native_name = format!("@{}", &ident.name);
-                            if let Some(Value::NativeFunction(_)) = env.lookup(&native_name) {
-                                return Ok(());
-                            }
-                            return Err(ZekkenError::reference(
-                                &format!("Function '{}' not found", &ident.name),
-                                "function",
-                                call.location.line,
-                                call.location.column,
-                            ));
-                        }
-                    }
-                },
-                _ => {
-                    lint_expression(&call.callee, env)?;
-                }
-            }
-            // Check arguments for non-native function calls
-            if let Expr::Identifier(ref ident) = *call.callee {
-                if !ident.name.starts_with('@') {
-                    for arg in &call.args {
-                        lint_expression(arg, env)?;
+            // Lint callee.
+            if let Expr::Identifier(ident) = call.callee.as_ref() {
+                let (val, kind) = env.lookup_with_kind(&ident.name);
+                let is_callable = matches!(
+                    val.as_ref(),
+                    Some(Value::Function(_)) | Some(Value::NativeFunction(_))
+                );
+
+                if !is_callable {
+                    if val.is_some() {
+                        return Err(ZekkenError::type_error(
+                            "Cannot call non-function value",
+                            "function",
+                            "non-function",
+                            call.location.line,
+                            call.location.column,
+                        ));
+                    } else {
+                        return Err(ZekkenError::reference(
+                            &format!("Function '{}' not found", &ident.name),
+                            "function",
+                            call.location.line,
+                            call.location.column,
+                        ));
                     }
                 }
+
+                // Enforce built-ins requiring '@' prefix.
+                if builtin_requires_at(&ident.name) && !call.is_native {
+                    return Err(ZekkenError::runtime(
+                        &format!("{} is a built-in; call it with '@{} => |...|'", ident.name, ident.name),
+                        call.location.line,
+                        call.location.column,
+                        None,
+                    ));
+                }
+                let _ = kind; // reserved for future, more precise diagnostics
             } else {
-                for arg in &call.args {
-                    lint_expression(arg, env)?;
-                }
+                lint_expression(&call.callee, env)?;
+            }
+
+            // Always lint arguments.
+            for arg in &call.args {
+                lint_expression(arg, env)?;
             }
         },
         Expr::Assign(assign) => {
@@ -110,7 +126,18 @@ pub fn lint_expression(expr: &Expr, env: &Environment) -> Result<(), ZekkenError
         },
         Expr::Member(member) => {
             lint_expression(&member.object, env)?;
+            lint_expression(&member.property, env)?;
         },
+        Expr::ArrayLit(array) => {
+            for el in &array.elements {
+                lint_expression(el, env)?;
+            }
+        }
+        Expr::ObjectLit(object) => {
+            for prop in &object.properties {
+                lint_expression(&prop.value, env)?;
+            }
+        }
         // Other expression types like literals don't need linting
         _ => {}
     }
@@ -128,14 +155,32 @@ pub fn lint_statement(stmt: &Stmt, env: &Environment) -> Result<(), ZekkenError>
             }
         },
         Stmt::FuncDecl(func_decl) => {
-            // Check function body for errors
+            // Lint function body in a dedicated scope that includes parameters.
+            let mut fn_env = Environment::new_with_parent_capacity(env.clone(), func_decl.params.len() + 8);
+            for param in func_decl.params.iter() {
+                fn_env.declare_ref_typed(param.ident.as_str(), dummy_value_for_type(&param.type_), param.type_, false);
+            }
+
             for content in &func_decl.body {
                 match &**content {
-                    Content::Expression(expr) => lint_expression(expr, env)?,
-                    Content::Statement(stmt) => lint_statement(stmt, env)?,
+                    Content::Expression(expr) => lint_expression(expr, &fn_env)?,
+                    Content::Statement(stmt) => lint_statement(stmt, &fn_env)?,
                 }
             }
         },
+        Stmt::Lambda(lambda) => {
+            // Same parameter scoping rules as functions.
+            let mut fn_env = Environment::new_with_parent_capacity(env.clone(), lambda.params.len() + 8);
+            for param in lambda.params.iter() {
+                fn_env.declare_ref_typed(param.ident.as_str(), dummy_value_for_type(&param.type_), param.type_, false);
+            }
+            for content in &lambda.body {
+                match &**content {
+                    Content::Expression(expr) => lint_expression(expr, &fn_env)?,
+                    Content::Statement(stmt) => lint_statement(stmt, &fn_env)?,
+                }
+            }
+        }
         Stmt::IfStmt(if_stmt) => {
             lint_expression(&if_stmt.test, env)?;
             for content in &if_stmt.body {
@@ -156,6 +201,12 @@ pub fn lint_statement(stmt: &Stmt, env: &Environment) -> Result<(), ZekkenError>
         Stmt::ForStmt(for_stmt) => {
             if let Some(init) = &for_stmt.init {
                 lint_statement(init, env)?;
+            }
+            if let Some(test) = &for_stmt.test {
+                lint_expression(test, env)?;
+            }
+            if let Some(update) = &for_stmt.update {
+                lint_expression(update, env)?;
             }
             for content in &for_stmt.body {
                 match &**content {

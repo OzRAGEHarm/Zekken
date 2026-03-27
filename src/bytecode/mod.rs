@@ -842,6 +842,11 @@ fn try_eval_math_call_native(
 }
 
 fn eval_call_native(call: &CallExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
+    #[inline]
+    fn builtin_requires_at(name: &str) -> bool {
+        matches!(name, "println" | "input" | "parse_json" | "queue")
+    }
+
     if let Expr::Member(member) = call.callee.as_ref() {
         let method_name = match member.property.as_ref() {
             Expr::Identifier(id) => id.name.clone(),
@@ -910,9 +915,9 @@ fn eval_call_native(call: &CallExpr, env: &mut Environment) -> Result<Value, Zek
     }
 
     if let Expr::Identifier(id) = call.callee.as_ref() {
-        if id.name == "queue" && !call.is_native {
+        if builtin_requires_at(&id.name) && !call.is_native {
             return Err(ZekkenError::runtime(
-                "queue is a native constructor; call it with '@queue => ||'",
+                &format!("{} is a built-in; call it with '@{} => |...|'", id.name, id.name),
                 call.location.line,
                 call.location.column,
                 None,
@@ -1043,6 +1048,11 @@ fn call_function_native(
     }
 
     let mut function_env = Environment::take_pooled_scope(func.params.len() + func.captures.len() + 8);
+    // Keep lexical/global visibility inside the function body (built-ins, globals, etc.).
+    // This matches expected behavior and avoids "not found" errors for globals.
+    //
+    // Note: This prevents pooling reuse for this scope (parent != None).
+    function_env.parent = Some(Box::new(env.clone()));
     if !func.captures.is_empty() {
         for capture in func.captures.iter() {
             if let Some(v) = env.lookup_ref(capture) {
