@@ -3,8 +3,17 @@ use crate::ast::{*};
 use crate::lexer::{*};
 use hashbrown::HashMap;
 use std::f64::consts::{PI, E};
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[cfg(target_arch = "wasm32")]
+fn random_unit() -> Result<f64, String> {
+    // WASM does not reliably support SystemTime/OS entropy in all environments.
+    // Use the host-provided JS RNG for the demo/runtime.
+    Ok(js_sys::Math::random())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn random_unit() -> Result<f64, String> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)

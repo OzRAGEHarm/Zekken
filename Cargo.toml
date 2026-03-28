@@ -13,6 +13,9 @@ wasm-bindgen = "0.2.113"
 console_error_panic_hook = "0.1.7"
 hashbrown = "0.15"
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3"
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # Native-only HTTP support (client + server). WASM builds keep working by omitting these deps.
 tiny_http = "0.12"

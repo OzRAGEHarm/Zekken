@@ -460,11 +460,14 @@ fn eval_assignment_native(assign: &AssignExpr, env: &mut Environment) -> Result<
 fn eval_member_native(member: &MemberExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
     // Fast path for member chains like a[i][k] or obj.key.other:
     // walk by reference and only clone final value.
-    fn collect_chain<'a>(expr: &'a Expr, out: &mut Vec<&'a Expr>) -> Option<&'a Identifier> {
+    fn collect_chain<'a>(
+        expr: &'a Expr,
+        out: &mut Vec<(&'a Expr, bool)>,
+    ) -> Option<&'a Identifier> {
         match expr {
             Expr::Member(m) => {
                 let root = collect_chain(m.object.as_ref(), out)?;
-                out.push(m.property.as_ref());
+                out.push((m.property.as_ref(), m.is_method));
                 Some(root)
             }
             Expr::Identifier(id) => Some(id),
@@ -474,11 +477,11 @@ fn eval_member_native(member: &MemberExpr, env: &mut Environment) -> Result<Valu
 
     let mut chain = Vec::new();
     if let Some(root_ident) = collect_chain(member.object.as_ref(), &mut chain) {
-        chain.push(member.property.as_ref());
+        chain.push((member.property.as_ref(), member.is_method));
 
         let supports_fast_chain = chain.iter().all(|prop| {
             matches!(
-                prop,
+                prop.0,
                 Expr::IntLit(_) | Expr::FloatLit(_) | Expr::Identifier(_) | Expr::StringLit(_)
             )
         });
@@ -494,9 +497,58 @@ fn eval_member_native(member: &MemberExpr, env: &mut Environment) -> Result<Valu
                 )
             })?;
 
-            for prop in chain {
+            for (prop, computed) in chain {
                 current = match current {
                     Value::Array(arr) => {
+                        if !computed {
+                            // Dot access on arrays (e.g. nums.length) is a property access, not indexing.
+                            let prop_name = match prop {
+                                Expr::Identifier(id) => id.name.as_str(),
+                                Expr::StringLit(s) => s.value.as_str(),
+                                _ => {
+                                    return Err(ZekkenError::type_error(
+                                        "Invalid member access",
+                                        "array member",
+                                        "other",
+                                        member.location.line,
+                                        member.location.column,
+                                    ));
+                                }
+                            };
+                            match prop_name {
+                                "length" => return Ok(Value::Int(arr.len() as i64)),
+                                "first" => {
+                                    return arr.first().cloned().ok_or_else(|| {
+                                        ZekkenError::runtime(
+                                            "Array is empty",
+                                            member.location.line,
+                                            member.location.column,
+                                            None,
+                                        )
+                                    })
+                                }
+                                "last" => {
+                                    return arr.last().cloned().ok_or_else(|| {
+                                        ZekkenError::runtime(
+                                            "Array is empty",
+                                            member.location.line,
+                                            member.location.column,
+                                            None,
+                                        )
+                                    })
+                                }
+                                _ => {
+                                    return Err(ZekkenError::type_error(
+                                        "Invalid member access",
+                                        "array index or known array member",
+                                        "other",
+                                        member.location.line,
+                                        member.location.column,
+                                    ));
+                                }
+                            }
+                        }
+
                         let idx = match prop {
                             Expr::IntLit(lit) if lit.value >= 0 => Some(lit.value as usize),
                             Expr::FloatLit(lit) if lit.value >= 0.0 && lit.value.fract() == 0.0 => Some(lit.value as usize),
@@ -520,75 +572,157 @@ fn eval_member_native(member: &MemberExpr, env: &mut Environment) -> Result<Valu
                         } else {
                             return Err(ZekkenError::type_error(
                                 "Invalid member access",
-                                "object",
+                                "array index",
                                 "other",
                                 member.location.line,
                                 member.location.column,
                             ));
                         }
                     }
-                    Value::Object(map) => match prop {
-                    Expr::Identifier(ident) => map.get(&ident.name).ok_or_else(|| {
-                        ZekkenError::reference_with_span(
-                            &format!("Property '{}' not found", ident.name),
-                            &ident.name,
-                            member.location.line,
-                            member.location.column,
-                            ident.name.len().max(1),
-                        )
-                    })?,
-                    Expr::StringLit(lit) => map.get(&lit.value).ok_or_else(|| {
-                        ZekkenError::reference_with_span(
-                            &format!("Property '{}' not found", lit.value),
-                            &lit.value,
-                            member.location.line,
-                            member.location.column,
-                            lit.value.len().max(1),
-                        )
-                    })?,
-                    Expr::IntLit(lit) if lit.value >= 0 => {
-                        let idx = lit.value as usize;
-                        let key = match map.get("__keys__") {
-                            Some(Value::Array(keys)) => match keys.get(idx) {
-                                Some(Value::String(key)) => key,
+                    Value::Object(map) => {
+                        if !computed {
+                            // Dot access treats identifiers as literal keys.
+                            let key = match prop {
+                                Expr::Identifier(ident) => ident.name.clone(),
+                                Expr::StringLit(lit) => lit.value.clone(),
                                 _ => {
-                                    return Err(ZekkenError::runtime(
-                                        &format!("Object index {} out of bounds", idx),
+                                    return Err(ZekkenError::type_error(
+                                        "Invalid property access",
+                                        "identifier/string",
+                                        "other",
                                         member.location.line,
                                         member.location.column,
-                                        None,
                                     ));
                                 }
-                            },
-                            _ => {
-                                return Err(ZekkenError::runtime(
-                                    "Object does not support numeric indexing",
+                            };
+
+                            map.get(&key).ok_or_else(|| {
+                                ZekkenError::reference_with_span(
+                                    &format!("Property '{}' not found", key),
+                                    &key,
                                     member.location.line,
                                     member.location.column,
-                                    None,
-                                ));
+                                    key.len().max(1),
+                                )
+                            })?
+                        } else {
+                            // Bracket/computed access evaluates the key expression.
+                            let key_val = match prop {
+                                Expr::StringLit(lit) => Value::String(lit.value.clone()),
+                                Expr::IntLit(lit) => Value::Int(lit.value),
+                                Expr::FloatLit(lit) => Value::Float(lit.value),
+                                Expr::Identifier(ident) => {
+                                    env.lookup_ref(&ident.name)
+                                        .cloned()
+                                        .ok_or_else(|| {
+                                            ZekkenError::reference_with_span(
+                                                &format!("Variable '{}' not found", ident.name),
+                                                "variable",
+                                                ident.location.line,
+                                                ident.location.column,
+                                                ident.name.len().max(1),
+                                            )
+                                        })?
+                                }
+                                _ => {
+                                    return Err(ZekkenError::type_error(
+                                        "Invalid property access",
+                                        "string/int",
+                                        "other",
+                                        member.location.line,
+                                        member.location.column,
+                                    ));
+                                }
+                            };
+
+                            match key_val {
+                                Value::String(k) => map.get(&k).ok_or_else(|| {
+                                    ZekkenError::reference_with_span(
+                                        &format!("Property '{}' not found", k),
+                                        &k,
+                                        member.location.line,
+                                        member.location.column,
+                                        k.len().max(1),
+                                    )
+                                })?,
+                                Value::Int(i) if i >= 0 => {
+                                    let idx = i as usize;
+                                    let key = match map.get("__keys__") {
+                                        Some(Value::Array(keys)) => match keys.get(idx) {
+                                            Some(Value::String(key)) => key.clone(),
+                                            _ => {
+                                                return Err(ZekkenError::runtime(
+                                                    &format!("Object index {} out of bounds", idx),
+                                                    member.location.line,
+                                                    member.location.column,
+                                                    None,
+                                                ));
+                                            }
+                                        },
+                                        _ => {
+                                            return Err(ZekkenError::runtime(
+                                                "Object does not support numeric indexing",
+                                                member.location.line,
+                                                member.location.column,
+                                                None,
+                                            ));
+                                        }
+                                    };
+                                    map.get(&key).ok_or_else(|| {
+                                        ZekkenError::reference_with_span(
+                                            &format!("Property '{}' not found", key),
+                                            &key,
+                                            member.location.line,
+                                            member.location.column,
+                                            key.len().max(1),
+                                        )
+                                    })?
+                                }
+                                Value::Float(f) if f >= 0.0 && f.fract() == 0.0 => {
+                                    let idx = f as usize;
+                                    let key = match map.get("__keys__") {
+                                        Some(Value::Array(keys)) => match keys.get(idx) {
+                                            Some(Value::String(key)) => key.clone(),
+                                            _ => {
+                                                return Err(ZekkenError::runtime(
+                                                    &format!("Object index {} out of bounds", idx),
+                                                    member.location.line,
+                                                    member.location.column,
+                                                    None,
+                                                ));
+                                            }
+                                        },
+                                        _ => {
+                                            return Err(ZekkenError::runtime(
+                                                "Object does not support numeric indexing",
+                                                member.location.line,
+                                                member.location.column,
+                                                None,
+                                            ));
+                                        }
+                                    };
+                                    map.get(&key).ok_or_else(|| {
+                                        ZekkenError::reference_with_span(
+                                            &format!("Property '{}' not found", key),
+                                            &key,
+                                            member.location.line,
+                                            member.location.column,
+                                            key.len().max(1),
+                                        )
+                                    })?
+                                }
+                                _ => {
+                                    return Err(ZekkenError::type_error(
+                                        "Invalid property access",
+                                        "string/int",
+                                        "other",
+                                        member.location.line,
+                                        member.location.column,
+                                    ));
+                                }
                             }
-                        };
-                        map.get(key).ok_or_else(|| {
-                            ZekkenError::reference_with_span(
-                                &format!("Property '{}' not found", key),
-                                key,
-                                member.location.line,
-                                member.location.column,
-                                key.len().max(1),
-                            )
-                        })?
+                        }
                     }
-                    _ => {
-                        return Err(ZekkenError::type_error(
-                            "Invalid property access",
-                            "string/int/identifier",
-                            "other",
-                            member.location.line,
-                            member.location.column,
-                        ));
-                    }
-                    },
                     _ => {
                         return Err(ZekkenError::type_error(
                             "Invalid member access",
@@ -606,38 +740,38 @@ fn eval_member_native(member: &MemberExpr, env: &mut Environment) -> Result<Valu
 
     let object = eval_expr_native(&member.object, env)?;
 
-    let key = match member.property.as_ref() {
-        Expr::Identifier(ident) => {
-            if matches!(object, Value::Array(_)) {
-                match env.lookup_ref(&ident.name) {
-                    Some(Value::Int(i)) if *i >= 0 => MemberKey::Index(*i as usize),
-                    Some(Value::Float(f)) if *f >= 0.0 && f.fract() == 0.0 => MemberKey::Index(*f as usize),
-                    _ => match eval_expr_native(member.property.as_ref(), env)? {
-                        Value::Int(i) if i >= 0 => MemberKey::Index(i as usize),
-                        Value::Float(f) if f >= 0.0 && f.fract() == 0.0 => MemberKey::Index(f as usize),
-                        _ => MemberKey::Prop(ident.name.clone()),
-                    },
-                }
-            } else {
-                MemberKey::Prop(ident.name.clone())
-            }
-        }
-        Expr::StringLit(s) => MemberKey::Prop(s.value.clone()),
-        Expr::IntLit(i) if i.value >= 0 => MemberKey::Index(i.value as usize),
-        Expr::FloatLit(f) if f.value >= 0.0 && f.value.fract() == 0.0 => MemberKey::Index(f.value as usize),
-        _ => match eval_expr_native(member.property.as_ref(), env)? {
+    let key = if member.is_method {
+        // Bracket/computed access: evaluate the key expression.
+        let v = eval_expr_native(member.property.as_ref(), env)?;
+        match v {
             Value::Int(i) if i >= 0 => MemberKey::Index(i as usize),
             Value::Float(f) if f >= 0.0 && f.fract() == 0.0 => MemberKey::Index(f as usize),
+            Value::String(s) => MemberKey::Prop(s),
             _ => {
                 return Err(ZekkenError::type_error(
                     "Invalid property access",
-                    "string/int/identifier",
+                    "string/int",
                     "other",
                     member.location.line,
                     member.location.column,
                 ))
             }
-        },
+        }
+    } else {
+        // Dot access: treat identifier as literal property name.
+        match member.property.as_ref() {
+            Expr::Identifier(ident) => MemberKey::Prop(ident.name.clone()),
+            Expr::StringLit(s) => MemberKey::Prop(s.value.clone()),
+            _ => {
+                return Err(ZekkenError::type_error(
+                    "Invalid property access",
+                    "identifier",
+                    "other",
+                    member.location.line,
+                    member.location.column,
+                ))
+            }
+        }
     };
 
     match (object, key) {
@@ -1498,10 +1632,15 @@ fn eval_for_native(for_stmt: &ForStmt, env: &mut Environment) -> Result<Option<V
     let mut last = None;
     match collection {
         Value::Array(arr) => {
-            let ids: Vec<String> = var_decl.ident.split(", ").map(|s| s.to_string()).collect();
-            if ids.len() != 1 {
+            let ids: Vec<String> = var_decl
+                .ident
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            if ids.is_empty() || ids.len() > 2 {
                 return Err(ZekkenError::syntax(
-                    "Array iteration requires one identifier",
+                    "Array iteration requires one or two identifiers",
                     var_decl.location.line,
                     var_decl.location.column,
                     None,
@@ -1509,8 +1648,19 @@ fn eval_for_native(for_stmt: &ForStmt, env: &mut Environment) -> Result<Option<V
                 ));
             }
             let body_may_return = block_has_return(&for_stmt.body);
-            for value in arr {
-                set_or_declare_loop_var(env, &ids[0], value);
+            if ids.len() == 1 {
+                set_or_declare_loop_var(env, &ids[0], Value::Void);
+            } else {
+                set_or_declare_loop_var(env, &ids[0], Value::Int(0));
+                set_or_declare_loop_var(env, &ids[1], Value::Void);
+            }
+            for (index, value) in arr.into_iter().enumerate() {
+                if ids.len() == 1 {
+                    set_or_declare_loop_var(env, &ids[0], value);
+                } else {
+                    set_or_declare_loop_var(env, &ids[0], Value::Int(index as i64));
+                    set_or_declare_loop_var(env, &ids[1], value);
+                }
                 if body_may_return {
                     if let Some(v) = eval_contents_native(&for_stmt.body, env)? {
                         last = Some(v);

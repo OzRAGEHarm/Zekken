@@ -87,7 +87,13 @@ pub fn lint_expression(expr: &Expr, env: &Environment) -> Result<(), ZekkenError
                 }
                 let _ = kind; // reserved for future, more precise diagnostics
             } else {
-                lint_expression(&call.callee, env)?;
+                // Calling a member (e.g. `"x".cast => |"int"|`, `math.sqrt => |9|`):
+                // lint the object, but treat the member name as a literal (not a variable).
+                if let Expr::Member(member) = call.callee.as_ref() {
+                    lint_expression(&member.object, env)?;
+                } else {
+                    lint_expression(&call.callee, env)?;
+                }
             }
 
             // Always lint arguments.
@@ -126,7 +132,11 @@ pub fn lint_expression(expr: &Expr, env: &Environment) -> Result<(), ZekkenError
         },
         Expr::Member(member) => {
             lint_expression(&member.object, env)?;
-            lint_expression(&member.property, env)?;
+            // Only bracket/computed member access should lint the property expression.
+            // Dot member access (`obj.key`) treats the identifier as a literal key.
+            if member.is_method {
+                lint_expression(&member.property, env)?;
+            }
         },
         Expr::ArrayLit(array) => {
             for el in &array.elements {
@@ -200,6 +210,39 @@ pub fn lint_statement(stmt: &Stmt, env: &Environment) -> Result<(), ZekkenError>
         },
         Stmt::ForStmt(for_stmt) => {
             if let Some(init) = &for_stmt.init {
+                // `for |...| in <collection> { ... }` is represented as a `ForStmt` whose `init`
+                // is a VarDecl with `ident` containing one/two loop identifiers and `value`
+                // containing the collection expression.
+                if for_stmt.test.is_none() && for_stmt.update.is_none() {
+                    if let Stmt::VarDecl(var_decl) = init.as_ref() {
+                        if let Some(Content::Expression(expr)) = var_decl.value.as_ref() {
+                            // Lint the collection in the outer env.
+                            lint_expression(expr, env)?;
+
+                            // Lint the body in a scope that contains the loop vars.
+                            let idents: Vec<String> = var_decl
+                                .ident
+                                .split(',')
+                                .map(|s| s.trim().to_string())
+                                .filter(|s| !s.is_empty())
+                                .collect();
+
+                            let mut loop_env = Environment::new_with_parent_capacity(env.clone(), idents.len().max(1) + 8);
+                            for ident in idents.iter() {
+                                loop_env.declare_ref(ident.as_str(), Value::Void, false);
+                            }
+
+                            for content in &for_stmt.body {
+                                match &**content {
+                                    Content::Expression(expr) => lint_expression(expr, &loop_env)?,
+                                    Content::Statement(stmt) => lint_statement(stmt, &loop_env)?,
+                                }
+                            }
+                            return Ok(());
+                        }
+                    }
+                }
+
                 lint_statement(init, env)?;
             }
             if let Some(test) = &for_stmt.test {

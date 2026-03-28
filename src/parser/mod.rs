@@ -301,6 +301,37 @@ impl Parser {
         let start_location = self.at().location();
         let constant = matches!(self.at().kind, TokenType::Const);
         self.consume();
+
+        // Provide a clearer error when a reserved type keyword is used as a variable name,
+        // e.g. `let obj: obj = { ... };`.
+        let next = self.at().clone();
+        if matches!(next.kind, TokenType::DataType(_)) {
+            let found = format!("{:?} ({})", next.kind, next.value);
+            self.errors.push(ZekkenError::syntax(
+                "Type names are reserved and cannot be used as variable identifiers",
+                next.line,
+                next.column,
+                Some("Identifier"),
+                Some(&found),
+            ));
+            // Consume the offending token so parsing can continue reasonably.
+            self.consume();
+            // Skip to the end of the statement to avoid cascaded nonsense errors.
+            while !matches!(self.at().kind, TokenType::Semicolon | TokenType::EOF) {
+                self.consume();
+            }
+            if self.at().kind == TokenType::Semicolon {
+                self.consume();
+            }
+            return Content::Statement(Box::new(Stmt::VarDecl(VarDecl {
+                constant,
+                ident: "<error>".to_string(),
+                type_: crate::lexer::DataType::Any,
+                value: None,
+                location: start_location,
+            })));
+        }
+
         let ident_token = self.expect(TokenType::Identifier, "Expected variable identifier");
         if ident_token.is_none() {
             // Return a dummy node so parsing can continue

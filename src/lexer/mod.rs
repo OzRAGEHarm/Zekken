@@ -253,7 +253,10 @@ pub fn tokenize(source: String) -> Vec<Token> {
                     column += 1;
                 }
             }
-            tokens.push(token);
+            // Comments are not part of the language grammar; skip them entirely.
+            if !matches!(token.kind, TokenType::SingleLineComment | TokenType::MultiLineComment) {
+                tokens.push(token);
+            }
             index += consumed;
         } else {
             index += 1;
@@ -397,6 +400,11 @@ fn parse_number(src: &[char], start: usize, line: usize, column: usize) -> Token
             num.push(c);
             idx += 1;
         } else if c == '.' && is_integer {
+            // Only treat '.' as part of a float literal if it is followed by a digit.
+            // This allows member access on integer literals: `99.cast => |...|`
+            if idx + 1 >= len || !src[idx + 1].is_ascii_digit() {
+                break;
+            }
             num.push(c);
             idx += 1;
             is_integer = false;
