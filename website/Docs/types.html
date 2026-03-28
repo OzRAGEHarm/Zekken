@@ -84,16 +84,6 @@ let headers: obj = { b: 1 };</code></pre>
             <li><strong>Function parameter checks</strong>: argument values are validated against parameter types at call time.</li>
             <li><strong>Containers are not generic</strong>: <code>arr</code> and <code>obj</code> can hold mixed runtime values.</li>
           </ul>
-          <p><strong>Gotcha:</strong> type keywords are reserved and cannot be used as variable names.</p>
-<pre><code class="language-zekken">// Invalid: `obj` is a reserved type keyword
-let obj: obj = { b: 1 };</code></pre>
-<pre><code class="language-text">Syntax Error: Type names are reserved and cannot be used as variable identifiers
-     | main.zk -&gt; [Ln: 1, Col: 5]
-     |
-   1 | let obj: obj = { b: 1 };
-     |     ^~~
-  expected: Identifier
-  found:    DataType(Object) (obj)</code></pre>
 
 <pre><code class="language-zekken">// 1) Declaration type check
 let n: int = 10;
