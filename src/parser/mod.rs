@@ -178,6 +178,10 @@ impl Parser {
                 | TokenType::CloseBrace
                 | TokenType::CloseBracket
                 | TokenType::Comma
+                // Allow `||` to mean an empty pipe-delimited list before a block/return-type,
+                // e.g. `func f || {}` or `func f || -> int {}` or `-> || {}`.
+                | TokenType::OpenBrace
+                | TokenType::ThinArrow
                 // New statement starters (newline isn't tokenized), so treat `||` before these as
                 // two pipe delimiters rather than a boolean OR that would incorrectly span lines.
                 | TokenType::At
@@ -351,10 +355,10 @@ impl Parser {
         let start_location = self.at().location();
         
         self.consume(); // Consume the ->
-        self.expect(TokenType::Pipe, "Expected '|' after '->'");
+        self.expect_pipe("Expected '|' after '->'");
         let params = self.parse_params();
         
-        self.expect(TokenType::Pipe, "Expected '|' after parameters");
+        self.expect_pipe("Expected '|' after parameters");
         // Lambdas currently do not support an explicit return type annotation.
         self.expect(TokenType::OpenBrace, "Expected '{' after parameters");
         let body = self.parse_block_stmt();
@@ -1438,6 +1442,7 @@ impl Parser {
                 };
                 Some(prec)
             },
+            TokenType::In => Some(7),
             TokenType::AssignOp(_) => Some(2),
             _ => None,
         }
@@ -1453,6 +1458,7 @@ impl Parser {
                 ArithOp::Div => "/".to_string(),
                 ArithOp::Mod => "%".to_string(),
             },
+            TokenType::In => "in".to_string(),
             TokenType::BinOp(op) => match op {
                 BinOp::And => "&&".to_string(),
                 BinOp::Or  => "||".to_string(),

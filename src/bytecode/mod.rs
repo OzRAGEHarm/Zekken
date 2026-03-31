@@ -85,6 +85,18 @@ fn eval_binary(left: &Value, right: &Value, op: &str, location: &Location) -> Re
             (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l % r)),
             _ => Err(ZekkenError::type_error("Invalid operand types for modulo", "int", "non-int", location.line, location.column)),
         },
+        "in" => match (left, right) {
+            (_, Value::Array(arr)) => Ok(Value::Boolean(arr.iter().any(|v| compare_values(left, v)))),
+            (Value::String(key), Value::Object(obj)) => Ok(Value::Boolean(obj.contains_key(key))),
+            (Value::String(needle), Value::String(haystack)) => Ok(Value::Boolean(haystack.contains(needle))),
+            _ => Err(ZekkenError::type_error(
+                "Invalid 'in' operation",
+                "value in array, string in object, or string in string",
+                "incompatible operands",
+                location.line,
+                location.column,
+            )),
+        },
         "==" => Ok(Value::Boolean(compare_values(left, right))),
         "!=" => Ok(Value::Boolean(!compare_values(left, right))),
         "<" => cmp_num(left, right, location, |l, r| l < r),

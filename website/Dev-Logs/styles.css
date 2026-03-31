@@ -234,7 +234,7 @@ h1 {
   }
 }
 
-.download-buttons {
+.buttons {
   display: flex;
   flex-direction: row; /* Display side by side */
   align-items: flex-start;
@@ -244,7 +244,7 @@ h1 {
   flex-wrap: wrap; /* Allow wrapping on smaller screens */
 }
 
-.download-buttons.editor-downloads {
+.buttons.editor-downloads {
   margin-top: 16px;
 }
 
@@ -262,7 +262,7 @@ h1 {
   margin-bottom: 20px;
 }
 
-.download-button {
+.button {
   background: #ba1923;
   color: #fff;
   border: none;
@@ -284,27 +284,73 @@ h1 {
   margin-bottom: 0; /* Reset margin */
 }
 
-.download-button.small {
+.button.small {
   padding: 10px 18px;
   font-size: 1.0em;
   min-width: 210px;
 }
 
-.download-button.secondary {
+.button.secondary {
   background: rgba(35, 40, 59, 0.92);
   border: 1px solid #2d3449;
 }
 
-.download-button:hover,
-.download-button:focus {
+.button:hover,
+.button:focus {
   background: #d62d2d;
   color: #fff;
   transform: translateY(-2px) scale(1.04);
   box-shadow: 0 4px 16px #0003;
 }
 
-.download-button.secondary:hover,
-.download-button.secondary:focus {
+.button.secondary:hover,
+.button.secondary:focus {
   background: rgba(42, 48, 67, 0.92);
   color: #fff;
+}
+
+/* Container styling */
+.devlog-dropdown {
+  margin-bottom: 1rem;
+  border: 1px solid #ba1923;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #384057;
+}
+
+/* Header/Toggle area */
+.devlog-dropdown summary {
+  padding: 1rem;
+  cursor: pointer;
+  background: #384057;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  user-select: none; /* Prevents text highlighting on double-click */
+}
+
+.devlog-dropdown summary h3 {
+  margin: 0;
+  display: inline-block;
+  color: #fff;
+}
+
+/* Add a custom arrow */
+.devlog-dropdown summary::before {
+  content: "▶";
+  font-size: 0.8rem;
+  margin-right: 10px;
+  transition: transform 0.3s ease; /* Kept only the arrow rotation transition */
+  color: #ba1923;
+}
+
+.devlog-dropdown[open] summary::before {
+  transform: rotate(90deg);
+}
+
+/* Content area */
+.devlog-content {
+  padding: 1rem;
+  background: #181c24;
+  border-top: 1px solid #ba1923;
 }

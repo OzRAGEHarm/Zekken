@@ -155,6 +155,35 @@ pub fn lint_expression(expr: &Expr, env: &Environment) -> Result<(), ZekkenError
 }
 
 pub fn lint_statement(stmt: &Stmt, env: &Environment) -> Result<(), ZekkenError> {
+    fn lint_contents_seq(contents: &[Box<Content>], env: &mut Environment) -> Result<(), ZekkenError> {
+        for content in contents {
+            match content.as_ref() {
+                Content::Expression(expr) => lint_expression(expr, env)?,
+                Content::Statement(stmt) => {
+                    // Inside a function/lambda body, model sequential local bindings so
+                    // later expressions can reference earlier `let` declarations.
+                    if let Stmt::VarDecl(var_decl) = stmt.as_ref() {
+                        if let Some(content) = &var_decl.value {
+                            match content {
+                                Content::Expression(expr) => lint_expression(expr, env)?,
+                                Content::Statement(stmt) => lint_statement(stmt, env)?,
+                            }
+                        }
+                        env.declare_ref_typed(
+                            var_decl.ident.as_str(),
+                            dummy_value_for_type(&var_decl.type_),
+                            var_decl.type_,
+                            var_decl.constant,
+                        );
+                    } else {
+                        lint_statement(stmt, env)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     match stmt {
         Stmt::VarDecl(var_decl) => {
             if let Some(content) = &var_decl.value {
@@ -171,12 +200,7 @@ pub fn lint_statement(stmt: &Stmt, env: &Environment) -> Result<(), ZekkenError>
                 fn_env.declare_ref_typed(param.ident.as_str(), dummy_value_for_type(&param.type_), param.type_, false);
             }
 
-            for content in &func_decl.body {
-                match &**content {
-                    Content::Expression(expr) => lint_expression(expr, &fn_env)?,
-                    Content::Statement(stmt) => lint_statement(stmt, &fn_env)?,
-                }
-            }
+            lint_contents_seq(&func_decl.body, &mut fn_env)?;
         },
         Stmt::Lambda(lambda) => {
             // Same parameter scoping rules as functions.
@@ -184,28 +208,15 @@ pub fn lint_statement(stmt: &Stmt, env: &Environment) -> Result<(), ZekkenError>
             for param in lambda.params.iter() {
                 fn_env.declare_ref_typed(param.ident.as_str(), dummy_value_for_type(&param.type_), param.type_, false);
             }
-            for content in &lambda.body {
-                match &**content {
-                    Content::Expression(expr) => lint_expression(expr, &fn_env)?,
-                    Content::Statement(stmt) => lint_statement(stmt, &fn_env)?,
-                }
-            }
+            lint_contents_seq(&lambda.body, &mut fn_env)?;
         }
         Stmt::IfStmt(if_stmt) => {
             lint_expression(&if_stmt.test, env)?;
-            for content in &if_stmt.body {
-                match &**content {
-                    Content::Expression(expr) => lint_expression(expr, env)?,
-                    Content::Statement(stmt) => lint_statement(stmt, env)?,
-                }
-            }
+            let mut body_env = Environment::new_with_parent_capacity(env.clone(), 8);
+            lint_contents_seq(&if_stmt.body, &mut body_env)?;
             if let Some(alt) = &if_stmt.alt {
-                for content in alt {
-                    match &**content {
-                        Content::Expression(expr) => lint_expression(expr, env)?,
-                        Content::Statement(stmt) => lint_statement(stmt, env)?,
-                    }
-                }
+                let mut alt_env = Environment::new_with_parent_capacity(env.clone(), 8);
+                lint_contents_seq(alt, &mut alt_env)?;
             }
         },
         Stmt::ForStmt(for_stmt) => {
@@ -231,13 +242,7 @@ pub fn lint_statement(stmt: &Stmt, env: &Environment) -> Result<(), ZekkenError>
                             for ident in idents.iter() {
                                 loop_env.declare_ref(ident.as_str(), Value::Void, false);
                             }
-
-                            for content in &for_stmt.body {
-                                match &**content {
-                                    Content::Expression(expr) => lint_expression(expr, &loop_env)?,
-                                    Content::Statement(stmt) => lint_statement(stmt, &loop_env)?,
-                                }
-                            }
+                            lint_contents_seq(&for_stmt.body, &mut loop_env)?;
                             return Ok(());
                         }
                     }
@@ -251,36 +256,20 @@ pub fn lint_statement(stmt: &Stmt, env: &Environment) -> Result<(), ZekkenError>
             if let Some(update) = &for_stmt.update {
                 lint_expression(update, env)?;
             }
-            for content in &for_stmt.body {
-                match &**content {
-                    Content::Expression(expr) => lint_expression(expr, env)?,
-                    Content::Statement(stmt) => lint_statement(stmt, env)?,
-                }
-            }
+            let mut body_env = Environment::new_with_parent_capacity(env.clone(), 8);
+            lint_contents_seq(&for_stmt.body, &mut body_env)?;
         },
         Stmt::WhileStmt(while_stmt) => {
             lint_expression(&while_stmt.test, env)?;
-            for content in &while_stmt.body {
-                match &**content {
-                    Content::Expression(expr) => lint_expression(expr, env)?,
-                    Content::Statement(stmt) => lint_statement(stmt, env)?,
-                }
-            }
+            let mut body_env = Environment::new_with_parent_capacity(env.clone(), 8);
+            lint_contents_seq(&while_stmt.body, &mut body_env)?;
         },
         Stmt::TryCatchStmt(try_catch) => {
-            for content in &try_catch.try_block {
-                match &**content {
-                    Content::Expression(expr) => lint_expression(expr, env)?,
-                    Content::Statement(stmt) => lint_statement(stmt, env)?,
-                }
-            }
+            let mut try_env = Environment::new_with_parent_capacity(env.clone(), 8);
+            lint_contents_seq(&try_catch.try_block, &mut try_env)?;
             if let Some(catch_block) = &try_catch.catch_block {
-                for content in catch_block {
-                    match &**content {
-                        Content::Expression(expr) => lint_expression(expr, env)?,
-                        Content::Statement(stmt) => lint_statement(stmt, env)?,
-                    }
-                }
+                let mut catch_env = Environment::new_with_parent_capacity(env.clone(), 8);
+                lint_contents_seq(catch_block, &mut catch_env)?;
             }
         },
         _ => {}

@@ -504,8 +504,6 @@ fn highlight_zekken_line(line: &str) -> String {
         // Numbers (float and int)
         (r"\b\d+\.\d+\b", FLOAT, false, false),
         (r"\b\d+\b", INT, false, false),
-        // Function declaration (func name)
-        (r"\bfunc\s+([a-zA-Z_][a-zA-Z0-9_]*)", FN_DECL, false, false),
         // Operators
         (r"=>|->|[+\-*/%=]", OPERATOR, false, false),
         // Variables (fallback)
@@ -526,6 +524,22 @@ fn highlight_zekken_line(line: &str) -> String {
                     start: name_pos,
                     end: name_end,
                     color: BUILTIN_FN,
+                    bold: false,
+                    italic: false,
+                });
+            }
+        }
+    }
+
+    // Highlight function declaration names without overriding the `func` keyword color.
+    {
+        let re = Regex::new(r"\\bfunc\\s+([a-zA-Z_][a-zA-Z0-9_]*)").unwrap();
+        for caps in re.captures_iter(line) {
+            if let Some(name) = caps.get(1) {
+                spans.push(Span {
+                    start: name.start(),
+                    end: name.end(),
+                    color: FN_DECL,
                     bold: false,
                     italic: false,
                 });

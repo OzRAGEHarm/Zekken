@@ -995,6 +995,20 @@ impl Value {
         }
     }
 
+    #[inline]
+    fn compare_values_simple(left: &Value, right: &Value) -> bool {
+        match (left, right) {
+            (Value::Int(l), Value::Int(r)) => l == r,
+            (Value::Float(l), Value::Float(r)) => l == r,
+            (Value::Int(l), Value::Float(r)) => (*l as f64) == *r,
+            (Value::Float(l), Value::Int(r)) => *l == (*r as f64),
+            (Value::String(l), Value::String(r)) => l == r,
+            (Value::Boolean(l), Value::Boolean(r)) => l == r,
+            (Value::Void, Value::Void) => true,
+            _ => false,
+        }
+    }
+
     fn handle_cast(&self, args: Vec<Value>) -> Result<Value, String> {
         if args.len() != 1 {
             return Err("cast requires one string argument (target type)".to_string());
@@ -1142,6 +1156,33 @@ impl Value {
                     .collect::<Vec<_>>()
                     .join(delim);
                 Ok(Value::String(joined))
+            }
+            "remove" => {
+                if args.len() != 1 {
+                    return Err("remove requires exactly one argument (value to remove)".to_string());
+                }
+                let value_to_remove = args.remove(0);
+
+                if let Some(env) = env {
+                    if let Some(var_name) = variable_name {
+                        let mut new_arr = arr.clone();
+                        if let Some(pos) = new_arr
+                            .iter()
+                            .position(|x| Self::compare_values_simple(x, &value_to_remove))
+                        {
+                            let removed_val = new_arr.remove(pos);
+                            env.assign(var_name, Value::Array(new_arr))
+                                .map_err(|e| format!("Failed to update array: {}", e))?;
+                            Ok(removed_val)
+                        } else {
+                            Err("Value not found in array".to_string())
+                        }
+                    } else {
+                        Err("remove requires a variable name to update the original array".to_string())
+                    }
+                } else {
+                    Err("remove requires an environment to update the original array".to_string())
+                }
             }
             _ => Err(format!("Array method '{}' not supported", method_name)),
         }

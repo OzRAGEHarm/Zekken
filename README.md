@@ -24,7 +24,7 @@
 Zekken is under active development and the language/standard library may change. If you hit a crash or confusing error, please open an issue with a minimal repro.
 
 ## Development Logs ⚙
-Stay informed about the latest changes, improvements, and fixes to Zekken. Below is a summary of the development progress:
+Stay informed about the latest changes, improvements, and fixes to Zekken. Below is a summary of the development progress, they are also available on the website [here](https://ozrageharm.github.io/Zekken/website/Dev-Logs/devlogs.html):
 
 ### Early Development Log (Feb 2025 - Feb 26, 2026)
 - **[View Full Development Log](./dev-logs/early-development.md)**

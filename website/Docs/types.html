@@ -20,6 +20,7 @@
       <a href="../Demo/demo.html">Demo</a>
       <a href="getting-started.html" class="active">Docs</a>
       <a href="../Download/download.html">Download</a>
+      <a href="../Dev-Logs/devlogs.html">Dev Logs</a>
     </nav>
     <button class="hamburger" aria-label="Open menu" tabindex="0">
       <span></span><span></span><span></span>
@@ -158,6 +159,7 @@ let parts: arr = s.split => |" "|;</code></pre>
 	            <li><code>a.first =&gt; || -&gt; value</code> - First element (runtime error if empty).</li>
 	            <li><code>a.last =&gt; || -&gt; value</code> - Last element (runtime error if empty).</li>
 	            <li><code>a.join =&gt; |sep: string| -&gt; string</code> - Join elements with a separator (elements are stringified).</li>
+	            <li><code>a.remove =&gt; |value: value| -&gt; value</code> - Remove the first matching element (mutates, runtime error if not found).</li>
 	            <li><code>a.push =&gt; |value: value| -&gt; void</code> - Append (mutates).</li>
 	            <li><code>a.pop =&gt; || -&gt; value</code> - Remove last (mutates, runtime error if empty).</li>
 	            <li><code>a.unshift =&gt; |value: value| -&gt; void</code> - Insert at front (mutates).</li>
@@ -171,9 +173,10 @@ nums.push => |8|
 let removed: int = nums.pop => ||;
 let front: int = nums.shift => ||;
 nums.unshift => |1|
+let removed_first_4: int = nums.remove => |4|;
 let joined: string = nums.join => |"-"|;</code></pre>
 	          <p>
-	            Note: <code>push</code>, <code>pop</code>, <code>shift</code>, and <code>unshift</code> mutate the array variable in-place, so call them on a named array (not a temporary expression).
+	            Note: <code>push</code>, <code>pop</code>, <code>shift</code>, <code>unshift</code>, and <code>remove</code> mutate the array variable in-place, so call them on a named array (not a temporary expression).
 	          </p>
 	          <p>Because arrays can contain mixed runtime values, you should annotate based on what you expect at runtime:</p>
 <pre><code class="language-zekken">let a: arr = [1, "two"];

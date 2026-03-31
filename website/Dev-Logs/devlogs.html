@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Developer Logs | Zekken Programming Language</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/png" href="../../images/zekken_icon.png">
+  <link rel="stylesheet" href="../Dev-Logs/styles.css">
+</head>
+<body>
+  <div class="navbar">
+    <img src="../../images/zekken_icon.png" alt="Zekken Logo" class="logo-img">
+    
+    <nav>
+      <a href="https://github.com/OzRAGEHarm/Zekken" class="github-btn" target="_blank" rel="noopener" title="View on GitHub">
+        <img src="../../images/github.png" alt="GitHub" class="github-icon">
+      </a>
+      <a href="../../index.html">Home</a>
+      <a href="../Demo/demo.html">Demo</a>
+      <a href="../Docs/getting-started.html">Docs</a>
+      <a href="../Download/download.html">Download</a>
+      <a href="devlogs.html" class="active">Dev Logs</a>
+    </nav>
+    <button class="hamburger" aria-label="Open menu" tabindex="0">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+  <script>
+    // Hamburger menu toggle
+    const hamburger = document.querySelector('.hamburger');
+    const navbar = document.querySelector('.navbar');
+    const nav = document.querySelector('.navbar nav');
+    hamburger.addEventListener('click', () => {
+      navbar.classList.toggle('menu-open');
+      hamburger.classList.toggle('active');
+    });
+    // Close menu when clicking a nav link (mobile)
+    nav.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', () => {
+        navbar.classList.remove('menu-open');
+        hamburger.classList.remove('active');
+      });
+    });
+  </script>
+
+	<div class="container">
+	    <h1>Zekken Developer Logs</h1>
+	    <p>Track the evolution of the language through the complete developer log archive.</p>
+
+		<hr style="margin: 22px 0; border: 0; border-top: 1px solid #2c3348;">
+
+	    <script type="module" src="https://cdn.jsdelivr.net/gh/zerodevx/zero-md@1/src/zero-md.min.js"></script>
+
+	    <h2>Latest Dev Log</h2>
+        <details class="devlog-dropdown" open>
+            <summary>Release Development Log (March 30, 2026) | Version 1.0.2</summary>
+            <div id="markdown-target-latest" class="devlog-content">
+                <zero-md src="../../dev-logs/release-dev/v1.0.2.md">
+                    <template>
+                        <style>
+                        :host { display: block; font-family: 'Fira Mono', 'Consolas', monospace; color: #e0e0e0; } h1, h2, h3 { color: #ba1923; margin-top: 1em; } a { color: #ba1923; text-decoration: none; } a:hover { text-decoration: underline; } code { color: #f2f2f2;  background: #121621; border: 1px solid #2d3449; border-radius: 6px; padding: 1px 6px; font-size: 0.95em; } pre { background: #181c24; padding: 16px; border-radius: 8px; border: 1px solid #2c3348; overflow-x: auto; } p, li { line-height: 1.6; margin-bottom: 16px; }
+                        </style>
+                    </template>
+                </zero-md>
+            </div>
+        </details>
+
+        <hr style="margin: 22px 0; border: 0; border-top: 1px solid #2c3348;">
+
+	    <h2>Other Dev Logs</h2>
+	    <p>Archived/older dev logs will be listed here as they are added.</p>
+		<details class="devlog-dropdown">
+            <!-- EARLY DEV LOG -->
+		    <summary>Early Development Log (February 2025 - February 26, 2026) | Pre-release (Source)</summary>
+            <div id="markdown-target-early" class="devlog-content">
+                <zero-md src="../../dev-logs/early-development.md">
+                    <template>
+                        <style>
+                            :host { display: block; font-family: 'Fira Mono', 'Consolas', monospace; color: #e0e0e0; } h1, h2, h3 { color: #ba1923; margin-top: 1em; } a { color: #ba1923; text-decoration: none; } a:hover { text-decoration: underline; } code { color: #f2f2f2;  background: #121621; border: 1px solid #2d3449; border-radius: 6px; padding: 1px 6px; font-size: 0.95em; } pre { background: #181c24; padding: 16px; border-radius: 8px; border: 1px solid #2c3348; overflow-x: auto; } p, li { line-height: 1.6; margin-bottom: 16px; }
+                        </style>
+                    </template>
+                </zero-md>
+            </div>
+	    </details>
+        <!-- RELEASE VERSION 1.0.0 -->
+        <details class="devlog-dropdown">
+            <summary>Release Development Log (February 26, 2026 - March 26, 2026) | Version 1.0.0</summary>
+            <div id="markdown-target-latest" class="devlog-content">
+                <zero-md src="../../dev-logs/release-dev/v1.0.0.md">
+                    <template>
+                        <style>
+                            :host { display: block; font-family: 'Fira Mono', 'Consolas', monospace; color: #e0e0e0; } h1, h2, h3 { color: #ba1923; margin-top: 1em; } a { color: #ba1923; text-decoration: none; } a:hover { text-decoration: underline; } code { color: #f2f2f2;  background: #121621; border: 1px solid #2d3449; border-radius: 6px; padding: 1px 6px; font-size: 0.95em; } pre { background: #181c24; padding: 16px; border-radius: 8px; border: 1px solid #2c3348; overflow-x: auto; } p, li { line-height: 1.6; margin-bottom: 16px; }
+                        </style>
+                    </template>
+                </zero-md>
+            </div>
+        </details>
+        <!-- RELEASE VERSION 1.0.1 -->
+        <details class="devlog-dropdown">
+            <summary>Release Development Log (March 27, 2026) | Version 1.0.1</summary>
+            <div id="markdown-target-latest" class="devlog-content">
+                <zero-md src="../../dev-logs/release-dev/v1.0.1.md">
+                    <template>
+                        <style>
+                        :host { display: block; font-family: 'Fira Mono', 'Consolas', monospace; color: #e0e0e0; } h1, h2, h3 { color: #ba1923; margin-top: 1em; } a { color: #ba1923; text-decoration: none; } a:hover { text-decoration: underline; } code { color: #f2f2f2;  background: #121621; border: 1px solid #2d3449; border-radius: 6px; padding: 1px 6px; font-size: 0.95em; } pre { background: #181c24; padding: 16px; border-radius: 8px; border: 1px solid #2c3348; overflow-x: auto; } p, li { line-height: 1.6; margin-bottom: 16px; }
+                        </style>
+                    </template>
+                </zero-md>
+            </div>
+        </details>
+	</div>
+</body>
+</html>

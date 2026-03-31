@@ -217,6 +217,22 @@ fn evaluate_binary_expression(expr: &BinaryExpr, env: &mut Environment) -> Resul
     let right = evaluate_expression(&expr.right, env)?;
     
     match expr.operator.as_str() {
+        "in" => match (&left, &right) {
+            (_, Value::Array(arr)) => Ok(Value::Boolean(
+                arr.iter().any(|v| compare_values(&left, v)),
+            )),
+            (Value::String(key), Value::Object(obj)) => Ok(Value::Boolean(obj.contains_key(key))),
+            (Value::String(needle), Value::String(haystack)) => {
+                Ok(Value::Boolean(haystack.contains(needle)))
+            }
+            _ => Err(ZekkenError::type_error(
+                "Invalid 'in' operation",
+                "value in array, string in object, or string in string",
+                "incompatible operands",
+                expr.location.line,
+                expr.location.column,
+            )),
+        },
         "+" => match (&left, &right) {
             (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l + r)),
             (Value::Float(l), Value::Float(r)) => Ok(Value::Float(l + r)),

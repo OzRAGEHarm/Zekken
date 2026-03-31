@@ -20,6 +20,7 @@
       <a href="../Demo/demo.html">Demo</a>
       <a href="getting-started.html" class="active">Docs</a>
       <a href="../Download/download.html">Download</a>
+	  <a href="../Dev-Logs/devlogs.html">Dev Logs</a>
     </nav>
     <button class="hamburger" aria-label="Open menu" tabindex="0">
       <span></span><span></span><span></span>
@@ -171,11 +172,26 @@ include { some_value, helper } from "other.zk";</code></pre>
 let sum: int = add =&gt; |1, 2|;</code></pre>
 
 	          <h3 id="control-flow" class="doc-anchor"><a class="doc-anchor-link" href="#control-flow">Control Flow</a><a class="doc-anchor-hash" href="#control-flow" aria-label="Link to this section">#</a></h3>
-	          <p>
-	            Conditionals use <code>if</code>/<code>else</code>. Loops use <code>while</code> for repetition and <code>for</code> for iterating arrays/objects.
-	            In a <code>for</code> loop, you can bind one variable (value/item) or two variables (index+value for arrays, key+value for objects).
-	            Use <code>_</code> to ignore a binding.
-	          </p>
+		          <p>
+		            Conditionals use <code>if</code>/<code>else</code>. Loops use <code>while</code> for repetition and <code>for</code> for iterating arrays/objects.
+		            In a <code>for</code> loop, you can bind one variable (value/item) or two variables (index+value for arrays, key+value for objects).
+		            Use <code>_</code> to ignore a binding.
+		          </p>
+		          <p>
+		            Zekken also supports the <code>in</code> operator inside conditions and expressions:
+		            it checks membership in arrays, key existence in objects, and substring existence in strings.
+		          </p>
+<pre><code class="language-zekken">let tasks: arr = ["read", "ship"];
+let task: string = "ship";
+
+if task in tasks {
+  @println => |"task exists"|
+}
+
+let profile: obj = { name: "RAGE" };
+if "name" in profile {
+  @println => |profile["name"]|
+}</code></pre>
 <pre><code class="language-zekken">if x == 45 {
   @println => |"x matched"|
 } else {
