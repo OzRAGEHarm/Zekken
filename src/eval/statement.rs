@@ -42,6 +42,8 @@ fn create_dummy_value(data_type: &DataType) -> Value {
             return_type: None,
             needs_parent: false,
             captures: Arc::new(vec![]),
+            compiled_insts: None,
+            compiled_reg_count: 0,
         }),
         _ => Value::Void,
     }
@@ -55,11 +57,17 @@ struct ParentUsage {
 
 fn analyze_function_parent_usage(params: &[Param], body: &[Box<Content>]) -> ParentUsage {
     let mut locals = HashSet::new();
+    let mut usage = ParentUsage::default();
     for p in params {
+        if let Some(default_expr) = p.default_value.as_ref() {
+            analyze_expr_parent_usage(default_expr, &locals, &mut usage);
+            if usage.requires_parent_clone {
+                return usage;
+            }
+        }
         locals.insert(p.ident.clone());
     }
 
-    let mut usage = ParentUsage::default();
     analyze_contents_parent_usage(body, &mut locals, &mut usage);
     usage
 }
@@ -166,6 +174,7 @@ fn analyze_expr_parent_usage(expr: &Expr, locals: &HashSet<String>, usage: &mut 
                 usage.captures.insert(i.name.clone());
             }
         }
+        Expr::Unary(u) => analyze_expr_parent_usage(&u.operand, locals, usage),
         Expr::Binary(b) => {
             analyze_expr_parent_usage(&b.left, locals, usage);
             if usage.requires_parent_clone {
@@ -243,6 +252,8 @@ fn process_statement_scope(stmt: &Stmt, env: &mut Environment) {
                 return_type: lambda.return_type,
                 needs_parent: true,
                 captures: Arc::new(vec![]),
+                compiled_insts: None,
+                compiled_reg_count: 0,
             };
             env.declare(lambda.ident.clone(), Value::Function(function_value), lambda.constant);
         },
@@ -272,6 +283,8 @@ fn process_statement_scope(stmt: &Stmt, env: &mut Environment) {
                 return_type: func_decl.return_type,
                 needs_parent: true,
                 captures: Arc::new(vec![]),
+                compiled_insts: None,
+                compiled_reg_count: 0,
             };
             env.declare(func_decl.ident.clone(), Value::Function(function_value), false);
         },
@@ -356,6 +369,7 @@ fn expr_location(expr: &Expr) -> Location {
         Expr::Assign(e) => e.location.clone(),
         Expr::Member(e) => e.location.clone(),
         Expr::Call(e) => e.location.clone(),
+        Expr::Unary(e) => e.location.clone(),
         Expr::Binary(e) => e.location.clone(),
         Expr::Identifier(e) => e.location.clone(),
         Expr::Property(e) => e.location.clone(),
@@ -532,6 +546,8 @@ fn evaluate_function_declaration(func: &FuncDecl, env: &mut Environment) -> Resu
         return_type: func.return_type,
         needs_parent: usage.requires_parent_clone,
         captures: Arc::new(captures),
+        compiled_insts: None,
+        compiled_reg_count: 0,
     };
 
     env.declare(func.ident.clone(), Value::Function(function_value), false);
@@ -1414,6 +1430,8 @@ fn evaluate_lambda(lambda: &LambdaDecl, env: &mut Environment) -> Result<Option<
         return_type: lambda.return_type,
         needs_parent: usage.requires_parent_clone,
         captures: Arc::new(captures),
+        compiled_insts: None,
+        compiled_reg_count: 0,
     };
 
     env.declare(lambda.ident.clone(), Value::Function(function_value), lambda.constant);

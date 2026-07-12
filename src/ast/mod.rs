@@ -32,6 +32,7 @@ pub enum Expr {
   Assign(AssignExpr),
   Member(MemberExpr),
   Call(CallExpr),
+  Unary(UnaryExpr),
   Binary(BinaryExpr),
   Identifier(Identifier),
   Property(Property),
@@ -116,6 +117,7 @@ pub struct WhileStmt {
 #[derive(Debug, Clone)]
 pub struct TryCatchStmt {
     pub try_block: Vec<Box<Content>>,
+    pub catch_param: Option<String>,
     pub catch_block: Option<Vec<Box<Content>>>,
     pub location: Location,
 }
@@ -183,6 +185,13 @@ pub struct CallExpr {
     pub callee: Box<Expr>,
     pub args: Vec<Box<Expr>>,
     pub is_native: bool,
+    pub location: Location,
+}
+
+#[derive(Debug, Clone)]
+pub struct UnaryExpr {
+    pub operator: String,
+    pub operand: Box<Expr>,
     pub location: Location,
 }
 

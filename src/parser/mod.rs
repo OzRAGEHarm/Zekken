@@ -169,8 +169,10 @@ impl Parser {
         if self.at().kind != TokenType::BinOp(BinOp::Or) {
             return false;
         }
-        matches!(
-            self.next_kind(),
+        let next = self.next_kind();
+        // First check for obvious delimiters
+        if matches!(
+            next,
             TokenType::Pipe
                 | TokenType::Semicolon
                 | TokenType::EOF
@@ -198,7 +200,14 @@ impl Parser {
                 | TokenType::Use
                 | TokenType::Include
                 | TokenType::Export
-        )
+        ) {
+            return true;
+        }
+        
+        // Also treat `||` as a delimiter if followed by any operator or identifier,
+        // since these can legitimately follow a function call with no arguments.
+        // Examples: `f => || == x`, `f => || != x`, `f => || +=1`, etc.
+        matches!(next, TokenType::BinOp(_) | TokenType::AssignOp(_) | TokenType::ArithOp(_) | TokenType::Identifier)
     }
 
     fn is_pipe_token(&self) -> bool {
@@ -875,22 +884,33 @@ impl Parser {
     fn parse_export_stmt(&mut self) -> Content {
         let start_location = self.at().location();
         self.expect(TokenType::Export, "Expected 'export' keyword");
-        
+
+        if self.expect(TokenType::OpenBrace, "Expected '{' after 'export'").is_none() {
+            return Content::Statement(Box::new(Stmt::Export(ExportStmt {
+                exports: Vec::new(),
+                location: start_location,
+            })));
+        }
+
         let mut exports = Vec::new();
-        
-        loop {
-            let ident = self.expect(TokenType::Identifier, "Expected identifier after 'export'").unwrap().value;
+
+        while self.not_eof() && self.at().kind != TokenType::CloseBrace {
+            let ident = match self.expect(TokenType::Identifier, "Expected identifier in export block") {
+                Some(token) => token.value,
+                None => break,
+            };
             exports.push(ident);
-            
+
             if self.at().kind == TokenType::Comma {
-                self.consume(); // Consume the comma
+                self.consume();
             } else {
                 break;
             }
         }
 
+        self.expect(TokenType::CloseBrace, "Expected '}' to close export block");
         self.expect(TokenType::Semicolon, "Expected ';' after export statement");
-        
+
         Content::Statement(Box::new(Stmt::Export(ExportStmt {
             exports,
             location: start_location,
@@ -929,7 +949,7 @@ impl Parser {
         self.expect_pipe("Expected '|' after 'catch'");
         
         // Parse the catch parameter
-        let _param_ident = self
+        let catch_param = self
             .expect(TokenType::Identifier, "Expected identifier in catch clause")
             .map(|t| t.value)
             .unwrap_or_else(|| "_".to_string());
@@ -941,6 +961,7 @@ impl Parser {
     
         Content::Statement(Box::new(Stmt::TryCatchStmt(TryCatchStmt {
             try_block,
+            catch_param: Some(catch_param),
             catch_block: Some(catch_block),
             location: start_location,
         })))
@@ -1218,6 +1239,20 @@ impl Parser {
                 },
                 _ => panic!("Expected expression after '-'"),
             }
+        }
+
+        if self.at().kind == TokenType::BinOp(BinOp::Not) {
+            let not_location = self.at().location();
+            self.consume();
+            let expr = self.parse_prefix();
+            return match expr {
+                Content::Expression(e) => Content::Expression(Box::new(Expr::Unary(UnaryExpr {
+                    operator: "!".to_string(),
+                    operand: e,
+                    location: not_location,
+                }))),
+                _ => panic!("Expected expression after '!'"),
+            };
         }
 
         // Handle native function calls prefixed with '@'
@@ -1551,6 +1586,7 @@ impl Parser {
             Expr::Assign(e) => e.location.clone(),
             Expr::Member(e) => e.location.clone(),
             Expr::Call(e) => e.location.clone(),
+            Expr::Unary(e) => e.location.clone(),
             Expr::Binary(e) => e.location.clone(),
             Expr::Identifier(e) => e.location.clone(),
             Expr::Property(e) => e.location.clone(),

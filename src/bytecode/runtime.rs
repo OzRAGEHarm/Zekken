@@ -1,12 +1,16 @@
 use crate::ast::*;
-use crate::environment::{Environment, FunctionValue, Value};
+use crate::environment::{Environment, Value};
 use crate::errors::ZekkenError;
 use crate::lexer::DataType;
 use hashbrown::HashMap;
-use std::sync::Arc;
+use std::cell::RefCell;
 
-use super::compiler::analyze_function_parent_usage;
+use super::compiler::make_function_value;
 use super::inst::{BinaryOpCode, Inst, Reg};
+
+thread_local! {
+    static REG_POOL: RefCell<Vec<Vec<Value>>> = const { RefCell::new(Vec::new()) };
+}
 
 #[inline]
 pub(super) fn value_type_name(val: &Value) -> &'static str {
@@ -164,10 +168,6 @@ fn value_to_non_negative_index(value: &Value) -> Option<usize> {
 }
 
 pub(super) fn run_insts(insts: &[Inst], reg_count: usize, env: &mut Environment) -> Result<Option<Value>, ZekkenError> {
-    let mut regs = vec![Value::Void; reg_count.max(1)];
-    let mut ip = 0usize;
-    let mut last_value: Option<Value> = None;
-
     #[inline]
     fn get_reg(regs: &[Value], reg: Reg) -> &Value {
         debug_assert!(reg < regs.len());
@@ -180,8 +180,48 @@ pub(super) fn run_insts(insts: &[Inst], reg_count: usize, env: &mut Environment)
         &mut regs[reg]
     }
 
-    while ip < insts.len() {
-        match &insts[ip] {
+    #[inline]
+    fn take_pooled_regs(reg_count: usize) -> Vec<Value> {
+        let needed = reg_count.max(1);
+        let mut reused = None;
+        REG_POOL.with(|pool| {
+            let mut pool = pool.borrow_mut();
+            if let Some(idx) = pool.iter().position(|regs| regs.capacity() >= needed) {
+                reused = Some(pool.swap_remove(idx));
+            }
+        });
+
+        let mut regs = reused.unwrap_or_else(|| Vec::with_capacity(needed));
+        regs.clear();
+        regs.resize(needed, Value::Void);
+        regs
+    }
+
+    #[inline]
+    fn return_pooled_regs(mut regs: Vec<Value>) {
+        regs.clear();
+        REG_POOL.with(|pool| {
+            pool.borrow_mut().push(regs);
+        });
+    }
+
+    #[inline]
+    fn collect_small_call_args(regs: &[Value], argc: u8, args: &[Reg; 3]) -> Vec<Value> {
+        let argc = argc as usize;
+        let mut out = Vec::with_capacity(argc);
+        for arg in args.iter().take(argc) {
+            out.push(clone_value_hot(get_reg(regs, *arg)));
+        }
+        out
+    }
+
+    let mut regs = take_pooled_regs(reg_count);
+    let result = (|| -> Result<Option<Value>, ZekkenError> {
+        let mut ip = 0usize;
+        let mut last_value: Option<Value> = None;
+
+        while ip < insts.len() {
+            match &insts[ip] {
             Inst::LoadConst { dst, value } => {
                 *get_reg_mut(&mut regs, *dst) = clone_value_hot(value);
             }
@@ -368,51 +408,133 @@ pub(super) fn run_insts(insts: &[Inst], reg_count: usize, env: &mut Environment)
                 *get_reg_mut(&mut regs, *dst) = out;
             }
             Inst::CallMath { dst, method, argc, args, location } => {
-                let mut call_args = Vec::with_capacity(*argc as usize);
-                for arg in args.iter().take(*argc as usize) {
-                    call_args.push(clone_value_hot(get_reg(&regs, *arg)));
-                }
+                let call_args = collect_small_call_args(&regs, *argc, args);
                 let out = method.eval(&call_args, location)?;
                 *get_reg_mut(&mut regs, *dst) = out;
             }
             Inst::CallFs { dst, method, argc, args, location } => {
-                let mut call_args = Vec::with_capacity(*argc as usize);
-                for arg in args.iter().take(*argc as usize) {
-                    call_args.push(clone_value_hot(get_reg(&regs, *arg)));
-                }
+                let call_args = collect_small_call_args(&regs, *argc, args);
                 let out = method.eval(call_args, env, location)?;
                 *get_reg_mut(&mut regs, *dst) = out;
             }
             Inst::CallOs { dst, method, argc, args, location } => {
-                let mut call_args = Vec::with_capacity(*argc as usize);
-                for arg in args.iter().take(*argc as usize) {
-                    call_args.push(clone_value_hot(get_reg(&regs, *arg)));
-                }
+                let call_args = collect_small_call_args(&regs, *argc, args);
                 let out = method.eval(call_args, env, location)?;
                 *get_reg_mut(&mut regs, *dst) = out;
             }
             Inst::CallPath { dst, method, argc, args, location } => {
-                let mut call_args = Vec::with_capacity(*argc as usize);
-                for arg in args.iter().take(*argc as usize) {
-                    call_args.push(clone_value_hot(get_reg(&regs, *arg)));
-                }
+                let call_args = collect_small_call_args(&regs, *argc, args);
                 let out = method.eval(call_args, env, location)?;
                 *get_reg_mut(&mut regs, *dst) = out;
             }
             Inst::CallEncoding { dst, method, argc, args, location } => {
-                let mut call_args = Vec::with_capacity(*argc as usize);
-                for arg in args.iter().take(*argc as usize) {
-                    call_args.push(clone_value_hot(get_reg(&regs, *arg)));
-                }
+                let call_args = collect_small_call_args(&regs, *argc, args);
                 let out = method.eval(call_args, env, location)?;
                 *get_reg_mut(&mut regs, *dst) = out;
             }
             Inst::CallHttp { dst, method, argc, args, location } => {
-                let mut call_args = Vec::with_capacity(*argc as usize);
-                for arg in args.iter().take(*argc as usize) {
-                    call_args.push(clone_value_hot(get_reg(&regs, *arg)));
-                }
+                let call_args = collect_small_call_args(&regs, *argc, args);
                 let out = method.eval(call_args, env, location)?;
+                *get_reg_mut(&mut regs, *dst) = out;
+            }
+            Inst::CallIdent { dst, name, argc, args, is_native, location } => {
+                let local_callee = match env.variables.get(name).or_else(|| env.constants.get(name)) {
+                    Some(Value::Function(func)) => Some(Value::Function(func.clone())),
+                    Some(Value::NativeFunction(native)) => Some(Value::NativeFunction(native.clone())),
+                    Some(other) => {
+                        return Err(ZekkenError::type_error(
+                            "Attempted to call a non-callable value",
+                            "function or native function",
+                            value_type_name(other),
+                            location.line,
+                            location.column,
+                        ))
+                    }
+                    None => None,
+                };
+                let out = if let Some(callee) = local_callee {
+                    match callee {
+                        Value::Function(func) => {
+                            super::call_function_native_small(&func, *argc, args, &regs, env, location.line, location.column)?
+                        }
+                        Value::NativeFunction(native) => {
+                            let call_args = collect_small_call_args(&regs, *argc, args);
+                            if matches!(name.as_str(), "println" | "input" | "parse_json" | "queue") && !*is_native {
+                                return Err(ZekkenError::runtime(
+                                    &format!("{} is a built-in; call it with '@{} => |...|'", name, name),
+                                    location.line,
+                                    location.column,
+                                    None,
+                                ));
+                            }
+                            native(call_args).map_err(|msg| ZekkenError::runtime(&msg, location.line, location.column, None))?
+                        }
+                        _ => unreachable!(),
+                    }
+                } else {
+                    let callee = env.lookup_ref(name).cloned().ok_or_else(|| {
+                        ZekkenError::reference_with_span(
+                            &format!("Function '{}' not found", name),
+                            "function",
+                            location.line,
+                            location.column,
+                            name.len().max(1),
+                        )
+                    })?;
+                    match callee {
+                        Value::Function(func) => {
+                            super::call_function_native_small(&func, *argc, args, &regs, env, location.line, location.column)?
+                        }
+                        Value::NativeFunction(native) => {
+                            let call_args = collect_small_call_args(&regs, *argc, args);
+                            if matches!(name.as_str(), "println" | "input" | "parse_json" | "queue") && !*is_native {
+                                return Err(ZekkenError::runtime(
+                                    &format!("{} is a built-in; call it with '@{} => |...|'", name, name),
+                                    location.line,
+                                    location.column,
+                                    None,
+                                ));
+                            }
+                            native(call_args).map_err(|msg| ZekkenError::runtime(&msg, location.line, location.column, None))?
+                        }
+                        other => {
+                            return Err(ZekkenError::type_error(
+                                "Attempted to call a non-callable value",
+                                "function or native function",
+                                value_type_name(&other),
+                                location.line,
+                                location.column,
+                            ))
+                        }
+                    }
+                };
+                *get_reg_mut(&mut regs, *dst) = out;
+            }
+            Inst::CallMethodIdent { dst, object_name, method_name, argc, args, location } => {
+                let call_args = collect_small_call_args(&regs, *argc, args);
+                let native_member = match env.lookup_ref(object_name) {
+                    Some(Value::Object(map)) => match map.get(method_name) {
+                        Some(Value::NativeFunction(native)) => Some(native.clone()),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+                let out = if let Some(native) = native_member {
+                    native(call_args).map_err(|msg| ZekkenError::runtime(&msg, location.line, location.column, None))?
+                } else {
+                    let object = env.lookup_ref(object_name).cloned().ok_or_else(|| {
+                        ZekkenError::reference_with_span(
+                            &format!("Variable '{}' not found", object_name),
+                            "variable",
+                            location.line,
+                            location.column,
+                            object_name.len().max(1),
+                        )
+                    })?;
+                    object
+                        .call_method(method_name, call_args, Some(env), Some(object_name.as_str()))
+                        .map_err(|msg| ZekkenError::runtime(&msg, location.line, location.column, None))?
+                };
                 *get_reg_mut(&mut regs, *dst) = out;
             }
             Inst::EvalExprNative { dst, expr } => {
@@ -437,39 +559,11 @@ pub(super) fn run_insts(insts: &[Inst], reg_count: usize, env: &mut Environment)
                 env.declare_ref_typed(name, value, *ty, *constant);
             }
             Inst::DeclareFunc { func } => {
-                let usage = analyze_function_parent_usage(&func.params, &func.body);
-                let captures = if usage.requires_parent_clone {
-                    vec![]
-                } else {
-                    let mut v: Vec<String> = usage.captures.into_iter().collect();
-                    v.sort_unstable();
-                    v
-                };
-                let function_value = FunctionValue {
-                    params: Arc::new(func.params.clone()),
-                    body: Arc::new(func.body.clone()),
-                    return_type: func.return_type,
-                    needs_parent: usage.requires_parent_clone,
-                    captures: Arc::new(captures),
-                };
+                let function_value = make_function_value(&func.params, &func.body, func.return_type);
                 env.declare(func.ident.clone(), Value::Function(function_value), false);
             }
             Inst::DeclareLambda { lambda } => {
-                let usage = analyze_function_parent_usage(&lambda.params, &lambda.body);
-                let captures = if usage.requires_parent_clone {
-                    vec![]
-                } else {
-                    let mut v: Vec<String> = usage.captures.into_iter().collect();
-                    v.sort_unstable();
-                    v
-                };
-                let function_value = FunctionValue {
-                    params: Arc::new(lambda.params.clone()),
-                    body: Arc::new(lambda.body.clone()),
-                    return_type: lambda.return_type,
-                    needs_parent: usage.requires_parent_clone,
-                    captures: Arc::new(captures),
-                };
+                let function_value = make_function_value(&lambda.params, &lambda.body, lambda.return_type);
                 env.declare(lambda.ident.clone(), Value::Function(function_value), lambda.constant);
             }
             Inst::DeclareObject { object } => {
@@ -556,10 +650,10 @@ pub(super) fn run_insts(insts: &[Inst], reg_count: usize, env: &mut Environment)
                 }
                 *get_reg_mut(&mut regs, *dst) = src_value;
             }
-            Inst::Jump { target } => {
-                ip = *target;
-                continue;
-            }
+                Inst::Jump { target } => {
+                    ip = *target;
+                    continue;
+                }
             Inst::JumpIfFalse { cond, target, location } => {
                 match get_reg(&regs, *cond) {
                     Value::Boolean(false) => {
@@ -625,12 +719,77 @@ pub(super) fn run_insts(insts: &[Inst], reg_count: usize, env: &mut Environment)
                     continue;
                 }
             }
+            Inst::JumpIfFalseIdent { name, target, location } => {
+                let value = env
+                    .variables
+                    .get(name)
+                    .or_else(|| env.constants.get(name))
+                    .or_else(|| env.lookup_ref(name))
+                    .ok_or_else(|| {
+                        ZekkenError::reference_with_span(
+                            &format!("Variable '{}' not found", name),
+                            "variable",
+                            location.line,
+                            location.column,
+                            name.len().max(1),
+                        )
+                    })?;
+                match value {
+                    Value::Boolean(true) => {}
+                    Value::Boolean(false) => {
+                        ip = *target;
+                        continue;
+                    }
+                    other => {
+                        return Err(ZekkenError::type_error(
+                            "Condition must be a boolean",
+                            "bool",
+                            value_type_name(other),
+                            location.line,
+                            location.column,
+                        ))
+                    }
+                }
+            }
+            Inst::JumpIfIdentCmpFalse { name, value, op, target, location } => {
+                let left = env
+                    .variables
+                    .get(name)
+                    .or_else(|| env.constants.get(name))
+                    .or_else(|| env.lookup_ref(name))
+                    .ok_or_else(|| {
+                        ZekkenError::reference_with_span(
+                            &format!("Variable '{}' not found", name),
+                            "variable",
+                            location.line,
+                            location.column,
+                            name.len().max(1),
+                        )
+                    })?;
+                let cond = eval_binary_opcode(left, value, *op, location)?;
+                match cond {
+                    Value::Boolean(true) => {}
+                    Value::Boolean(false) => {
+                        ip = *target;
+                        continue;
+                    }
+                    other => {
+                        return Err(ZekkenError::type_error(
+                            "Condition must be a boolean",
+                            "bool",
+                            value_type_name(&other),
+                            location.line,
+                            location.column,
+                        ))
+                    }
+                }
+            }
             Inst::SetLast { src } => {
                 last_value = Some(clone_value_hot(get_reg(&regs, *src)));
             }
-            Inst::Return { src } => {
-                return Ok(Some(clone_value_hot(get_reg(&regs, *src))));
-            }
+                Inst::Return { src } => {
+                    return Ok(Some(clone_value_hot(get_reg(&regs, *src))));
+                }
             Inst::AddIntAssignIdent { dst, name, delta, location } => {
                 let slot = env.lookup_mut_assignable(name).map_err(|e| {
                     ZekkenError::runtime(&e, location.line, location.column, None)
@@ -655,9 +814,12 @@ pub(super) fn run_insts(insts: &[Inst], reg_count: usize, env: &mut Environment)
                     }
                 }
             }
+            }
+            ip += 1;
         }
-        ip += 1;
-    }
 
-    Ok(last_value)
+        Ok(last_value)
+    })();
+    return_pooled_regs(regs);
+    result
 }

@@ -123,11 +123,14 @@ def format_num(n: Optional[float], digits: int = 2) -> str:
 def resolve_zekken_binary(user_bin: Optional[str]) -> str:
     if user_bin:
         return user_bin
-    local_release = ROOT / "target" / "release" / "zekken"
+        
+    ext = ".exe" if os.name == "nt" else ""
+    
+    local_release = ROOT / "target" / "release" / f"zekken{ext}"
     if local_release.exists():
         return str(local_release)
-    return "zekken"
-
+        
+    return f"zekken{ext}"
 
 def select_cases(selected: List[str]) -> List[BenchCase]:
     if not selected:

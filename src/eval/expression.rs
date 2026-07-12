@@ -87,6 +87,7 @@ pub fn evaluate_expression(expr: &Expr, env: &mut Environment) -> Result<Value, 
                 )
             })
         },
+        Expr::Unary(unary) => evaluate_unary_expression(unary, env),
         Expr::Binary(binary) => evaluate_binary_expression(binary, env),
         Expr::Call(call) => evaluate_call_expression(call, env),
         Expr::Member(member) => evaluate_member_expression(member, env),
@@ -94,6 +95,23 @@ pub fn evaluate_expression(expr: &Expr, env: &mut Environment) -> Result<Value, 
         Expr::Property(_) => Err(ZekkenError::internal(
             "Property expression not supported in this context",
         ))
+    }
+}
+
+fn evaluate_unary_expression(expr: &UnaryExpr, env: &mut Environment) -> Result<Value, ZekkenError> {
+    let operand = evaluate_expression(&expr.operand, env)?;
+    match expr.operator.as_str() {
+        "!" => match operand {
+            Value::Boolean(value) => Ok(Value::Boolean(!value)),
+            other => Err(ZekkenError::type_error(
+                "Invalid logical NOT operation",
+                "boolean",
+                value_type_name(&other),
+                expr.location.line,
+                expr.location.column,
+            )),
+        },
+        _ => Err(ZekkenError::internal("Unsupported unary operator")),
     }
 }
 
@@ -1154,10 +1172,6 @@ fn evaluate_function_value_call_with_args(
     //
     // Note: This prevents returning the env to the pool (parent != None), but fixes
     // correctness issues where function bodies can't see global names.
-    if !func_def.needs_parent {
-        function_env.parent = Some(Box::new(env.clone()));
-    }
-
     if !func_def.needs_parent && !func_def.captures.is_empty() {
         for name in func_def.captures.iter() {
             if let Some(val) = env.lookup_ref(name) {
@@ -1238,6 +1252,7 @@ fn expr_location(expr: &Expr) -> Location {
         Expr::Assign(e) => e.location.clone(),
         Expr::Member(e) => e.location.clone(),
         Expr::Call(e) => e.location.clone(),
+        Expr::Unary(e) => e.location.clone(),
         Expr::Binary(e) => e.location.clone(),
         Expr::Identifier(e) => e.location.clone(),
         Expr::Property(e) => e.location.clone(),
@@ -1252,6 +1267,7 @@ fn expr_location(expr: &Expr) -> Location {
 
 fn expr_span_len(expr: &Expr) -> usize {
     match expr {
+        Expr::Unary(unary) => unary.operator.len() + expr_span_len(&unary.operand),
         Expr::StringLit(lit) => lit.value.chars().count() + 2, // include quotes
         Expr::Identifier(id) => id.name.chars().count().max(1),
         Expr::IntLit(lit) => lit.value.to_string().chars().count().max(1),
@@ -1895,13 +1911,43 @@ fn evaluate_assignment_internal(assign: &AssignExpr, env: &mut Environment, want
                             }
                         }
                     }
+                    "!" => {
+                        if let Value::Boolean(b) = left_slot {
+                            *b = !*b;
+                            return Ok(if want_result { Value::Boolean(*b) } else { Value::Void });
+                        }
+                    }
                     _ => {}
                 }
             }
         }
     }
 
-    let value_to_store = if assign.operator != "=" {
+    let value_to_store = if assign.operator == "!" {
+        let left_val = match &target {
+            AssignTarget::Identifier(name) => env.lookup(name).ok_or_else(|| {
+                ZekkenError::reference(
+                    &format!("Variable '{}' not found", name),
+                    name,
+                    assign.location.line,
+                    assign.location.column,
+                )
+            })?,
+            AssignTarget::Member(expr) => evaluate_expression(expr, env)?,
+        };
+        match left_val {
+            Value::Boolean(value) => Value::Boolean(!value),
+            other => {
+                return Err(ZekkenError::type_error(
+                    "Invalid logical NOT assignment",
+                    "boolean",
+                    value_type_name(&other),
+                    assign.location.line,
+                    assign.location.column,
+                ))
+            }
+        }
+    } else if assign.operator != "=" {
         let left_val = match &target {
             AssignTarget::Identifier(name) => env.lookup(name).ok_or_else(|| {
                 ZekkenError::reference(

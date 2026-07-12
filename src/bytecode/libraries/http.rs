@@ -8,7 +8,7 @@ use std::time::Duration;
 #[cfg(not(target_arch = "wasm32"))]
 use ureq;
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum HttpOpCode {
     BuildQuery,
     ParseQuery,

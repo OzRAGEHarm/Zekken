@@ -6,6 +6,7 @@ use std::collections::VecDeque;
 use std::io::Write;
 use std::fmt::{self, Display, Formatter};
 use std::sync::{Arc, Mutex};
+use std::rc::Rc;
 use crate::ast::*;
 use crate::lexer::DataType;
 use serde_json::Value as JsonValue;
@@ -401,12 +402,14 @@ pub struct FunctionValue {
   pub return_type: Option<DataType>,
   pub needs_parent: bool,
   pub captures: Arc<Vec<String>>,
+  pub compiled_insts: Option<Arc<Vec<crate::bytecode::inst::Inst>>>,
+  pub compiled_reg_count: usize,
   //pub closure: Environment,
 }
 
 #[derive(Debug, Clone)]
 pub struct Environment {
-  pub parent: Option<Box<Environment>>,
+  pub parent: Option<Rc<Environment>>,
   pub variables: HashMap<String, Value>,
   pub constants: HashMap<String, Value>,
   pub types: HashMap<String, DataType>,
@@ -660,7 +663,7 @@ impl Environment {
 
   pub fn new_with_parent(parent: Environment) -> Self {
       Environment {
-          parent: Some(Box::new(parent)),
+          parent: Some(Rc::new(parent)),
           variables: HashMap::with_capacity(16),
           constants: HashMap::with_capacity(8),
           types: HashMap::with_capacity(16),
@@ -669,7 +672,7 @@ impl Environment {
 
   pub fn new_with_parent_capacity(parent: Environment, var_capacity: usize) -> Self {
       Environment {
-          parent: Some(Box::new(parent)),
+          parent: Some(Rc::new(parent)),
           variables: HashMap::with_capacity(var_capacity.max(4)),
           constants: HashMap::with_capacity(0),
           types: HashMap::with_capacity(var_capacity.max(4)),
@@ -790,8 +793,8 @@ impl Environment {
       }
 
       // If not in current scope, try parent scope
-      if let Some(ref mut parent) = self.parent {
-          return parent.assign(name, value);
+      if let Some(parent) = self.parent.as_mut() {
+          return Rc::make_mut(parent).assign(name, value);
       }
 
       Err(format!("Variable '{}' not found", name))
@@ -854,7 +857,7 @@ impl Environment {
       }
 
       if let Some(parent) = self.parent.as_mut() {
-          return parent.lookup_mut_assignable(name);
+          return Rc::make_mut(parent).lookup_mut_assignable(name);
       }
 
       Err(format!("Variable '{}' not found", name))

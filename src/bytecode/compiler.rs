@@ -1,5 +1,6 @@
 use crate::ast::*;
 use crate::environment::{FunctionValue, Value};
+use crate::lexer::DataType;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -16,6 +17,7 @@ fn expr_location(expr: &Expr) -> Location {
         Expr::Assign(e) => e.location.clone(),
         Expr::Member(e) => e.location.clone(),
         Expr::Call(e) => e.location.clone(),
+        Expr::Unary(e) => e.location.clone(),
         Expr::Binary(e) => e.location.clone(),
         Expr::Identifier(e) => e.location.clone(),
         Expr::Property(e) => e.location.clone(),
@@ -41,11 +43,17 @@ pub(super) struct ParentUsage {
 
 pub(super) fn analyze_function_parent_usage(params: &[Param], body: &[Box<Content>]) -> ParentUsage {
     let mut locals = HashSet::new();
+    let mut usage = ParentUsage::default();
     for p in params {
+        if let Some(default_expr) = p.default_value.as_ref() {
+            analyze_expr_parent_usage(default_expr, &locals, &mut usage);
+            if usage.requires_parent_clone {
+                return usage;
+            }
+        }
         locals.insert(p.ident.clone());
     }
 
-    let mut usage = ParentUsage::default();
     analyze_contents_parent_usage(body, &mut locals, &mut usage);
     usage
 }
@@ -141,6 +149,7 @@ fn analyze_expr_parent_usage(expr: &Expr, locals: &HashSet<String>, usage: &mut 
                 usage.captures.insert(i.name.clone());
             }
         }
+        Expr::Unary(u) => analyze_expr_parent_usage(&u.operand, locals, usage),
         Expr::Binary(b) => {
             analyze_expr_parent_usage(&b.left, locals, usage);
             if usage.requires_parent_clone {
@@ -229,9 +238,39 @@ impl Compiler {
     }
 
     fn emit_test_jump_false(&mut self, test: &Expr, location: &Location) -> usize {
+        #[inline]
+        fn literal_value(expr: &Expr) -> Option<Value> {
+            match expr {
+                Expr::IntLit(v) => Some(Value::Int(v.value)),
+                Expr::FloatLit(v) => Some(Value::Float(v.value)),
+                Expr::BoolLit(v) => Some(Value::Boolean(v.value)),
+                Expr::StringLit(v) if !v.value.as_bytes().contains(&b'{') => Some(Value::String(v.value.clone())),
+                _ => None,
+            }
+        }
+
+        if let Expr::Identifier(id) = test {
+            return self.emit(Inst::JumpIfFalseIdent {
+                name: id.name.clone(),
+                target: usize::MAX,
+                location: location.clone(),
+            });
+        }
+
         if let Expr::Binary(binary) = test {
             if binary.operator != "&&" && binary.operator != "||" {
                 if let Some(op) = BinaryOpCode::from_str(binary.operator.as_str()) {
+                    if let Expr::Identifier(id) = binary.left.as_ref() {
+                        if let Some(value) = literal_value(binary.right.as_ref()) {
+                            return self.emit(Inst::JumpIfIdentCmpFalse {
+                                name: id.name.clone(),
+                                value,
+                                op,
+                                target: usize::MAX,
+                                location: location.clone(),
+                            });
+                        }
+                    }
                     match op {
                         BinaryOpCode::Eq
                         | BinaryOpCode::Ne
@@ -421,6 +460,11 @@ impl Compiler {
                 self.emit(Inst::EvalExprNative { dst, expr: expr.clone() });
                 dst
             }
+            Expr::Unary(_) => {
+                let dst = self.new_reg();
+                self.emit(Inst::EvalExprNative { dst, expr: expr.clone() });
+                dst
+            }
             Expr::IntLit(v) => {
                 let dst = self.new_reg();
                 self.emit(Inst::LoadConst { dst, value: Value::Int(v.value) });
@@ -480,15 +524,29 @@ impl Compiler {
                 dst
             }
             Expr::Call(call) => {
-                if let Expr::Member(member) = call.callee.as_ref() {
-                    if let Expr::Identifier(object) = member.object.as_ref() {
-                        if let Expr::Identifier(method_ident) = member.property.as_ref() {
-                            let argc = call.args.len();
-                            if argc <= 3 {
-                                let mut regs = [0usize; 3];
-                                for (idx, arg) in call.args.iter().enumerate() {
-                                    regs[idx] = self.compile_expr(arg);
-                                }
+                let argc = call.args.len();
+                if argc <= 3 {
+                    let mut regs = [0usize; 3];
+                    for (idx, arg) in call.args.iter().enumerate() {
+                        regs[idx] = self.compile_expr(arg);
+                    }
+
+                    if let Expr::Identifier(ident) = call.callee.as_ref() {
+                        let dst = self.new_reg();
+                        self.emit(Inst::CallIdent {
+                            dst,
+                            name: ident.name.clone(),
+                            argc: argc as u8,
+                            args: regs,
+                            is_native: call.is_native,
+                            location: call.location.clone(),
+                        });
+                        return dst;
+                    }
+
+                    if let Expr::Member(member) = call.callee.as_ref() {
+                        if let Expr::Identifier(object) = member.object.as_ref() {
+                            if let Expr::Identifier(method_ident) = member.property.as_ref() {
                                 let dst = self.new_reg();
                                 if object.name == "math" {
                                     if let Some(method) = MathOpCode::from_method(method_ident.name.as_str()) {
@@ -557,6 +615,16 @@ impl Compiler {
                                         return dst;
                                     }
                                 }
+
+                                self.emit(Inst::CallMethodIdent {
+                                    dst,
+                                    object_name: object.name.clone(),
+                                    method_name: method_ident.name.clone(),
+                                    argc: argc as u8,
+                                    args: regs,
+                                    location: call.location.clone(),
+                                });
+                                return dst;
                             }
                         }
                     }
@@ -574,7 +642,11 @@ impl Compiler {
     }
 }
 
-pub(super) fn make_function_value(params: &[Param], body: &[Box<Content>]) -> FunctionValue {
+pub(crate) fn make_function_value(
+    params: &[Param],
+    body: &[Box<Content>],
+    return_type: Option<DataType>,
+) -> FunctionValue {
     let usage = analyze_function_parent_usage(params, body);
     let captures = if usage.requires_parent_clone {
         vec![]
@@ -583,11 +655,15 @@ pub(super) fn make_function_value(params: &[Param], body: &[Box<Content>]) -> Fu
         v.sort_unstable();
         v
     };
+    let mut compiled = Compiler::new();
+    compiled.compile_contents(body);
     FunctionValue {
         params: Arc::new(params.to_vec()),
         body: Arc::new(body.to_vec()),
-        return_type: None,
+        return_type,
         needs_parent: usage.requires_parent_clone,
         captures: Arc::new(captures),
+        compiled_insts: Some(Arc::new(compiled.insts)),
+        compiled_reg_count: compiled.next_reg,
     }
 }

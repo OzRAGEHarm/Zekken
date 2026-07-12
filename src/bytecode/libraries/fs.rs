@@ -2,7 +2,7 @@ use crate::ast::Location;
 use crate::environment::{Environment, Value};
 use crate::errors::ZekkenError;
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum FsOpCode {
     ReadFile,
     WriteFile,

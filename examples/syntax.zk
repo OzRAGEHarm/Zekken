@@ -21,7 +21,7 @@ let a: arr = [1, 2, 3];
 const b: obj = { hello: "Hello", world: "World!" };
 
 // Export values
-export x, y, z, w, a, b;
+export { x, y, z, w, a, b };
 
 // Functions
 func add |a: int, b: int| -> float {

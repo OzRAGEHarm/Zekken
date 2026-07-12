@@ -4,16 +4,15 @@ use crate::errors::{push_error, ZekkenError};
 use crate::libraries::load_library;
 use crate::parser::Parser;
 use hashbrown::HashMap;
-use std::sync::Arc;
 use std::path::Path;
 
-mod inst;
+pub(crate) mod inst;
 mod compiler;
 mod runtime;
 mod libraries;
 
-use compiler::Compiler;
-use compiler::analyze_function_parent_usage;
+use compiler::{make_function_value, Compiler};
+use inst::Reg;
 use runtime::{run_insts, check_value_type, clone_value_hot, compare_values, value_type_name};
 
 fn eval_binary(left: &Value, right: &Value, op: &str, location: &Location) -> Result<Value, ZekkenError> {
@@ -225,6 +224,7 @@ fn eval_assignment_native(assign: &AssignExpr, env: &mut Environment) -> Result<
         "/=" => Some("/"),
         "%=" => Some("%"),
         "=" => None,
+        "!" => None,
         _ => {
             return Err(ZekkenError::runtime(
                 &format!("Unsupported assignment operator '{}'", assign.operator),
@@ -404,12 +404,40 @@ fn eval_assignment_native(assign: &AssignExpr, env: &mut Environment) -> Result<
                             }
                             _ => {}
                         },
+                        "!" => {
+                            if let Value::Boolean(b) = slot {
+                                *b = !*b;
+                                return Ok(Value::Boolean(*b));
+                            }
+                        }
                         _ => {}
                     }
                 }
             }
 
-            let final_value = if let Some(op) = base_op {
+            let final_value = if assign.operator == "!" {
+                match env.lookup_ref(&id.name) {
+                    Some(Value::Boolean(value)) => Value::Boolean(!value),
+                    Some(other) => {
+                        return Err(ZekkenError::type_error(
+                            "Invalid logical NOT assignment",
+                            "bool",
+                            value_type_name(other),
+                            assign.location.line,
+                            assign.location.column,
+                        ))
+                    }
+                    None => {
+                        return Err(ZekkenError::reference_with_span(
+                            &format!("Variable '{}' not found", id.name),
+                            "variable",
+                            id.location.line,
+                            id.location.column,
+                            id.name.len().max(1),
+                        ))
+                    }
+                }
+            } else if let Some(op) = base_op {
                 let left = env.lookup_ref(&id.name).ok_or_else(|| {
                     ZekkenError::reference_with_span(
                         &format!("Variable '{}' not found", id.name),
@@ -1135,7 +1163,7 @@ fn eval_call_native(call: &CallExpr, env: &mut Environment) -> Result<Value, Zek
     }
 }
 
-fn call_function_native(
+pub(super) fn call_function_native(
     func: &FunctionValue,
     args: Vec<Value>,
     env: &mut Environment,
@@ -1177,7 +1205,11 @@ fn call_function_native(
             }
             function_env.declare_ref_typed(param.ident.as_str(), value, param.type_, false);
         }
-        let result = eval_contents_native(func.body.as_ref(), &mut function_env)?;
+        let result = if let Some(insts) = func.compiled_insts.as_deref() {
+            run_insts(insts, func.compiled_reg_count, &mut function_env)?
+        } else {
+            eval_contents_native(func.body.as_ref(), &mut function_env)?
+        };
         let out = result.unwrap_or(Value::Void);
         if let Some(ret_ty) = func.return_type {
             if !check_value_type(&out, &ret_ty) {
@@ -1194,11 +1226,6 @@ fn call_function_native(
     }
 
     let mut function_env = Environment::take_pooled_scope(func.params.len() + func.captures.len() + 8);
-    // Keep lexical/global visibility inside the function body (built-ins, globals, etc.).
-    // This matches expected behavior and avoids "not found" errors for globals.
-    //
-    // Note: This prevents pooling reuse for this scope (parent != None).
-    function_env.parent = Some(Box::new(env.clone()));
     if !func.captures.is_empty() {
         for capture in func.captures.iter() {
             if let Some(v) = env.lookup_ref(capture) {
@@ -1240,7 +1267,11 @@ fn call_function_native(
         return Err(e);
     }
 
-    let result = eval_contents_native(func.body.as_ref(), &mut function_env);
+    let result = if let Some(insts) = func.compiled_insts.as_deref() {
+        run_insts(insts, func.compiled_reg_count, &mut function_env)
+    } else {
+        eval_contents_native(func.body.as_ref(), &mut function_env)
+    };
     let out = match result {
         Ok(v) => Ok(v.unwrap_or(Value::Void)),
         Err(e) => Err(e),
@@ -1262,11 +1293,163 @@ fn call_function_native(
     out
 }
 
+pub(super) fn call_function_native_small(
+    func: &FunctionValue,
+    argc: u8,
+    arg_regs: &[Reg; 3],
+    regs: &[Value],
+    env: &mut Environment,
+    line: usize,
+    column: usize,
+) -> Result<Value, ZekkenError> {
+    let argc = argc as usize;
+    if argc > func.params.len() {
+        return Err(ZekkenError::runtime(
+            &format!("Expected {} arguments but got {}", func.params.len(), argc),
+            line,
+            column,
+            Some("argument mismatch"),
+        ));
+    }
+
+    let bind_value = |idx: usize| clone_value_hot(&regs[arg_regs[idx]]);
+
+    if func.needs_parent {
+        let mut function_env = Environment::new_with_parent(env.clone());
+        for (idx, param) in func.params.iter().enumerate() {
+            let value = if idx < argc {
+                bind_value(idx)
+            } else if let Some(default_expr) = param.default_value.as_ref() {
+                eval_expr_native(default_expr, &mut function_env)?
+            } else {
+                return Err(ZekkenError::runtime(
+                    &format!("Missing required argument '{}'", param.ident),
+                    line,
+                    column,
+                    Some("argument mismatch"),
+                ));
+            };
+            if !check_value_type(&value, &param.type_) {
+                return Err(ZekkenError::type_error(
+                    &format!("Type mismatch for parameter '{}'", param.ident),
+                    &format!("{:?}", param.type_),
+                    value_type_name(&value),
+                    line,
+                    column,
+                ));
+            }
+            function_env.declare_ref_typed(param.ident.as_str(), value, param.type_, false);
+        }
+        let result = if let Some(insts) = func.compiled_insts.as_deref() {
+            run_insts(insts, func.compiled_reg_count, &mut function_env)?
+        } else {
+            eval_contents_native(func.body.as_ref(), &mut function_env)?
+        };
+        let out = result.unwrap_or(Value::Void);
+        if let Some(ret_ty) = func.return_type {
+            if !check_value_type(&out, &ret_ty) {
+                return Err(ZekkenError::type_error(
+                    "Type mismatch in function return value",
+                    &format!("{:?}", ret_ty),
+                    value_type_name(&out),
+                    line,
+                    column,
+                ));
+            }
+        }
+        return Ok(out);
+    }
+
+    let mut function_env = Environment::take_pooled_scope(func.params.len() + func.captures.len() + 8);
+    if !func.captures.is_empty() {
+        for capture in func.captures.iter() {
+            if let Some(v) = env.lookup_ref(capture) {
+                function_env.declare_ref(capture.as_str(), clone_value_hot(v), false);
+            }
+        }
+    }
+
+    let bind_result = (|| -> Result<(), ZekkenError> {
+        for (idx, param) in func.params.iter().enumerate() {
+            let value = if idx < argc {
+                bind_value(idx)
+            } else if let Some(default_expr) = param.default_value.as_ref() {
+                eval_expr_native(default_expr, &mut function_env)?
+            } else {
+                return Err(ZekkenError::runtime(
+                    &format!("Missing required argument '{}'", param.ident),
+                    line,
+                    column,
+                    Some("argument mismatch"),
+                ));
+            };
+            if !check_value_type(&value, &param.type_) {
+                return Err(ZekkenError::type_error(
+                    &format!("Type mismatch for parameter '{}'", param.ident),
+                    &format!("{:?}", param.type_),
+                    value_type_name(&value),
+                    line,
+                    column,
+                ));
+            }
+            function_env.declare_ref_typed(param.ident.as_str(), value, param.type_, false);
+        }
+        Ok(())
+    })();
+
+    if let Err(err) = bind_result {
+        Environment::return_pooled_scope(function_env);
+        return Err(err);
+    }
+
+    let result = if let Some(insts) = func.compiled_insts.as_deref() {
+        run_insts(insts, func.compiled_reg_count, &mut function_env)
+    } else {
+        eval_contents_native(func.body.as_ref(), &mut function_env)
+    };
+    let out = match result {
+        Ok(v) => Ok(v.unwrap_or(Value::Void)),
+        Err(e) => Err(e),
+    }
+    .and_then(|v| {
+        if let Some(ret_ty) = func.return_type {
+            if !check_value_type(&v, &ret_ty) {
+                return Err(ZekkenError::type_error(
+                    "Type mismatch in function return value",
+                    &format!("{:?}", ret_ty),
+                    value_type_name(&v),
+                    line,
+                    column,
+                ));
+            }
+        }
+        Ok(v)
+    });
+    Environment::return_pooled_scope(function_env);
+    out
+}
+
 fn eval_expr_native(expr: &Expr, env: &mut Environment) -> Result<Value, ZekkenError> {
     match expr {
         Expr::Assign(assign) => eval_assignment_native(assign, env),
         Expr::Member(member) => eval_member_native(member, env),
         Expr::Call(call) => eval_call_native(call, env),
+        Expr::Unary(unary) => {
+            let operand = eval_expr_native(&unary.operand, env)?;
+            match unary.operator.as_str() {
+                "!" => match operand {
+                    Value::Boolean(value) => Ok(Value::Boolean(!value)),
+                    other => Err(ZekkenError::type_error(
+                        "Invalid logical NOT operation",
+                        "bool",
+                        value_type_name(&other),
+                        unary.location.line,
+                        unary.location.column,
+                    )),
+                },
+                _ => Err(ZekkenError::internal("Unsupported unary operator")),
+            }
+        }
         Expr::Binary(binary) => {
             if binary.operator == "&&" {
                 let left = eval_expr_native(&binary.left, env)?;
@@ -1792,21 +1975,7 @@ fn eval_stmt_native(stmt: &Stmt, env: &mut Environment) -> Result<Option<Value>,
             Ok(None)
         }
         Stmt::FuncDecl(func) => {
-            let usage = analyze_function_parent_usage(&func.params, &func.body);
-            let captures = if usage.requires_parent_clone {
-                vec![]
-            } else {
-                let mut v: Vec<String> = usage.captures.into_iter().collect();
-                v.sort_unstable();
-                v
-            };
-            let function_value = FunctionValue {
-                params: Arc::new(func.params.clone()),
-                body: Arc::new(func.body.clone()),
-                return_type: func.return_type,
-                needs_parent: usage.requires_parent_clone,
-                captures: Arc::new(captures),
-            };
+            let function_value = make_function_value(&func.params, &func.body, func.return_type);
             env.declare(func.ident.clone(), Value::Function(function_value), false);
             Ok(None)
         }
@@ -2042,21 +2211,7 @@ fn eval_stmt_native(stmt: &Stmt, env: &mut Environment) -> Result<Option<Value>,
             Ok(Some(value))
         }
         Stmt::Lambda(lambda) => {
-            let usage = analyze_function_parent_usage(&lambda.params, &lambda.body);
-            let captures = if usage.requires_parent_clone {
-                vec![]
-            } else {
-                let mut v: Vec<String> = usage.captures.into_iter().collect();
-                v.sort_unstable();
-                v
-            };
-            let function_value = FunctionValue {
-                params: Arc::new(lambda.params.clone()),
-                body: Arc::new(lambda.body.clone()),
-                return_type: lambda.return_type,
-                needs_parent: usage.requires_parent_clone,
-                captures: Arc::new(captures),
-            };
+            let function_value = make_function_value(&lambda.params, &lambda.body, lambda.return_type);
             env.declare(lambda.ident.clone(), Value::Function(function_value), lambda.constant);
             Ok(None)
         }

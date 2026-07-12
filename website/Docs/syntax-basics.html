@@ -158,7 +158,7 @@ include { some_value, helper } from "other.zk";</code></pre>
 	            Export makes values available to other files via <code>include { ... } from "file.zk"</code>.
 	            It’s common to export constants and helper functions from a module-style file.
 	          </p>
-<pre><code class="language-zekken">export x, name, nums;</code></pre>
+<pre><code class="language-zekken">export { x, name, nums };</code></pre>
 
 	          <h3 id="functions" class="doc-anchor"><a class="doc-anchor-link" href="#functions">Functions</a><a class="doc-anchor-hash" href="#functions" aria-label="Link to this section">#</a></h3>
 	          <p>

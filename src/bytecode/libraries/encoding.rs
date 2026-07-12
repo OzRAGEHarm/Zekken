@@ -2,7 +2,7 @@ use crate::ast::Location;
 use crate::environment::{Environment, Value};
 use crate::errors::ZekkenError;
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum EncodingOpCode {
     Base64Encode,
     Base64Decode,
@@ -68,4 +68,3 @@ fn dispatch_library_native(
 
     native(args).map_err(|msg| ZekkenError::runtime(&msg, location.line, location.column, None))
 }
-

@@ -47,11 +47,7 @@ func run |n: int| {
 
     state = mix_state => |state, code, flip|
 
-    if flip {
-      flip = false
-    } else {
-      flip = true
-    }
+    flip = !flip
 
     i += 1
   }

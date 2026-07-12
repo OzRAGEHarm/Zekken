@@ -26,6 +26,8 @@ fn dummy_value_for_type(ty: &DataType) -> Value {
             return_type: None,
             needs_parent: false,
             captures: Arc::new(Vec::new()),
+            compiled_insts: None,
+            compiled_reg_count: 0,
         }),
         DataType::Any => Value::Void,
     }
@@ -269,6 +271,9 @@ pub fn lint_statement(stmt: &Stmt, env: &Environment) -> Result<(), ZekkenError>
             lint_contents_seq(&try_catch.try_block, &mut try_env)?;
             if let Some(catch_block) = &try_catch.catch_block {
                 let mut catch_env = Environment::new_with_parent_capacity(env.clone(), 8);
+                if let Some(name) = try_catch.catch_param.as_deref().filter(|name| !name.is_empty() && *name != "_") {
+                    catch_env.declare(name.to_string(), crate::environment::Value::Void, false);
+                }
                 lint_contents_seq(catch_block, &mut catch_env)?;
             }
         },

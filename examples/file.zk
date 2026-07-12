@@ -1,4 +1,7 @@
 let variable1: string = "Hello, World!";
 let variable2: string = "Zekken!";
 
-export variable1, variable2;
+export { 
+  variable1, 
+  variable2 
+};

@@ -11,8 +11,8 @@ use super::libraries::os::OsOpCode;
 
 pub(super) type Reg = usize;
 
-#[derive(Clone, Copy)]
-pub(super) enum BinaryOpCode {
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum BinaryOpCode {
     Add,
     Sub,
     Mul,
@@ -48,8 +48,8 @@ impl BinaryOpCode {
     }
 }
 
-#[derive(Clone)]
-pub(super) enum Inst {
+#[derive(Debug, Clone)]
+pub(crate) enum Inst {
     LoadConst { dst: Reg, value: Value },
     LoadIdent { dst: Reg, name: String, location: Location },
     LoadIndex { dst: Reg, object: Reg, index: Reg, location: Location },
@@ -60,6 +60,8 @@ pub(super) enum Inst {
     CallPath { dst: Reg, method: PathOpCode, argc: u8, args: [Reg; 3], location: Location },
     CallEncoding { dst: Reg, method: EncodingOpCode, argc: u8, args: [Reg; 3], location: Location },
     CallHttp { dst: Reg, method: HttpOpCode, argc: u8, args: [Reg; 3], location: Location },
+    CallIdent { dst: Reg, name: String, argc: u8, args: [Reg; 3], is_native: bool, location: Location },
+    CallMethodIdent { dst: Reg, object_name: String, method_name: String, argc: u8, args: [Reg; 3], location: Location },
     EvalExprNative { dst: Reg, expr: Expr },
     ExecStmtNative { stmt: Stmt },
     DeclareVar { name: String, ty: DataType, constant: bool, src: Reg, location: Location },
@@ -71,6 +73,8 @@ pub(super) enum Inst {
     Jump { target: usize },
     JumpIfFalse { cond: Reg, target: usize, location: Location },
     JumpIfCmpFalse { left: Reg, right: Reg, op: BinaryOpCode, target: usize, location: Location },
+    JumpIfFalseIdent { name: String, target: usize, location: Location },
+    JumpIfIdentCmpFalse { name: String, value: Value, op: BinaryOpCode, target: usize, location: Location },
     SetLast { src: Reg },
     Return { src: Reg },
     AddIntAssignIdent { dst: Reg, name: String, delta: i64, location: Location },
