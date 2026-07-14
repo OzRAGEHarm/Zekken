@@ -233,6 +233,8 @@ impl Compiler {
             Some(Inst::Jump { target: t }) => *t = target,
             Some(Inst::JumpIfFalse { target: t, .. }) => *t = target,
             Some(Inst::JumpIfCmpFalse { target: t, .. }) => *t = target,
+            Some(Inst::JumpIfFalseIdent { target: t, .. }) => *t = target,
+            Some(Inst::JumpIfIdentCmpFalse { target: t, .. }) => *t = target,
             _ => {}
         }
     }
@@ -646,6 +648,7 @@ pub(crate) fn make_function_value(
     params: &[Param],
     body: &[Box<Content>],
     return_type: Option<DataType>,
+    env: &crate::environment::Environment,
 ) -> FunctionValue {
     let usage = analyze_function_parent_usage(params, body);
     let captures = if usage.requires_parent_clone {
@@ -655,6 +658,14 @@ pub(crate) fn make_function_value(
         v.sort_unstable();
         v
     };
+    let mut capture_values = hashbrown::HashMap::new();
+    if !usage.requires_parent_clone {
+        for capture in &captures {
+            if let Some(value) = env.lookup_ref(capture) {
+                capture_values.insert(capture.clone(), value.clone());
+            }
+        }
+    }
     let mut compiled = Compiler::new();
     compiled.compile_contents(body);
     FunctionValue {
@@ -663,6 +674,7 @@ pub(crate) fn make_function_value(
         return_type,
         needs_parent: usage.requires_parent_clone,
         captures: Arc::new(captures),
+        capture_values: Arc::new(capture_values),
         compiled_insts: Some(Arc::new(compiled.insts)),
         compiled_reg_count: compiled.next_reg,
     }

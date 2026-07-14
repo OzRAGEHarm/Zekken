@@ -1,0 +1,4 @@
+let a: fn -> |c: int, size: int| {
+  return c;
+};
+@println => |a => |1, 2||

@@ -81,10 +81,12 @@
   </div>
 
   <script type="module">
-    import init, { run_zekken, clear_errors } from "./js/WASM/zekken_wasm.js";
-    
+    const wasmCacheKey = Date.now().toString(36);
+    const wasmModule = await import(`./js/WASM/zekken_wasm.js?v=${wasmCacheKey}`);
+    const { run_zekken, clear_errors } = wasmModule;
+
     let ready = false;
-    init("./js/WASM/zekken_wasm_bg.wasm").then(() => ready = true);
+    wasmModule.default(`./js/WASM/zekken_wasm_bg.wasm?v=${wasmCacheKey}`).then(() => ready = true);
 
     // Initialize input editor
     const editor = CodeMirror.fromTextArea(document.getElementById('code'), {

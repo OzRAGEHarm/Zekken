@@ -139,7 +139,7 @@ impl ErrorContext {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ErrorKind {
     Syntax,
     Runtime,
@@ -325,8 +325,8 @@ impl ZekkenError {
 }
 
 lazy_static::lazy_static! {
-    // Store errors as (kind, filename, line, column) to deduplicate
-    static ref ERROR_SET: Mutex<HashSet<(String, String, usize, usize)>> = Mutex::new(HashSet::new());
+    // Include the detail text so only byte-for-byte equivalent diagnostics collapse.
+    static ref ERROR_SET: Mutex<HashSet<(String, String, usize, usize, String, Option<String>)>> = Mutex::new(HashSet::new());
     pub static ref ERROR_LIST: Mutex<Vec<ZekkenError>> = Mutex::new(Vec::new());
     static ref NO_COLOR: Mutex<bool> = Mutex::new({
         #[cfg(target_arch = "wasm32")]
@@ -424,6 +424,8 @@ pub fn push_error(error: ZekkenError) {
         error.context.filename.clone(),
         error.context.line,
         error.context.column,
+        error.message.clone(),
+        error.extra.clone(),
     );
     let mut set = ERROR_SET.lock().unwrap();
     if set.insert(key) {
@@ -431,23 +433,62 @@ pub fn push_error(error: ZekkenError) {
     }
 }
 
+#[inline]
+fn error_kind_priority(kind: &ErrorKind) -> u8 {
+    match kind {
+        ErrorKind::Syntax => 0,
+        ErrorKind::Reference => 1,
+        ErrorKind::Type => 2,
+        ErrorKind::Runtime => 3,
+        ErrorKind::Internal => 4,
+    }
+}
+
+pub fn sort_and_dedup_errors(errors: &mut Vec<ZekkenError>) {
+    let mut seen = HashSet::new();
+    errors.retain(|error| {
+        seen.insert((
+            error.kind.clone(),
+            error.context.filename.clone(),
+            error.context.line,
+            error.context.column,
+            error.message.clone(),
+            error.extra.clone(),
+        ))
+    });
+    errors.sort_by(|a, b| {
+        error_kind_priority(&a.kind)
+            .cmp(&error_kind_priority(&b.kind))
+            .then(a.context.filename.cmp(&b.context.filename))
+            .then(a.context.line.cmp(&b.context.line))
+            .then(a.context.column.cmp(&b.context.column))
+            .then(a.message.cmp(&b.message))
+    });
+}
+
+pub fn clear_collected_errors() {
+    ERROR_LIST.lock().unwrap().clear();
+    ERROR_SET.lock().unwrap().clear();
+}
+
+pub fn take_collected_errors() -> Vec<ZekkenError> {
+    let mut errors = {
+        let mut stored = ERROR_LIST.lock().unwrap();
+        std::mem::take(&mut *stored)
+    };
+    ERROR_SET.lock().unwrap().clear();
+    sort_and_dedup_errors(&mut errors);
+    errors
+}
+
 // Print and clear all collected errors, returns true if any errors were printed
 #[allow(dead_code)]
 pub fn print_and_clear_errors() -> bool {
-    let mut errors = ERROR_LIST.lock().unwrap();
+    let errors = take_collected_errors();
     if !errors.is_empty() {
-        errors.sort_by(|a, b| {
-            a.context
-                .filename
-                .cmp(&b.context.filename)
-                .then(a.context.line.cmp(&b.context.line))
-                .then(a.context.column.cmp(&b.context.column))
-        });
         for error in errors.iter() {
             eprintln!("{}", error);
         }
-        errors.clear();
-        ERROR_SET.lock().unwrap().clear();
         true
     } else {
         false

@@ -11,12 +11,14 @@ mod bytecode;
 mod eval;
 mod errors;
 mod libraries;
+mod diagnostics;
 
 use parser::Parser as ZkParser;
 use eval::statement::evaluate_statement;
 use environment::{Environment, Value};
 use ast::Stmt;
 use errors::{extract_exit_code, push_error, print_and_clear_errors};
+use diagnostics::{run_program_collecting, ExecutionMode};
 
 /// Zekken Language CLI
 #[derive(Parser)]
@@ -79,17 +81,6 @@ fn main() {
             let mut parser = ZkParser::new();
             let ast = parser.produce_ast(source_code);
 
-            // Push all syntax errors to the global error list
-            for error in &parser.errors {
-                push_error(error.clone());
-            }
-
-            // Stop immediately when parsing failed.
-            if !parser.errors.is_empty() {
-                let _ = print_and_clear_errors();
-                process::exit(1);
-            }
-
             let mut env = Environment::new();
 
             let file_path = std::path::Path::new(file);
@@ -100,25 +91,18 @@ fn main() {
 
             env.declare("ZEKKEN_CURRENT_DIR".to_string(), Value::String(current_dir), false);
 
-            // Evaluate and push all runtime/type/reference errors to the global error list
-            let result = match if *vm {
-                bytecode::execute_program(&ast, &mut env)
-            } else {
-                evaluate_statement(&Stmt::Program(ast), &mut env)
-            } {
-                Ok(val) => Some(val),
-                Err(e) => {
-                    if let Some(code) = extract_exit_code(&e.message) {
-                        process::exit(code);
-                    }
-
-                    // Internal errors are control markers; user-facing errors are already collected.
-                    if e.kind != crate::errors::ErrorKind::Internal {
-                        push_error(e);
-                    }
-                    None
-                }
-            };
+            let report = run_program_collecting(
+                &ast,
+                &parser.errors,
+                &mut env,
+                if *vm { ExecutionMode::Bytecode } else { ExecutionMode::TreeWalk },
+            );
+            if let Some(code) = report.exit_code {
+                process::exit(code);
+            }
+            for error in report.errors {
+                push_error(error);
+            }
 
             // Print all errors (syntax, runtime, etc.) and exit if any
             if print_and_clear_errors() {
@@ -127,7 +111,7 @@ fn main() {
 
             // `zekken run` does not implicitly print the last expression value.
             // Use `@println` for output. (REPL remains expression-result oriented.)
-            let _ = result; // keep evaluation for side effects
+            let _ = report.value; // keep evaluation for side effects
             io::stdout().flush().unwrap();
             process::exit(0);
         }

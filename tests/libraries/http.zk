@@ -60,4 +60,3 @@ while true {
     server.respond => |id, {status: 404, body: "Not Found"}|
   }
 }
-

@@ -9,6 +9,7 @@ pub struct Parser {
     tokens: Vec<Token>,
     current: usize,
     virtual_pipe_tokens: usize,
+    pipe_expression_depth: usize,
     debug_parser: bool,
     recovery_mode: bool,
     pub errors: Vec<ZekkenError>,
@@ -20,6 +21,7 @@ impl Parser {
             tokens: Vec::new(),
             current: 0,
             virtual_pipe_tokens: 0,
+            pipe_expression_depth: 0,
             debug_parser: matches!(
                 std::env::var("ZEKKEN_DEBUG_PARSER"),
                 Ok(v) if v == "1" || v.eq_ignore_ascii_case("true")
@@ -56,6 +58,7 @@ impl Parser {
         self.tokens = tokens;
         self.current = 0;
         self.virtual_pipe_tokens = 0;
+        self.pipe_expression_depth = 0;
     
         let start_location = self.at().location();
         let mut program = Program {
@@ -157,63 +160,39 @@ impl Parser {
         &self.tokens[self.current]
     }
 
-    fn next_kind(&self) -> TokenType {
-        if self.current + 1 < self.tokens.len() {
-            self.tokens[self.current + 1].kind
-        } else {
-            TokenType::EOF
-        }
-    }
-
     fn looks_like_delimiter_or(&self) -> bool {
-        if self.at().kind != TokenType::BinOp(BinOp::Or) {
+        if self.pipe_expression_depth == 0 || self.at().kind != TokenType::BinOp(BinOp::Or) {
             return false;
         }
-        let next = self.next_kind();
-        // First check for obvious delimiters
-        if matches!(
-            next,
-            TokenType::Pipe
-                | TokenType::Semicolon
-                | TokenType::EOF
-                | TokenType::CloseParen
-                | TokenType::CloseBrace
-                | TokenType::CloseBracket
-                | TokenType::Comma
-                // Allow `||` to mean an empty pipe-delimited list before a block/return-type,
-                // e.g. `func f || {}` or `func f || -> int {}` or `-> || {}`.
-                | TokenType::OpenBrace
-                | TokenType::ThinArrow
-                // New statement starters (newline isn't tokenized), so treat `||` before these as
-                // two pipe delimiters rather than a boolean OR that would incorrectly span lines.
-                | TokenType::At
-                | TokenType::Let
-                | TokenType::Const
-                | TokenType::Func
-                | TokenType::If
-                | TokenType::Else
-                | TokenType::For
-                | TokenType::While
-                | TokenType::Try
-                | TokenType::Catch
-                | TokenType::Return
-                | TokenType::Use
-                | TokenType::Include
-                | TokenType::Export
-        ) {
+        let current = self.at();
+        let Some(next) = self.tokens.get(self.current + 1) else {
             return true;
-        }
-        
-        // Also treat `||` as a delimiter if followed by any operator or identifier,
-        // since these can legitimately follow a function call with no arguments.
-        // Examples: `f => || == x`, `f => || != x`, `f => || +=1`, etc.
-        matches!(next, TokenType::BinOp(_) | TokenType::AssignOp(_) | TokenType::ArithOp(_) | TokenType::Identifier)
+        };
+
+        // Inside a pipe-delimited expression, `||` can also be two adjacent
+        // closing pipes. A same-line expression starter makes it logical OR;
+        // otherwise it closes the current and enclosing pipe lists.
+        next.line > current.line
+            || !matches!(
+                next.kind,
+                TokenType::Identifier
+                    | TokenType::Int
+                    | TokenType::Float
+                    | TokenType::String
+                    | TokenType::Boolean(_)
+                    | TokenType::At
+                    | TokenType::OpenParen
+                    | TokenType::OpenBrace
+                    | TokenType::OpenBracket
+                    | TokenType::ArithOp(ArithOp::Sub)
+                    | TokenType::BinOp(BinOp::Not)
+            )
     }
 
     fn is_pipe_token(&self) -> bool {
         self.virtual_pipe_tokens > 0
             || self.at().kind == TokenType::Pipe
-            || self.looks_like_delimiter_or()
+            || self.at().kind == TokenType::BinOp(BinOp::Or)
     }
 
     fn consume_pipe_token(&mut self) {
@@ -253,6 +232,20 @@ impl Parser {
             Some("Pipe"),
             Some(&found),
         ));
+    }
+
+    fn parse_pipe_expression(&mut self) -> Content {
+        self.pipe_expression_depth += 1;
+        let expression = self.parse_expression(0);
+        self.pipe_expression_depth -= 1;
+        expression
+    }
+
+    fn parse_pipe_expression_until(&mut self, stop_tokens: &[TokenType]) -> Content {
+        self.pipe_expression_depth += 1;
+        let expression = self.parse_expression_until(stop_tokens);
+        self.pipe_expression_depth -= 1;
+        expression
     }
 
     fn expect(&mut self, type_: TokenType, err: &str) -> Option<Token> {
@@ -306,7 +299,21 @@ impl Parser {
             TokenType::Export => self.parse_export_stmt(),
             TokenType::Return => self.parse_return_stmt(),
             TokenType::Try => self.parse_try_catch_stmt(),
-            _ => self.parse_expr(),
+            _ => {
+                let expr = self.parse_expr();
+                if self.at().kind == TokenType::Semicolon {
+                    let semicolon = self.at().clone();
+                    self.errors.push(ZekkenError::syntax(
+                        "Unexpected ';' after expression",
+                        semicolon.line,
+                        semicolon.column,
+                        Some("end of line"),
+                        Some("Semicolon (;)"),
+                    ));
+                    self.consume();
+                }
+                expr
+            }
         }
     }
 
@@ -1272,8 +1279,7 @@ impl Parser {
             self.expect(TokenType::FatArrow, "Expected '=>' after native function identifier");
 
             let mut args = Vec::new();
-            let empty_double_pipe =
-                self.at().kind == TokenType::BinOp(BinOp::Or) && self.looks_like_delimiter_or();
+            let empty_double_pipe = self.at().kind == TokenType::BinOp(BinOp::Or);
             if empty_double_pipe {
                 // Support => || as a zero-argument call shorthand.
                 self.consume();
@@ -1282,7 +1288,7 @@ impl Parser {
 
                 if !self.is_pipe_token() {
                     loop {
-                        let expr = self.parse_expression_until(&[TokenType::Comma]);
+                        let expr = self.parse_pipe_expression_until(&[TokenType::Comma]);
                         match expr {
                             Content::Expression(e) => args.push(e),
                             _ => panic!("Expected expression in native function arguments"),
@@ -1420,15 +1426,14 @@ impl Parser {
         if self.at().kind == TokenType::FatArrow {
             self.consume(); // consume '=>'
             let mut args = Vec::new();
-            let empty_double_pipe =
-                self.at().kind == TokenType::BinOp(BinOp::Or) && self.looks_like_delimiter_or();
+            let empty_double_pipe = self.at().kind == TokenType::BinOp(BinOp::Or);
             if empty_double_pipe {
                 // Support => || as a zero-argument call shorthand.
                 self.consume();
             } else {
                 self.expect_pipe("Expected '|' before function arguments");
                 while !self.is_pipe_token() {
-                    let arg = self.parse_expression(0);
+                    let arg = self.parse_pipe_expression();
                     match arg {
                         Content::Expression(e) => args.push(e),
                         _ => panic!("Expected expression in call arguments"),

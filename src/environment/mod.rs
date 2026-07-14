@@ -402,6 +402,7 @@ pub struct FunctionValue {
   pub return_type: Option<DataType>,
   pub needs_parent: bool,
   pub captures: Arc<Vec<String>>,
+  pub capture_values: Arc<HashMap<String, Value>>,
   pub compiled_insts: Option<Arc<Vec<crate::bytecode::inst::Inst>>>,
   pub compiled_reg_count: usize,
   //pub closure: Environment,
@@ -501,8 +502,8 @@ impl Environment {
           Err(_) => false,
       };
 
-      env.constants.insert(
-        "println".to_string(),
+      env.declare_ref_typed(
+        "println",
         Value::NativeFunction(Arc::new(move |args: Vec<Value>| -> Result<Value, String> {
             if disable_print {
                 return Ok(Value::Void);
@@ -519,7 +520,9 @@ impl Environment {
             writeln!(stdout, "{}", line).map_err(|e| e.to_string())?;
 
             Ok(Value::Void)
-        }))
+        })),
+        DataType::Fn,
+        true,
       );
 
       env.declare(

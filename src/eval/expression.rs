@@ -1174,7 +1174,7 @@ fn evaluate_function_value_call_with_args(
     // correctness issues where function bodies can't see global names.
     if !func_def.needs_parent && !func_def.captures.is_empty() {
         for name in func_def.captures.iter() {
-            if let Some(val) = env.lookup_ref(name) {
+            if let Some(val) = func_def.capture_values.get(name).or_else(|| env.lookup_ref(name)) {
                 function_env.declare_ref(name, val.clone(), false);
             }
         }

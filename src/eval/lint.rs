@@ -26,6 +26,7 @@ fn dummy_value_for_type(ty: &DataType) -> Value {
             return_type: None,
             needs_parent: false,
             captures: Arc::new(Vec::new()),
+            capture_values: Arc::new(HashMap::new()),
             compiled_insts: None,
             compiled_reg_count: 0,
         }),
@@ -280,6 +281,270 @@ pub fn lint_statement(stmt: &Stmt, env: &Environment) -> Result<(), ZekkenError>
         _ => {}
     }
     Ok(())
+}
+
+pub fn collect_lint_expression(expr: &Expr, env: &Environment, errors: &mut Vec<ZekkenError>) {
+    match expr {
+        Expr::Identifier(ident) => {
+            if env.lookup_ref(&ident.name).is_none() {
+                errors.push(ZekkenError::reference(
+                    &format!("Variable '{}' not found", ident.name),
+                    "variable",
+                    ident.location.line,
+                    ident.location.column,
+                ));
+            }
+        }
+        Expr::Unary(unary) => collect_lint_expression(&unary.operand, env, errors),
+        Expr::Binary(binary) => {
+            collect_lint_expression(&binary.left, env, errors);
+            collect_lint_expression(&binary.right, env, errors);
+        }
+        Expr::Call(call) => {
+            if let Expr::Identifier(ident) = call.callee.as_ref() {
+                match env.lookup_ref(&ident.name) {
+                    Some(Value::Function(_)) | Some(Value::NativeFunction(_)) => {
+                        if builtin_requires_at(&ident.name) && !call.is_native {
+                            errors.push(ZekkenError::runtime(
+                                &format!(
+                                    "{} is a built-in; call it with '@{} => |...|'",
+                                    ident.name, ident.name
+                                ),
+                                call.location.line,
+                                call.location.column,
+                                None,
+                            ));
+                        }
+                    }
+                    Some(_) => errors.push(ZekkenError::type_error(
+                        "Cannot call non-function value",
+                        "function",
+                        "non-function",
+                        call.location.line,
+                        call.location.column,
+                    )),
+                    None => errors.push(ZekkenError::reference(
+                        &format!("Function '{}' not found", ident.name),
+                        "function",
+                        call.location.line,
+                        call.location.column,
+                    )),
+                }
+            } else if let Expr::Member(member) = call.callee.as_ref() {
+                collect_lint_expression(&member.object, env, errors);
+            } else {
+                collect_lint_expression(&call.callee, env, errors);
+            }
+
+            for arg in &call.args {
+                collect_lint_expression(arg, env, errors);
+            }
+        }
+        Expr::Assign(assign) => {
+            match assign.left.as_ref() {
+                Expr::Identifier(ident) => {
+                    let (value, kind) = env.lookup_with_kind(&ident.name);
+                    if value.is_none() {
+                        errors.push(ZekkenError::reference(
+                            &format!("Variable '{}' not found", ident.name),
+                            "variable",
+                            ident.location.line,
+                            ident.location.column,
+                        ));
+                    } else if kind == Some("constant") {
+                        errors.push(ZekkenError::runtime(
+                            &format!("Cannot assign to constant '{}'", ident.name),
+                            assign.location.line,
+                            assign.location.column,
+                            None,
+                        ));
+                    }
+                }
+                Expr::Member(member) => collect_lint_expression(&member.object, env, errors),
+                _ => errors.push(ZekkenError::type_error(
+                    "Invalid assignment target",
+                    "identifier or member access",
+                    "other",
+                    assign.location.line,
+                    assign.location.column,
+                )),
+            }
+            collect_lint_expression(&assign.right, env, errors);
+        }
+        Expr::Member(member) => {
+            collect_lint_expression(&member.object, env, errors);
+            if member.is_method {
+                collect_lint_expression(&member.property, env, errors);
+            }
+        }
+        Expr::ArrayLit(array) => {
+            for element in &array.elements {
+                collect_lint_expression(element, env, errors);
+            }
+        }
+        Expr::ObjectLit(object) => {
+            for property in &object.properties {
+                collect_lint_expression(&property.value, env, errors);
+            }
+        }
+        Expr::IntLit(_)
+        | Expr::FloatLit(_)
+        | Expr::StringLit(_)
+        | Expr::BoolLit(_)
+        | Expr::Property(_) => {}
+    }
+}
+
+fn collect_lint_contents(
+    contents: &[Box<Content>],
+    env: &mut Environment,
+    errors: &mut Vec<ZekkenError>,
+) {
+    for content in contents {
+        match content.as_ref() {
+            Content::Expression(expr) => collect_lint_expression(expr, env, errors),
+            Content::Statement(stmt) => {
+                if let Stmt::VarDecl(decl) = stmt.as_ref() {
+                    if let Some(value) = &decl.value {
+                        match value {
+                            Content::Expression(expr) => collect_lint_expression(expr, env, errors),
+                            Content::Statement(stmt) => collect_lint_statement(stmt, env, errors),
+                        }
+                    }
+                    env.declare_ref_typed(
+                        &decl.ident,
+                        dummy_value_for_type(&decl.type_),
+                        decl.type_,
+                        decl.constant,
+                    );
+                } else {
+                    collect_lint_statement(stmt, env, errors);
+                }
+            }
+        }
+    }
+}
+
+pub fn collect_lint_statement(
+    stmt: &Stmt,
+    env: &Environment,
+    errors: &mut Vec<ZekkenError>,
+) {
+    match stmt {
+        Stmt::Program(program) => {
+            let mut program_env = env.clone();
+            collect_lint_contents(&program.content, &mut program_env, errors);
+        }
+        Stmt::VarDecl(decl) => {
+            if let Some(value) = &decl.value {
+                match value {
+                    Content::Expression(expr) => collect_lint_expression(expr, env, errors),
+                    Content::Statement(stmt) => collect_lint_statement(stmt, env, errors),
+                }
+            }
+        }
+        Stmt::FuncDecl(decl) => {
+            let mut fn_env = Environment::new_with_parent_capacity(env.clone(), decl.params.len() + 8);
+            for param in &decl.params {
+                fn_env.declare_ref_typed(
+                    &param.ident,
+                    dummy_value_for_type(&param.type_),
+                    param.type_,
+                    false,
+                );
+            }
+            collect_lint_contents(&decl.body, &mut fn_env, errors);
+        }
+        Stmt::Lambda(decl) => {
+            let mut fn_env = Environment::new_with_parent_capacity(env.clone(), decl.params.len() + 8);
+            for param in &decl.params {
+                fn_env.declare_ref_typed(
+                    &param.ident,
+                    dummy_value_for_type(&param.type_),
+                    param.type_,
+                    false,
+                );
+            }
+            collect_lint_contents(&decl.body, &mut fn_env, errors);
+        }
+        Stmt::ObjectDecl(decl) => {
+            for property in &decl.properties {
+                collect_lint_expression(&property.value, env, errors);
+            }
+        }
+        Stmt::IfStmt(stmt) => {
+            collect_lint_expression(&stmt.test, env, errors);
+            let mut body_env = Environment::new_with_parent_capacity(env.clone(), 8);
+            collect_lint_contents(&stmt.body, &mut body_env, errors);
+            if let Some(alt) = &stmt.alt {
+                let mut alt_env = Environment::new_with_parent_capacity(env.clone(), 8);
+                collect_lint_contents(alt, &mut alt_env, errors);
+            }
+        }
+        Stmt::ForStmt(stmt) => {
+            let mut body_env = Environment::new_with_parent_capacity(env.clone(), 8);
+            if let Some(init) = &stmt.init {
+                if stmt.test.is_none() && stmt.update.is_none() {
+                    if let Stmt::VarDecl(decl) = init.as_ref() {
+                        if let Some(Content::Expression(collection)) = &decl.value {
+                            collect_lint_expression(collection, env, errors);
+                        }
+                        for ident in decl.ident.split(',').map(str::trim).filter(|name| !name.is_empty()) {
+                            body_env.declare_ref(ident, Value::Void, false);
+                        }
+                    }
+                } else {
+                    collect_lint_statement(init, env, errors);
+                }
+            }
+            if let Some(test) = &stmt.test {
+                collect_lint_expression(test, &body_env, errors);
+            }
+            if let Some(update) = &stmt.update {
+                collect_lint_expression(update, &body_env, errors);
+            }
+            collect_lint_contents(&stmt.body, &mut body_env, errors);
+        }
+        Stmt::WhileStmt(stmt) => {
+            collect_lint_expression(&stmt.test, env, errors);
+            let mut body_env = Environment::new_with_parent_capacity(env.clone(), 8);
+            collect_lint_contents(&stmt.body, &mut body_env, errors);
+        }
+        Stmt::TryCatchStmt(stmt) => {
+            let mut try_env = Environment::new_with_parent_capacity(env.clone(), 8);
+            collect_lint_contents(&stmt.try_block, &mut try_env, errors);
+            if let Some(catch) = &stmt.catch_block {
+                let mut catch_env = Environment::new_with_parent_capacity(env.clone(), 8);
+                if let Some(name) = stmt.catch_param.as_deref().filter(|name| !name.is_empty() && *name != "_") {
+                    catch_env.declare_ref(name, Value::Object(HashMap::new()), false);
+                }
+                collect_lint_contents(catch, &mut catch_env, errors);
+            }
+        }
+        Stmt::BlockStmt(stmt) => {
+            let mut body_env = Environment::new_with_parent_capacity(env.clone(), 8);
+            collect_lint_contents(&stmt.body, &mut body_env, errors);
+        }
+        Stmt::Return(stmt) => {
+            if let Some(value) = &stmt.value {
+                match value.as_ref() {
+                    Content::Expression(expr) => collect_lint_expression(expr, env, errors),
+                    Content::Statement(stmt) => collect_lint_statement(stmt, env, errors),
+                }
+            }
+        }
+        Stmt::Use(stmt) => {
+            if let Err(error) = lint_use(stmt) {
+                errors.push(error);
+            }
+        }
+        Stmt::Include(stmt) => {
+            if let Err(error) = lint_include(stmt) {
+                errors.push(error);
+            }
+        }
+        Stmt::Export(_) => {}
+    }
 }
 
 pub fn lint_include(include: &IncludeStmt) -> Result<(), ZekkenError> {

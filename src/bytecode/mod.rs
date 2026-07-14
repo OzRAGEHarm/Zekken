@@ -1228,7 +1228,7 @@ pub(super) fn call_function_native(
     let mut function_env = Environment::take_pooled_scope(func.params.len() + func.captures.len() + 8);
     if !func.captures.is_empty() {
         for capture in func.captures.iter() {
-            if let Some(v) = env.lookup_ref(capture) {
+            if let Some(v) = func.capture_values.get(capture).or_else(|| env.lookup_ref(capture)) {
                 function_env.declare_ref(capture.as_str(), clone_value_hot(v), false);
             }
         }
@@ -1363,7 +1363,7 @@ pub(super) fn call_function_native_small(
     let mut function_env = Environment::take_pooled_scope(func.params.len() + func.captures.len() + 8);
     if !func.captures.is_empty() {
         for capture in func.captures.iter() {
-            if let Some(v) = env.lookup_ref(capture) {
+            if let Some(v) = func.capture_values.get(capture).or_else(|| env.lookup_ref(capture)) {
                 function_env.declare_ref(capture.as_str(), clone_value_hot(v), false);
             }
         }
@@ -1975,7 +1975,7 @@ fn eval_stmt_native(stmt: &Stmt, env: &mut Environment) -> Result<Option<Value>,
             Ok(None)
         }
         Stmt::FuncDecl(func) => {
-            let function_value = make_function_value(&func.params, &func.body, func.return_type);
+            let function_value = make_function_value(&func.params, &func.body, func.return_type, env);
             env.declare(func.ident.clone(), Value::Function(function_value), false);
             Ok(None)
         }
@@ -2211,7 +2211,7 @@ fn eval_stmt_native(stmt: &Stmt, env: &mut Environment) -> Result<Option<Value>,
             Ok(Some(value))
         }
         Stmt::Lambda(lambda) => {
-            let function_value = make_function_value(&lambda.params, &lambda.body, lambda.return_type);
+            let function_value = make_function_value(&lambda.params, &lambda.body, lambda.return_type, env);
             env.declare(lambda.ident.clone(), Value::Function(function_value), lambda.constant);
             Ok(None)
         }

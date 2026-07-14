@@ -42,6 +42,7 @@ fn create_dummy_value(data_type: &DataType) -> Value {
             return_type: None,
             needs_parent: false,
             captures: Arc::new(vec![]),
+            capture_values: Arc::new(HashMap::new()),
             compiled_insts: None,
             compiled_reg_count: 0,
         }),
@@ -252,6 +253,7 @@ fn process_statement_scope(stmt: &Stmt, env: &mut Environment) {
                 return_type: lambda.return_type,
                 needs_parent: true,
                 captures: Arc::new(vec![]),
+                capture_values: Arc::new(HashMap::new()),
                 compiled_insts: None,
                 compiled_reg_count: 0,
             };
@@ -283,6 +285,7 @@ fn process_statement_scope(stmt: &Stmt, env: &mut Environment) {
                 return_type: func_decl.return_type,
                 needs_parent: true,
                 captures: Arc::new(vec![]),
+                capture_values: Arc::new(HashMap::new()),
                 compiled_insts: None,
                 compiled_reg_count: 0,
             };
@@ -540,12 +543,18 @@ fn evaluate_function_declaration(func: &FuncDecl, env: &mut Environment) -> Resu
         v.sort_unstable();
         v
     };
+    let capture_values = captures
+        .iter()
+        .filter(|name| name.as_str() != func.ident)
+        .filter_map(|name| env.lookup_ref(name).map(|value| (name.clone(), value.clone())))
+        .collect();
     let function_value = FunctionValue {
         params: Arc::new(func.params.clone()),
         body: Arc::new(func.body.clone()),
         return_type: func.return_type,
         needs_parent: usage.requires_parent_clone,
         captures: Arc::new(captures),
+        capture_values: Arc::new(capture_values),
         compiled_insts: None,
         compiled_reg_count: 0,
     };
@@ -1424,12 +1433,18 @@ fn evaluate_lambda(lambda: &LambdaDecl, env: &mut Environment) -> Result<Option<
         v.sort_unstable();
         v
     };
+    let capture_values = captures
+        .iter()
+        .filter(|name| name.as_str() != lambda.ident)
+        .filter_map(|name| env.lookup_ref(name).map(|value| (name.clone(), value.clone())))
+        .collect();
     let function_value = FunctionValue {
         params: Arc::new(lambda.params.clone()),
         body: Arc::new(lambda.body.clone()),
         return_type: lambda.return_type,
         needs_parent: usage.requires_parent_clone,
         captures: Arc::new(captures),
+        capture_values: Arc::new(capture_values),
         compiled_insts: None,
         compiled_reg_count: 0,
     };

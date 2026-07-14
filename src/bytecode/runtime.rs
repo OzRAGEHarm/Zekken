@@ -559,11 +559,11 @@ pub(super) fn run_insts(insts: &[Inst], reg_count: usize, env: &mut Environment)
                 env.declare_ref_typed(name, value, *ty, *constant);
             }
             Inst::DeclareFunc { func } => {
-                let function_value = make_function_value(&func.params, &func.body, func.return_type);
+                let function_value = make_function_value(&func.params, &func.body, func.return_type, env);
                 env.declare(func.ident.clone(), Value::Function(function_value), false);
             }
             Inst::DeclareLambda { lambda } => {
-                let function_value = make_function_value(&lambda.params, &lambda.body, lambda.return_type);
+                let function_value = make_function_value(&lambda.params, &lambda.body, lambda.return_type, env);
                 env.declare(lambda.ident.clone(), Value::Function(function_value), lambda.constant);
             }
             Inst::DeclareObject { object } => {

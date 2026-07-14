@@ -1,0 +1,7 @@
+let flip: bool = true;
+flip = !flip
+@println => |flip|
+
+while flip = !flip {
+  @println => |flip|
+}

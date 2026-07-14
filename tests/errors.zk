@@ -11,9 +11,13 @@ let a: string = ; // Missing value after assignment
 // Add function does not exist and therefore triggers a reference error
 let sum: int = add => |2, 5|;
 
+// read_file hasn't been imported from fs library therefore it doesn't exist in the current context
+let data: string = read_file => |"data.txt"|;
+
 // Type Errors:
 
 let b: string = 10; // Assigning an int to a string variable
+let c: float = "3.14"; // Assigning string to a float varaible
 
 // Runtime Errors:
 use fs;

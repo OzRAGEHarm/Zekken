@@ -1,0 +1,3 @@
+let shell_flag: string = "1";
+let shell_disabled: bool = shell_flag == "1" || shell_flag == "true";
+@println => |shell_disabled|
